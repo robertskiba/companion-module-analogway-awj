@@ -1,4 +1,4 @@
-import { AWJinstance } from '..'
+import { AWJinstance } from '../index.js'
 import Choices from '../awjdevice/choices.js'
 
 type Dropdown<t> = {id: t, label: string}
@@ -290,18 +290,60 @@ export default class ChoicesLivepremier4 extends Choices {
 		return ret
 	}
 
+	/**
+	 * AWJ reserves a fixed block of 8 audio addresses per physical input card slot, regardless of that
+	 * slot's real capacity (4 or 8 inputs) - input card slots come in pairs ("rows"), up to 4 rows per
+	 * device. So audio input numbering (INPUT_x_CHANNEL_c) only matches the continuous, real video input
+	 * numbering (IN_x) when every populated slot is at full (8) capacity. This returns the ordered list
+	 * of populated input-card slots' real capacities, to translate between the two numbering schemes.
+	 */
+	private getAudioInputSlotCapacities(device: number): number[] {
+		const rows: string[] = (this.state.get(['DEVICE', 'device', 'system', 'mapping', 'deviceList', 'items', device.toString(), 'cardList', 'itemKeys']) ?? [])
+			.filter((key: string) => key.startsWith('IN_'))
+		const capacities: number[] = []
+		for (const row of rows) {
+			for (const slot of ['0', '1']) {
+				const count = this.state.get(['DEVICE', 'device', 'system', 'mapping', 'deviceList', 'items', device.toString(), 'cardList', 'items', row, 'febeList', 'items', slot, 'pp', 'plugCountMapped']) ?? 0
+				if (count > 0) capacities.push(count)
+			}
+		}
+		return capacities
+	}
+
+	/**
+	 * Translates an audio input number (INPUT_x_CHANNEL_c addressing, always 8 reserved addresses per
+	 * card slot) to the corresponding real, continuous video input number (IN_x, as shown elsewhere in
+	 * this module and in Web RCS), or undefined if the audio address falls in an unused padding region
+	 * of a slot with fewer than 8 real inputs.
+	 */
+	private audioInputNumberToVideoInputNumber(audioNum: number, slotCapacities: number[]): number | undefined {
+		let videoBase = 0
+		for (let i = 0; i < slotCapacities.length; i += 1) {
+			const slotAudioStart = i * 8 + 1
+			if (audioNum >= slotAudioStart && audioNum <= i * 8 + 8) {
+				const offsetInSlot = audioNum - slotAudioStart // 0-based
+				return offsetInSlot < slotCapacities[i] ? videoBase + offsetInSlot + 1 : undefined
+			}
+			videoBase += slotCapacities[i]
+		}
+		return undefined
+	}
+
 	public getAudioInputChoices(device?: number): Dropdown<string>[] {
 		if (typeof device !== 'number') device = 1
 		const ret = [{ id: 'NONE', label: 'No Source' }]
 		const inputs = this.state.get(`DEVICE/device/audio/control/deviceList/items/${device}/rxList/itemKeys`) ?? []
+		const slotCapacities = this.getAudioInputSlotCapacities(device)
 		for (const input of inputs) {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			const [inputtype, inputnum, _channel, channelnum] = input.split('_')
-			if (inputtype === 'INPUT' && this.state.get('DEVICE/device/inputList/items/IN_' + inputnum + '/status/pp/isAvailable')) {
-				const inputLabel = this.state.get(`DEVICE/device/inputList/items/IN_${ (device-1) * 64 + Number(inputnum)}/control/pp/label`)
+			if (inputtype === 'INPUT') {
+				const videoInputNum = this.audioInputNumberToVideoInputNumber(Number(inputnum), slotCapacities)
+				if (videoInputNum === undefined) continue // unused padding address, not a real input
+				const inputLabel = this.state.get(`DEVICE/device/inputList/items/IN_${ (device-1) * 64 + videoInputNum}/control/pp/label`)
 				ret.push({
 					id: input,
-					label: `Input ${inputnum} Channel ${channelnum}${inputLabel === '' ? '' : ' - ' + inputLabel}`,
+					label: `Input ${videoInputNum} Channel ${channelnum}${inputLabel === '' ? '' : ' - ' + inputLabel}`,
 				})
 			} else if (
 				inputtype === 'DANTE' &&

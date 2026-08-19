@@ -1,9 +1,5 @@
 import {AWJinstance} from '../index.js'
-import {
-	CompanionButtonPresetDefinition,
-	CompanionPresetDefinitions,
-} from '@companion-module/base'
-import Presets from '../awjdevice/presets.js'
+import Presets, { CategorizedPresetDefinitions, PresetDefWithCategory } from '../awjdevice/presets.js'
 
 type Dropdown<t> = { id: t, label: string }
 
@@ -55,7 +51,7 @@ export default class PresetsMidra extends Presets {
 
 		// MARK: Screen Memories
 	get screenMemories() {
-		const presets: CompanionPresetDefinitions = {}
+		const presets: CategorizedPresetDefinitions = {}
 		const ilabel = this.instance.label
 
 		for (const screen of [{ id: 'sel', label: 'Selected', index: '0' }, ...this.choices.getScreensArray()]
@@ -65,7 +61,7 @@ export default class PresetsMidra extends Presets {
 				const bgcolor = parseInt(this.state.get(['REMOTE', 'banks', 'screen', 'items', memory.id, 'color'])?.slice(1), 16)
 
 				presets[`LoadScreenMemory_${memory.id}_to_${screen.id}`] = {
-					type: 'button',
+					type: 'simple',
 					name: `Load Screen Memory ${memory.id} into screen ${screen.id}${screen.label ? ' ('+screen.label+')' : ''}`,
 					category: `Screen Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
 					style: {
@@ -153,7 +149,7 @@ export default class PresetsMidra extends Presets {
 
 		// MARK: Aux Memories
 	get auxMemories() {
-		const presets: CompanionPresetDefinitions = {}
+		const presets: CategorizedPresetDefinitions = {}
 		const ilabel = this.instance.label
 
 		for (const screen of [{ id: 'sel', label: 'Selected', index: '0' }, ...this.choices.getAuxArray()]) {
@@ -162,7 +158,7 @@ export default class PresetsMidra extends Presets {
 				const bgcolor = parseInt(this.state.get(['REMOTE', 'banks', 'aux', 'items', memory.id, 'color'])?.slice(1), 16)
 
 				presets[`LoadAuxMemory_${memory.id}_${screen.id}`] = {
-					type: 'button',
+					type: 'simple',
 					name: `Load Aux Memory ${memory.id} into auxscreen ${screen.id}${screen.label ? ' ('+screen.label+')' : ''}`,
 					category: `Aux Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
 					style: {
@@ -250,7 +246,7 @@ export default class PresetsMidra extends Presets {
 
 	// MARK: Choose Input ...
 	get chooseInput() {
-		const presets: CompanionPresetDefinitions = {}
+		const presets: CategorizedPresetDefinitions = {}
 		const ilabel = this.instance.label
 		const self = this
 
@@ -260,8 +256,8 @@ export default class PresetsMidra extends Presets {
 			if (input.id.match(/^IN|LIVE|STILL|SCREEN/)) {
 				sourceLabelVariable = `\\n$(${ilabel}:${input.id.replace('LIVE_', 'INPUT_')}label)`
 			}
-			const preparedPreset: CompanionButtonPresetDefinition = {
-				type: 'button',
+			const preparedPreset: PresetDefWithCategory = {
+				type: 'simple',
 				name: 'Choose Input ' + input.label + ' for selected '+ layerdescription +' Layer(s)',
 				category: 'Layer Source',
 				style: {

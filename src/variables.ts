@@ -1,8 +1,16 @@
-import { CompanionVariableDefinition } from '@companion-module/base'
 import {AWJinstance} from './index.js'
 
-export function initVariables(_instance: AWJinstance): CompanionVariableDefinition[] {
-	const variables: CompanionVariableDefinition[] = [
+export interface TrackedVariable {
+	/** internal id of the source adding this variable, not exposed to the user */
+	id?: string
+	/** unique to the instance id of the variable with which the user can reference it */
+	variableId: string
+	/** human readable description of the variable's content */
+	name: string
+}
+
+export function initVariables(_instance: AWJinstance): TrackedVariable[] {
+	const variables: TrackedVariable[] = [
 		{
 			variableId: 'connectionLabel',
 			name: 'The label of this connection',

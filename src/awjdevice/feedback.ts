@@ -147,6 +147,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen Memory',
 					choices: this.choices.getMasterMemoryChoices(),
@@ -190,6 +191,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'Any' }],
@@ -205,6 +207,7 @@ export default class Feedbacks {
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen Memory',
 					choices: this.choices.getScreenMemoryChoices(),
@@ -284,6 +287,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Aux Screens',
 					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getAuxChoices()],
@@ -301,6 +305,7 @@ export default class Feedbacks {
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Aux Memory',
 					choices: this.choices.getAuxMemoryChoices(),
@@ -369,6 +374,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
@@ -392,7 +398,12 @@ export default class Feedbacks {
 					default: 'NONE',
 				},
 			],
-			subscribe: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string[], preset: string, source: string } }) => {
+			unsubscribe: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string[], preset: string, source: string } }) => {
+				const sortedScreens = [...feedback.options.screens].sort()
+				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
+				this.instance.removeVariable(feedback.id, varName)
+			},
+			callback: (feedback) => {
 				const sortedScreens = [...feedback.options.screens].sort()
 				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
 				this.instance.addVariable({
@@ -400,13 +411,6 @@ export default class Feedbacks {
 					variableId: varName,
 					name: `Tally for ${feedback.options.source} at screens ${sortedScreens.join(', ')}, preset ${feedback.options.preset}`,
 				})
-			},
-			unsubscribe: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string[], preset: string, source: string } }) => {
-				const sortedScreens = [...feedback.options.screens].sort()
-				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
-				this.instance.removeVariable(feedback.id, varName)
-			},
-			callback: (feedback) => {  
 				const checkTally = (): boolean => {
 					// go thru the screens
 					for (const screen of this.choices.getChosenScreenAuxes(feedback.options.screens)) {
@@ -462,8 +466,6 @@ export default class Feedbacks {
 				}
 
 				const tally = checkTally()
-				const sortedScreens = [...feedback.options.screens].sort()
-				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
 				let varValue = '0'
 				if (tally) {
 					varValue = '1'
@@ -494,6 +496,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
@@ -525,6 +528,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Auxscreen',
 					choices: this.choices.getScreenAuxChoices(),
@@ -553,6 +557,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen',
 					choices: [{ id: 'all', label: 'ALL' }, ...this.choices.getScreenAuxChoices()],
@@ -634,6 +639,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Auxscreen',
 					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
@@ -788,10 +794,12 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen',
 					choices: [{id: 'any', label:'Any'}, ...this.choices.getScreenChoices()],
 					default: this.choices.getScreenChoices()[0]?.id,
+					disableAutoExpression: true,
 				},
 				...[
 					{id: 'any', label:'Any'},
@@ -807,10 +815,7 @@ export default class Feedbacks {
 								{id:'NATIVE', label: 'Background Layer'}
 							],
 							default: '1',
-							isVisibleData: screen.id,
-							isVisible: (options: any, screenID: string) => {
-								return options.screen === screenID
-							}
+							isVisibleExpression: `$(options:screen) == '${screen.id}'`,
 						}
 						if (screen.id === 'any') {
 							opt.choices.push(...this.choices.getLayerChoices(this.constants.maxLayers, false))
@@ -873,6 +878,7 @@ export default class Feedbacks {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen',
 					choices: [{id: 'any', label:'Any'}, ...this.choices.getScreenAuxChoices()],
@@ -1067,6 +1073,7 @@ export default class Feedbacks {
 						{ id: 'o', label: 'Object' },
 					],
 					default: 't',
+					disableAutoExpression: true,
 				},
 				{
 					type: 'dropdown',
@@ -1079,14 +1086,14 @@ export default class Feedbacks {
 						{ id: '4', label: 'Text matches regular expression' },
 					],
 					default: '1',
-					isVisible: (thisOptions) => { return thisOptions.valuetype === 't' },
+					isVisibleExpression: "$(options:valuetype) == 't'",
 				},
 				{
 					type: 'textinput',
 					id: 'textValue',
 					label: 'value',
 					default: '',
-					isVisible: (thisOptions) => { return thisOptions.valuetype === 't' },
+					isVisibleExpression: "$(options:valuetype) == 't'",
 				},
 				{
 					type: 'dropdown',
@@ -1099,7 +1106,8 @@ export default class Feedbacks {
 						{ id: '%', label: 'Number modulo value is value2' },
 					],
 					default: '==',
-					isVisible: (thisOptions) => { return thisOptions.valuetype === 'n' },
+					isVisibleExpression: "$(options:valuetype) == 'n'",
+					disableAutoExpression: true,
 				},
 				{
 					type: 'number',
@@ -1108,7 +1116,7 @@ export default class Feedbacks {
 					default: 0,
 					min: Number.MIN_VALUE,
 					max: Number.MAX_VALUE,
-					isVisible: (thisOptions) => { return thisOptions.valuetype === 'n' },
+					isVisibleExpression: "$(options:valuetype) == 'n'",
 				},
 				{
 					type: 'number',
@@ -1117,7 +1125,7 @@ export default class Feedbacks {
 					default: 0,
 					min: Number.MIN_VALUE,
 					max: Number.MAX_VALUE,
-					isVisible: (thisOptions) => { return thisOptions.valuetype === 'n' && (thisOptions.actionsn === '...' || thisOptions.actionsn === '%') },
+					isVisibleExpression: "$(options:valuetype) == 'n' && ($(options:actionsn) == '...' || $(options:actionsn) == '%')",
 				},
 				{
 					type: 'checkbox',
@@ -1168,6 +1176,55 @@ export default class Feedbacks {
 				}
 			},
 			callback: (feedback: CompanionFeedbackBooleanEvent & { options: FeedbackDeviceCustomOptions }) => {
+				{
+					// register the subscription pattern and custom variable for this feedback instance (idempotent, safe to repeat on every check)
+					let subVarId = ''
+					const sub = {}
+					let subVarname = `Custom Variable for Path ${feedback.options.path}`
+					if (feedback.options.path.match(regexAWJpath) !== null) {
+						// we got a path to work with
+						subVarname = `Custom Variable for Feedback ${feedback.options.path}`
+						if (feedback.options.variable.match(/[A-Za-z0-9_-]+/) !== null) {
+							subVarId = feedback.options.variable.replace(/[^A-Za-z0-9_-]/g, '')
+						} else {
+							subVarId = feedback.options.path.replace(/\//g, '_').replace(/[^A-Za-z0-9_-]/g, '')
+						}
+						const parts = this.instance.AWJtoJsonPath(feedback.options.path)
+
+						if (
+							parts[4] === 'presetList' &&
+							parts[5] === 'items' &&
+							parts[6] &&
+							feedback.options.path.split('/')[6]?.match(/^PGM|PVW|program|preview$/i) !== null
+						) {
+							parts[6] = '(\\w+?)'
+							sub[`${feedback.id}-take`] = {
+								pat: 'DEVICE/device/(screenGroup|screenAuxGroup|transition/screen)List/items/(\\w+?)/status/pp/transition',
+								fbk: `id:${feedback.id}`,
+							}
+						}
+
+						sub[feedback.id] = {
+							pat: parts.join('/'),
+							fbk: `id:${feedback.id}`
+						}
+						this.instance.subscriptions.addSubscriptions(sub)
+					} else {
+						// we got no valid path
+						subVarname = `Custom Variable for Feedback ${feedback.id}`
+						if (feedback.options.variable !== '') {
+							subVarId = feedback.options.variable
+						} else {
+							subVarId = feedback.id
+						}
+					}
+					this.instance.addVariable({
+						id: feedback.id,
+						variableId: subVarId,
+						name: subVarname,
+					})
+				}
+
 				let ret = false
 				const path = this.instance.AWJtoJsonPath(feedback.options.path)
 				if (path.length < 2) {
@@ -1246,57 +1303,6 @@ export default class Feedbacks {
 					ret = valueo.length > 0
 				}
 				return feedback.options.invert ? !ret : ret
-			},
-			subscribe: (feedback) => {
-				// console.log('subscribe', feedback.id, feedback.options.path);
-				let varId = ''
-				const sub = {}
-				let varname = `Custom Variable for Path ${feedback.options.path}`
-				if (feedback.options.path.match(regexAWJpath) !== null) {
-					// we got a path to work with
-					varname = `Custom Variable for Feedback ${feedback.options.path}`
-					if (feedback.options.variable.match(/[A-Za-z0-9_-]+/) !== null) {
-						varId = feedback.options.variable.replace(/[^A-Za-z0-9_-]/g, '')
-					} else {
-						varId = feedback.options.path.replace(/\//g, '_').replace(/[^A-Za-z0-9_-]/g, '')
-					}
-					const parts = this.instance.AWJtoJsonPath(feedback.options.path)
-
-					if (
-						parts[4] === 'presetList' &&
-						parts[5] === 'items' &&
-						parts[6] &&
-						feedback.options.path.split('/')[6]?.match(/^PGM|PVW|program|preview$/i) !== null
-					) {
-						parts[6] = '(\\w+?)'
-						sub[`${feedback.id}-take`] = {
-							pat: 'DEVICE/device/(screenGroup|screenAuxGroup|transition/screen)List/items/(\\w+?)/status/pp/transition',
-							fbk: `id:${feedback.id}`,
-						}
-					}
-
-					sub[feedback.id] = {
-						pat: parts.join('/'),
-						fbk: `id:${feedback.id}`
-					}
-					// console.log('add sub', sub)
-					this.instance.subscriptions.addSubscriptions(sub)
-					// console.log('subscriptions', Object.keys(this.state.subscriptions).map(key => `${key} : ${this.state.subscriptions[key].pat}`))
-
-				} else {
-					// we got no valid path
-					varname = `Custom Variable for Feedback ${feedback.id}`
-					if (feedback.options.variable !== '') {
-						varId = feedback.options.variable
-					} else {
-						varId = feedback.id
-					}
-				}
-				this.instance.addVariable({
-					id: feedback.id,
-					variableId: varId,
-					name: varname,
-				})
 			},
 			unsubscribe: (feedback) => {
 				this.instance.subscriptions.removeSubscription(feedback.id)

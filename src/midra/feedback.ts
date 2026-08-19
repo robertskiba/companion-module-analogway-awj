@@ -72,6 +72,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 				tags: true,
 				regex: '/^S([1-9]|[1-3][0-9]|4[0-8])$/',
 				default: ['all'],
+				allowInvalidValues: true,
 			} as any // TODO: fix type of dropdown with multiple: true property
 
 		return deviceScreenMemory

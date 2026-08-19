@@ -1,4 +1,5 @@
 {
+	"type": "connection",
 	"id": "analogway-awj",
 	"name": "analogway-awj",
 	"shortname": "AWJdevice",
@@ -15,7 +16,7 @@
 	],
 	"legacyIds": [],
 	"runtime": {
-		"type": "node18",
+		"type": "node22",
 		"api": "nodejs-ipc",
 		"apiVersion": "1.2.0",
 		"entrypoint": "../dist/src/index.js"

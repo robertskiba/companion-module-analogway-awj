@@ -1,4 +1,4 @@
-import { AWJinstance } from '..'
+import { AWJinstance } from '../index.js'
 import Choices from '../awjdevice/choices.js'
 
 type Dropdown<t> = {id: t, label: string}

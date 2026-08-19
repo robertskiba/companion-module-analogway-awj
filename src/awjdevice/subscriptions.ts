@@ -657,8 +657,7 @@ export default class Subscriptions {
 			void (async () => {
 				try {
 					void this.instance.updateInstance()
-					this.instance.checkFeedbacks()
-					this.instance.subscribeFeedbacks()
+					this.instance.checkAllFeedbacks()
 				} catch (error) {
 					this.instance.log('error', 'Cannot update the this.instance. '+ error)
 				}

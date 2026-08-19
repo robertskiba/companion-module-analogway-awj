@@ -69,6 +69,7 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 				choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
 				multiple: true,
 				default: ['all'],
+				allowInvalidValues: true,
 			} as any // TODO: fix type of dropdown with multiple: true property
 
 		deviceScreenMemory.callback =  (feedback) => {

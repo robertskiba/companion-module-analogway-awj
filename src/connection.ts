@@ -324,26 +324,39 @@ class AWJconnection {
 					// Password required
 					this.instance.updateStatus(InstanceStatus.Connecting, `Logging in`)
 					try {
+						// 'manual' instead of 'error': newer firmware (v4+) responds to a successful login with a
+						// redirect instead of a plain 200, so we must not treat a redirect as a hard failure - we
+						// inspect the (possibly 3xx) response ourselves for the auth cookie instead of following it.
+						// throwHttpErrors: false so ky returns the 302 response instead of throwing before we get
+						// a chance to look at it.
 						let res = await ky(`${urlObj.protocol()}://${urlObj.host()}/auth/login`, {
 							method: 'post',
 							json: { password: urlObj.password() },
 							retry: 2,
-							redirect: 'error'
+							redirect: 'manual',
+							throwHttpErrors: false
 						})
 						// Got succesful auth response
-						if (res.headers['set-cookie']) {
-							this.authcookie = res.headers['set-cookie']
+						// Note: res.headers is a Headers instance (fetch API), not a plain object - must use .get(), bracket access always returns undefined
+						const setCookie = res.headers.get('set-cookie')
+						if (setCookie) {
+							this.authcookie = setCookie
 							this.instance.log('info', 'Login to device is successful')
 
 							await setupDevice()
 
+						} else {
+							this.instance.updateStatus(InstanceStatus.AuthenticationFailure, 'This device is password protected. Please enter the correct credentials in the device address.')
+							this.instance.log('error', 'Login to device failed: no session cookie received. Check username/password in the device address.')
 						}
-						
+
 					} catch (error) {
+						// Note: do not re-reject here - nothing awaits/catches connect()'s callers, so a rejection
+						// here would become an unhandled promise rejection and crash the whole module process.
+						this.instance.updateStatus(InstanceStatus.AuthenticationFailure, 'This device is password protected. Please enter the correct credentials in the device address.')
 						this.instance.log('error', 'Password failed ' + error)
-						return Promise.reject(error)
 					}
-					
+
 				} else {
 					// no Password required
 					await setupDevice()
@@ -352,7 +365,6 @@ class AWJconnection {
 				this.instance.updateStatus(InstanceStatus.ConnectionFailure, 'No AWJ device')
 				this.instance.log('error', 'Connected to a device, but it is no compatible AWJ device, disconnecting now.')
 				this.disconnect()
-				return Promise.reject('No AWJ device')
 			}
 
 			
@@ -450,13 +462,16 @@ class AWJconnection {
 					'Content-Type': 'application/json',
 				},
 				...fetchDefaultParameters,
-				redirect: 'error'
+				redirect: 'manual',
+				throwHttpErrors: false
 			})
 				//.ok((res) => res.status < 400)
 			.then((res) => {
 				// Got succesful auth response
-				if (res.headers['set-cookie']) {
-					this.authcookie = res.headers['set-cookie']
+				// Note: res.headers is a Headers instance (fetch API), not a plain object - must use .get()
+				const setCookie = res.headers.get('set-cookie')
+				if (setCookie) {
+					this.authcookie = setCookie
 					this.instance.log('info', 'Login to device is successful')
 				}
 				ky.post(`${urlObj.protocol()}://${urlObj.host()}${urlObj.resource()}`,{

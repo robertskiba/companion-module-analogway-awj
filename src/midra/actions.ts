@@ -1,6 +1,7 @@
 import {AWJinstance} from '../index.js'
 
 import {
+	CompanionActionContext,
 	CompanionActionEvent,
 	CompanionInputFieldDropdown,
 	SomeCompanionActionInputField,
@@ -16,7 +17,7 @@ type AWJaction<T> = {
 	description?: string
 	tooltip?: string,
 	options: SomeAWJactionInputfield<T>[]
-	callback?: (action: ActionEvent<T>) => void
+	callback?: (action: ActionEvent<T>, context: CompanionActionContext) => void
 	subscribe?: (action: ActionEvent<T>) => void
 	unsubscribe?: (action: ActionEvent<T>) => void
 	learn?: (
@@ -194,6 +195,7 @@ export default class ActionsMidra extends Actions {
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Master Memory',
 					choices: this.choices.getMasterMemoryChoices(),
@@ -358,8 +360,8 @@ export default class ActionsMidra extends Actions {
 		const deviceTbar = super.deviceTbar
 
 		deviceTbar.callback =  async (action) => {
-			const position = parseFloat(await this.instance.parseVariablesInString(action.options.position))
-			const maximum = parseFloat(await this.instance.parseVariablesInString(action.options.maximum))
+			const position = parseFloat(action.options.position)
+			const maximum = parseFloat(action.options.maximum)
 			const tbarmax = 65535
 			if (typeof position === 'number' && typeof maximum === 'number' && position >= 0 && maximum >= 0) {
 				let value = 0.0
@@ -434,7 +436,7 @@ export default class ActionsMidra extends Actions {
 						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
 					else
 						// else decide which dropdown to use for which layer
-						for (const layer of action.options[`layer${screen}`]) {
+						for (const layer of action.options[`layer${screen.id}`]) {
 							if (layer === 'NATIVE' && action.options['sourceNative'] !== 'keep') {
 								this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], action.options['sourceNative'].replace(/\D/g, ''))
 							} else if (layer === 'TOP' && action.options['sourceFront'] !== 'keep') {
@@ -484,10 +486,7 @@ export default class ActionsMidra extends Actions {
 				label: 'Layer ' + screen.id,
 				choices: this.choices.getLayerChoices(screen.id),
 				default: ['1'],
-				isVisibleData: screen.id,
-				isVisible: (options, screenId) => {
-					return options.method === 'spec' && options.screen.includes(screenId)	
-				},
+				isVisibleExpression: `$(options:method) == 'spec' && arrayIncludes($(options:screen), '${screen.id}')`,
 			})
 		})
 		deviceSelectSource.options.push(
@@ -497,15 +496,12 @@ export default class ActionsMidra extends Actions {
 				label: 'Screen Background Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.choicesBackgroundSourcesPlusNone],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					if (options.method === 'spec') {
-						for (const screen of options.screen.filter((screen) => screen.startsWith('S'))) {
-							if (options[`layer${screen}`].find((elem: string) => elem === 'NATIVE')) return true
-						}
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected S-prefixed screens have a NATIVE ('BKG') layer selected in their per-screen layer field. This
+				// depends on a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot be
+				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
+				// silently hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 			{
 				id: 'sourceLayer',
@@ -513,17 +509,12 @@ export default class ActionsMidra extends Actions {
 				label: 'Screen Layer Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getSourceChoices()],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					for (const screen of options.screen) {
-						if (
-							options[`layer${screen}`]?.find((layer: string) => {
-								return layer.match(/^\d+$/)
-							})
-						) return true
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected screens (of any kind) have a non-NATIVE (numeric) layer selected in their per-screen layer
+				// field. This depends on a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot
+				// be expressed generically in Companion's expression language. Falling back to always-visible to avoid
+				// silently hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 			{
 				id: 'sourceFront',
@@ -531,15 +522,12 @@ export default class ActionsMidra extends Actions {
 				label: 'Screen Foreground Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.choicesForegroundImagesSource],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					if (options.method === 'spec') {
-						for (const screen of options.screen.filter((screen) => screen.startsWith('S'))) {
-							if (options[`layer${screen}`].find((elem: string) => elem === 'TOP')) return true
-						}
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected S-prefixed screens have a TOP layer selected in their per-screen layer field. This depends on
+				// a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot be expressed
+				// generically in Companion's expression language. Falling back to always-visible to avoid silently
+				// hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 			{
 				id: 'sourceBack',
@@ -547,15 +535,12 @@ export default class ActionsMidra extends Actions {
 				label: 'Aux Background Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getAuxBackgroundChoices()],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					if (options.method === 'spec') {
-						for (const screen of options.screen.filter((screen) => screen.startsWith('A'))) {
-							if (options[`layer${screen}`].find((elem: string) => elem === 'BKG')) return true
-						}
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected A-prefixed screens have a BKG layer selected in their per-screen layer field. This depends on
+				// a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot be expressed
+				// generically in Companion's expression language. Falling back to always-visible to avoid silently
+				// hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 		)
 
@@ -636,7 +621,8 @@ export default class ActionsMidra extends Actions {
 					),
 					default: this.choices.getLiveInputArray()
 						.filter((input) => this.choices.getPlugChoices(input.id).length > 1)
-						.map(input => input.id)[0] ?? ''
+						.map(input => input.id)[0] ?? '',
+					disableAutoExpression: true,
 				},
 				...this.choices.getLiveInputArray()
 					.filter((input) => this.choices.getPlugChoices(input.id).length > 1)
@@ -648,8 +634,7 @@ export default class ActionsMidra extends Actions {
 							label: 'Plug',
 							choices: plugs,
 							default: plugs[0].id,
-							isVisibleData: input.id,
-							isVisible: (options, inputId: string) => {return options.input == inputId}
+							isVisibleExpression: `$(options:input) == '${input.id}'`,
 						}
 					}
 				),
@@ -680,6 +665,7 @@ export default class ActionsMidra extends Actions {
 			label: 'Screen',
 			choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenChoices()],
 			default: 'sel',
+			allowInvalidValues: true,
 		}
 		
 		return devicePositionSize
@@ -950,7 +936,7 @@ export default class ActionsMidra extends Actions {
 					id: 'device',
 					choices: [],
 					default: '1',
-					isVisible: () => {return false},
+					isVisibleExpression: 'false',
 				},
 				{
 					type: 'dropdown',
@@ -1045,7 +1031,7 @@ export default class ActionsMidra extends Actions {
 					id: 'device',
 					choices: [],
 					default: 1,
-					isVisible: () => {return false},
+					isVisibleExpression: 'false',
 				},
 				{
 					type: 'dropdown',
@@ -1134,9 +1120,8 @@ export default class ActionsMidra extends Actions {
 		}
 
 		// Color setup is not available at Midra
-		const hidden = () => { return false }
-		deviceTimerSetup.options[4].isVisible = hidden
-		deviceTimerSetup.options[5].isVisible = hidden
+		deviceTimerSetup.options[4].isVisibleExpression = 'false'
+		deviceTimerSetup.options[5].isVisibleExpression = 'false'
 
 		return deviceTimerSetup
 	}
@@ -1157,6 +1142,7 @@ export default class ActionsMidra extends Actions {
 					{ id: 'outputList', label: 'Output' },
 				],
 				default: 'outputList',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'screenList',
@@ -1164,9 +1150,7 @@ export default class ActionsMidra extends Actions {
 				label: 'Screen',
 				choices: this.choices.getScreenChoices(),
 				default: this.choices.getScreenChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'screenList'
-				},
+				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
 				id: 'outputList',
@@ -1174,9 +1158,7 @@ export default class ActionsMidra extends Actions {
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'outputList'
-				},
+				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
 				id: 'patall',
@@ -1184,9 +1166,7 @@ export default class ActionsMidra extends Actions {
 				label: 'Pattern',
 				choices: [{ id: '0', label: 'Off' }],
 				default: '0',
-				isVisible: (options) => {
-					return options.group === 'all'
-				},
+				isVisibleExpression: "$(options:group) == 'all'",
 			},
 			{
 				id: 'screenListPat',
@@ -1208,9 +1188,7 @@ export default class ActionsMidra extends Actions {
 					{ id: 'SOFTEDGE', label: 'Covering' },
 				],
 				default: 'NONE',
-				isVisible: (options) => {
-					return options.group === 'screenList'
-				},
+				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
 				id: 'outputListPat',
@@ -1235,9 +1213,7 @@ export default class ActionsMidra extends Actions {
 					{ id: 'SOFTEDGE', label: 'Covering' },
 				],
 				default: 'NO_PATTERN',
-				isVisible: (options) => {
-					return options.group === 'outputList'
-				},
+				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 		]
 
