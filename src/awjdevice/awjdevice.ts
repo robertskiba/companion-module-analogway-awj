@@ -1,5 +1,5 @@
-import { AWJinstance } from ".."
-import { AWJconnection } from "../connection"
+import { AWJinstance } from "../index.js"
+import { AWJconnection } from "../connection.js"
 import Actions from "./actions.js"
 import Feedbacks from "./feedback.js"
 import Presets from "./presets.js"

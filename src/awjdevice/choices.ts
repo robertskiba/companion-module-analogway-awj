@@ -1,6 +1,6 @@
-import { AWJinstance } from '..'
-import { State } from '../../types/State'
-import Constants from './constants'
+import { AWJinstance } from '../index.js'
+import { State } from '../../types/State.js'
+import Constants from './constants.js'
 
 type Dropdown<t> = {id: t, label: string}
 
@@ -616,6 +616,26 @@ export default class Choices {
 	}
 
 	/**
+	 * Splits any array elements that look like multiple concatenated screen/aux ids (e.g. a value like
+	 * 'S1S2A1' coming from an expression built without a separator) into their individual ids (S1, S2, A1),
+	 * so users can build such lists without needing a separator character. Leaves 'all'/'sel' keywords as-is.
+	 * Ids that don't correspond to a currently existing screen/aux are silently dropped, since they could
+	 * otherwise only come from an expression typo or an out-of-range value (real dropdown selections are
+	 * already constrained to real choices, and 'allowInvalidValues' only relaxes that in expression mode).
+	 * @param input array of strings to check
+	 * @returns array with any concatenated ids split into individual, currently existing ids
+	 */
+	private expandScreenAuxTokens(input: string[]): string[] {
+		const validIds = new Set([...this.getScreensArray(), ...this.getAuxArray()].map((s) => s.id))
+		return input.flatMap((el) => {
+			if (el === 'all' || el === 'sel') return [el]
+			const tokens = el.match(/[SA]\d+/g)
+			if (tokens === null) return [el]
+			return tokens.filter((token) => validIds.has(token))
+		})
+	}
+
+	/**
 	 * Returnes the input array of screens but extends it by all active screens or the selected screens if the input array containes 'all' or 'sel'
 	 * @param input array of strings to check
 	 * @param prefix what to write in front of the screen number, defaults to 'S'
@@ -625,6 +645,7 @@ export default class Choices {
 		if (typeof input === 'string') {
 			input = [input]
 		}
+		input = this.expandScreenAuxTokens(input)
 		let screens: string[] = []
 		// get screens to check
 		if (input.includes('all')) {
@@ -652,6 +673,7 @@ export default class Choices {
 		if (typeof input === 'string') {
 			input = [input]
 		}
+		input = this.expandScreenAuxTokens(input)
 		let screens: string[] = []
 		// get screens to check
 		if (input.includes('all')) {
@@ -691,6 +713,7 @@ export default class Choices {
 		if (typeof input === 'string') {
 			input = [input]
 		}
+		input = this.expandScreenAuxTokens(input)
 		let screens: string[] = []
 		// get screens to check
 		if (input.includes('all')) {

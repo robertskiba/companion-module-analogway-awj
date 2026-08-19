@@ -1,6 +1,4 @@
-// const { CreateConvertToBooleanFeedbackUpgradeScript } = require('@companion-module/base')
-
-import { CompanionMigrationAction } from "@companion-module/base"
+import { CompanionMigrationAction, FixupNumericOrVariablesValueToExpressions } from "@companion-module/base"
 
 type LooseObj = {[name: string]: any}
 const UpgradeScripts = [
@@ -15,19 +13,19 @@ const UpgradeScripts = [
 		const actionsToUpdate:CompanionMigrationAction[] = []
 
 		actions.filter((action: CompanionMigrationAction) => action.actionId === 'devicePositionSize').forEach((oldAction: CompanionMigrationAction) => {
-			const action = {...oldAction}
-			action.options.x = oldAction.options.x?.toString() ?? 0
-			action.options.y = oldAction.options.y?.toString() ?? 0
-			action.options.w = oldAction.options.w?.toString() ?? 1920
-			action.options.h = oldAction.options.h?.toString() ?? 1080
-			if (action.options.xAnchor === undefined) action.options.xAnchor = 'lx + 0.5 * lw'
-			if (action.options.yAnchor === undefined) action.options.yAnchor = 'ly + 0.5 * lh'
-			if (action.options.ar === undefined) action.options.ar = ''
+			const action = {...oldAction, options: {...oldAction.options}}
+			action.options.x = FixupNumericOrVariablesValueToExpressions(action.options.x) ?? { value: 0, isExpression: false }
+			action.options.y = FixupNumericOrVariablesValueToExpressions(action.options.y) ?? { value: 0, isExpression: false }
+			action.options.w = FixupNumericOrVariablesValueToExpressions(action.options.w) ?? { value: 1920, isExpression: false }
+			action.options.h = FixupNumericOrVariablesValueToExpressions(action.options.h) ?? { value: 1080, isExpression: false }
+			if (action.options.xAnchor === undefined) action.options.xAnchor = { value: 'lx + 0.5 * lw', isExpression: true }
+			if (action.options.yAnchor === undefined) action.options.yAnchor = { value: 'ly + 0.5 * lh', isExpression: true }
+			if (action.options.ar === undefined) action.options.ar = { value: '', isExpression: false }
 
 			actionsToUpdate.push(action)
 		})
-       
-        return { 
+
+        return {
             updatedConfig: null,
             updatedActions: actionsToUpdate,
             updatedFeedbacks: [],
@@ -44,27 +42,29 @@ const UpgradeScripts = [
 				&& action.options['device'] === undefined
 			))
 			.forEach((oldAction: CompanionMigrationAction) => {
-				const action = {...oldAction}
-				if (action.options.device === undefined) action.options.device = 1
-				if (typeof action.options.device === 'string') action.options.device = parseInt(action.options.device)
-				if (typeof action.options.device === 'number' && isNaN(action.options.device)) action.options.device = 1
-				if (typeof action.options.device === 'number' && action.options.device < 1) action.options.device = 1
+				const action = {...oldAction, options: {...oldAction.options}}
+				let device: number = typeof action.options.device?.value === 'number' ? action.options.device.value : 1
+				if (typeof action.options.device?.value === 'string') device = parseInt(action.options.device.value)
+				if (isNaN(device) || device < 1) device = 1
+				action.options.device = { value: device, isExpression: false }
 
-				if (action.options.out && !action.options.out1) action.options.out1 = action.options.out
-				if (action.options.out && !action.options.out2) action.options.out2 = action.options.out
-				if (action.options.out && !action.options.out3) action.options.out3 = action.options.out
-				if (action.options.out && !action.options.out4) action.options.out4 = action.options.out
-				if (action.options.out && action.options.out1) delete action.options.out
-				if (action.options.in && !action.options.in1) action.options.in1 = action.options.in
-				if (action.options.in && !action.options.in2) action.options.in2 = action.options.in
-				if (action.options.in && !action.options.in3) action.options.in3 = action.options.in
-				if (action.options.in && !action.options.in4) action.options.in4 = action.options.in
-				if (action.options.in && action.options.in1) delete action.options.in
+				const out = action.options.out?.value
+				if (out !== undefined && action.options.out1 === undefined) action.options.out1 = { value: out, isExpression: false }
+				if (out !== undefined && action.options.out2 === undefined) action.options.out2 = { value: out, isExpression: false }
+				if (out !== undefined && action.options.out3 === undefined) action.options.out3 = { value: out, isExpression: false }
+				if (out !== undefined && action.options.out4 === undefined) action.options.out4 = { value: out, isExpression: false }
+				if (out !== undefined && action.options.out1 !== undefined) delete action.options.out
+				const inp = action.options.in?.value
+				if (inp !== undefined && action.options.in1 === undefined) action.options.in1 = { value: inp, isExpression: false }
+				if (inp !== undefined && action.options.in2 === undefined) action.options.in2 = { value: inp, isExpression: false }
+				if (inp !== undefined && action.options.in3 === undefined) action.options.in3 = { value: inp, isExpression: false }
+				if (inp !== undefined && action.options.in4 === undefined) action.options.in4 = { value: inp, isExpression: false }
+				if (inp !== undefined && action.options.in1 !== undefined) delete action.options.in
 
 				actionsToUpdate.push(action)
 			})
-       
-        return { 
+
+        return {
             updatedConfig: null,
             updatedActions: actionsToUpdate,
             updatedFeedbacks: [],
@@ -77,15 +77,15 @@ const UpgradeScripts = [
 		const actionsToUpdate:CompanionMigrationAction[] = []
 
 		actions
-			.filter((action: CompanionMigrationAction) => (action.actionId === 'devicePower' && action.options['action'] === 'wake'))
+			.filter((action: CompanionMigrationAction) => (action.actionId === 'devicePower' && action.options['action']?.value === 'wake'))
 			.forEach((oldAction: CompanionMigrationAction) => {
-				const action = {...oldAction}
-				action.options.wake = 'on'
+				const action = {...oldAction, options: {...oldAction.options}}
+				action.options.wake = { value: 'on', isExpression: false }
 
 				actionsToUpdate.push(action)
 			})
-       
-        return { 
+
+        return {
             updatedConfig: null,
             updatedActions: actionsToUpdate,
             updatedFeedbacks: [],

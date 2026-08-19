@@ -1,15 +1,21 @@
 import {
+	CompanionActionSchemaWithoutResult,
+	CompanionActionSchemaWithResult,
+	CompanionFeedbackSchema,
+	CompanionOptionValues,
+	CompanionPresetDefinitions,
+	CompanionVariableDefinitions,
+	CompanionVariableValues,
+	JsonValue,
 	combineRgb,
-	CompanionVariableDefinition,
 	InstanceBase,
 	InstanceStatus,
-	runEntrypoint,
 	SomeCompanionConfigField,
 } from '@companion-module/base'
 import { AWJconnection } from './connection.js'
 import { AWJdevice } from './awjdevice/awjdevice.js'
 import { Config, GetConfigFields } from './config.js'
-import { initVariables } from './variables.js'
+import { initVariables, TrackedVariable } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { StateMachine } from './state.js'
 import Constants from './awjdevice/constants.js'
@@ -60,9 +66,21 @@ export const regexAWJpath = '^DeviceObject(?:\\/(@items|@props|\\$?[A-Za-z0-9_-]
  */
 
 /**
+ * Manifest of the schema for this instance. Actions, feedbacks and variables are kept loosely typed
+ * (the permissive default shape) since this module builds its option definitions dynamically per platform.
+ */
+export type AWJInstanceSchema = {
+	config: Config
+	secrets: undefined
+	actions: Record<string, CompanionActionSchemaWithoutResult<CompanionOptionValues> | CompanionActionSchemaWithResult<CompanionOptionValues, JsonValue>>
+	feedbacks: Record<string, CompanionFeedbackSchema<CompanionOptionValues>>
+	variables: CompanionVariableValues
+}
+
+/**
  * Companion instance class for the Analog Way AWJ API products.
  */
-export class AWJinstance extends InstanceBase<Config> {
+export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	/**
 	 * Create an instance of an AWJ module.
 	 */
@@ -93,7 +111,7 @@ export class AWJinstance extends InstanceBase<Config> {
 	public device!: AWJdevice
 	
 	/** variables storage */
-	private variables!: (CompanionVariableDefinition & { id?: string })[]
+	private variables!: TrackedVariable[]
 	
 	/** the instance configuration */
 	public config!: Config
@@ -258,10 +276,11 @@ export class AWJinstance extends InstanceBase<Config> {
 
 		this.setFeedbackDefinitions(this.feedbacks.allFeedbacks)
 		this.setActionDefinitions(this.actions.allActions)
-		this.setPresetDefinitions(this.presets.allPresets)
+		// cast: presets/actions/feedbacks are intentionally kept loosely typed (see AWJInstanceSchema), so the
+		// preset structure's nested references to them don't line up 1:1 with this specific schema instantiation
+		this.setPresetDefinitions(this.presets.presetStructure, this.presets.allPresets as CompanionPresetDefinitions<AWJInstanceSchema>)
 		this.setVariableValues({ connectionLabel: this.label })
-		this.subscribeFeedbacks()
-		
+
 		let preset: string,
 				vartext = 'PGM'
 		if (this.state.syncSelection) {
@@ -291,11 +310,9 @@ export class AWJinstance extends InstanceBase<Config> {
 	public updateVariableDefinitions(variables = this.variables) {
 		// make set with unique variableIds
 		const varIds = new Set(variables.map(variable => variable.variableId))
-		const vars: CompanionVariableDefinition[] = []
+		const vars: CompanionVariableDefinitions<CompanionVariableValues> = {}
 		varIds.forEach(varId => {
-			vars.push(
-				variables.map(vari => { return { name: vari.name, variableId: vari.variableId } }).find(vari => vari.variableId === varId) || { name: '', variableId: '' }
-			)
+			vars[varId] = { name: variables.find(vari => vari.variableId === varId)?.name ?? '' }
 		})
 		this.setVariableDefinitions(vars)
 	}
@@ -309,7 +326,11 @@ export class AWJinstance extends InstanceBase<Config> {
 	 * @param {string} newVariable.name - human readable description of the variable's content.
 	 * @returns 
 	 */
-	public addVariable(newVariable: (CompanionVariableDefinition & { id?: string })): void {
+	public addVariable(newVariable: TrackedVariable): void {
+		if (this.variables.some(variable => variable.id === newVariable.id && variable.variableId === newVariable.variableId)) {
+			// already registered by this same id, nothing to do (feedbacks may call this on every check, not just once)
+			return
+		}
 		this.variables.push(newVariable)
 		if (this.variables.some(variable => (variable.variableId === newVariable.variableId && variable.id !== newVariable.id))) { // the variable already exists from another id
 			return
@@ -506,4 +527,5 @@ export class AWJinstance extends InstanceBase<Config> {
 	}
 }
 
-runEntrypoint(AWJinstance, UpgradeScripts)
+export { UpgradeScripts }
+export default AWJinstance

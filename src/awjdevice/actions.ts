@@ -2,11 +2,11 @@ import {AWJinstance} from '../index.js'
 
 import Choices, { Choicemeta } from './choices.js'
 import {
+	CompanionActionContext,
 	CompanionActionDefinitions,
 	CompanionActionEvent,
 	CompanionInputFieldDropdown,
 	DropdownChoice,
-	DropdownChoiceId,
 	SomeCompanionActionInputField,
 } from '@companion-module/base'
 import { Config } from '../config.js'
@@ -25,7 +25,7 @@ type AWJaction<T> = {
 	description?: string
 	tooltip?: string,
 	options: SomeAWJactionInputfield<T>[]
-	callback?: (action: ActionEvent<T>) => void
+	callback?: (action: ActionEvent<T>, context: CompanionActionContext) => void
 	subscribe?: (action: ActionEvent<T>) => void
 	unsubscribe?: (action: ActionEvent<T>) => void
 	learn?: (
@@ -133,6 +133,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen',
 					choices: [{ id: 'sel', label: 'Selected' }],
@@ -147,6 +148,7 @@ export default class Actions {
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen Memory',
 					choices: this.choices.getScreenMemoryChoices(),
@@ -184,16 +186,16 @@ export default class Actions {
 						{ id: 'sel', label: 'Use Selected Layers' },
 					],
 					default: 'spec',
+					disableAutoExpression: true,
 				},
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen / Aux',
 					choices: this.choices.getScreenAuxChoices(),
 					default: [this.choices.getScreenAuxChoices()[0]?.id],
-					isVisible: (options) => {
-						return options.method === 'spec'
-					},
+					isVisibleExpression: "$(options:method) == 'spec'",
 				},
 				{
 					id: 'preset',
@@ -201,9 +203,7 @@ export default class Actions {
 					label: 'Preset',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
 					default: 'pvw',
-					isVisible: (options) => {
-						return options.method === 'spec'
-					},
+					isVisibleExpression: "$(options:method) == 'spec'",
 				},
 				{
 					id: 'layer',
@@ -211,12 +211,11 @@ export default class Actions {
 					label: 'Layer',
 					choices: this.choices.getLayerChoices(this.constants.maxLayers, true),
 					default: ['1'],
-					isVisible: (options) => {
-						return options.method === 'spec'
-					},
+					isVisibleExpression: "$(options:method) == 'spec'",
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer Memory',
 					choices: this.choices.getLayerMemoryChoices(),
@@ -278,6 +277,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Auxscreen',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.getAuxChoices()],
@@ -292,6 +292,7 @@ export default class Actions {
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Aux Memory',
 					choices: this.choices.getAuxMemoryChoices(),
@@ -327,6 +328,7 @@ export default class Actions {
 				},
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Master Memory',
 					choices: this.choices.getMasterMemoryChoices(),
@@ -355,6 +357,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'memory',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Memory',
 					choices: this.choices.getMultiviewerMemoryChoices(),
@@ -400,7 +403,7 @@ export default class Actions {
 					label: 'Multiviewer',
 					choices: [{id: '1', label: 'Multiviewer 1'}],
 					default: ['1'],
-					isVisible: () => false
+					isVisibleExpression: 'false',
 				},
 			)
 		}
@@ -418,6 +421,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
 					choices: [
@@ -444,6 +448,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
@@ -487,6 +492,7 @@ export default class Actions {
 				},
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
@@ -512,8 +518,8 @@ export default class Actions {
 				}
 			],
 			callback: async (action) => {
-				const position = parseFloat(await this.instance.parseVariablesInString(action.options.position))
-				const maximum = parseFloat(await this.instance.parseVariablesInString(action.options.maximum))
+				const position = parseFloat(action.options.position)
+				const maximum = parseFloat(action.options.maximum)
 				const tbarmax = 65535
 				if (typeof position === 'number' && typeof maximum === 'number' && position >= 0 && maximum >= 0) {
 					let value = 0.0
@@ -544,6 +550,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
@@ -571,17 +578,19 @@ export default class Actions {
 				const time = action.options.time as number * 10
 				this.choices.getChosenScreenAuxes(action.options.screens).forEach((screen) => {
 					const presetPgm = this.choices.getPreset(screen, 'PGM')
+					// direction must match deviceTakeScreen's mapping: presetPgm === 'A' means the next take moves the T-Bar up (xTakeUp),
+					// so "pgm" (the direction leading into the new program) corresponds to takeUpTime there, not takeDownTime
 					if (
 						action.options.preset === 'all' ||
-						(action.options.preset === 'pgm' && presetPgm === 'A') ||
-						(action.options.preset === 'pvw' && presetPgm === 'B')
+						(action.options.preset === 'pgm' && presetPgm === 'B') ||
+						(action.options.preset === 'pvw' && presetPgm === 'A')
 					) {
 						this.connection.sendWSmessage([...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'takeDownTime'], time)
 					}
 					if (
 						action.options.preset === 'all' ||
-						(action.options.preset === 'pvw' && presetPgm === 'A') ||
-						(action.options.preset === 'pgm' && presetPgm === 'B')
+						(action.options.preset === 'pvw' && presetPgm === 'B') ||
+						(action.options.preset === 'pgm' && presetPgm === 'A')
 					) {
 						this.connection.sendWSmessage([...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'takeUpTime'], time)
 					}
@@ -608,16 +617,17 @@ export default class Actions {
 						{ id: 'sel', label: 'Target selected layers' },
 					],
 					default: 'spec',
+					disableAutoExpression: true,
 				},
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen / Aux',
 					choices: this.choices.getScreenAuxChoices(),
 					default: [this.choices.getScreenAuxChoices()[0]?.id],
-					isVisible: (options) => {
-						return options.method === 'spec'
-					},
+					isVisibleExpression: "$(options:method) == 'spec'",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'preset',
@@ -625,9 +635,7 @@ export default class Actions {
 					label: 'Preset',
 					choices: this.choices.choicesPreset,
 					default: 'pvw',
-					isVisible: (options) => {
-						return options.method === 'spec'
-					}
+					isVisibleExpression: "$(options:method) == 'spec'",
 				},
 			],
 			callback: () => {},
@@ -743,10 +751,12 @@ export default class Actions {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen',
 					choices: this.choices.getScreenChoices(),
 					default: [this.choices.getScreenChoices()[0]?.id],
+					disableAutoExpression: true,
 				},
 				...this.choices.getScreensArray().map((screen) => {
 					return {
@@ -755,10 +765,7 @@ export default class Actions {
 						label: 'Layer ' + screen.id,
 						choices: [{id:'NATIVE', label: 'Background Layer'}, ...this.choices.getLayerChoices(screen.id, false)],
 						default: ['1'],
-						isVisibleData: screen.id,
-						isVisible: (options, screenId) => {
-							return options.screen.includes(screenId)
-						},
+						isVisibleExpression: `arrayIncludes($(options:screen), '${screen.id}')`,
 					}
 				}),
 				{
@@ -813,6 +820,7 @@ export default class Actions {
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen',
 					choices: this.choices.getScreenAuxChoices(),
@@ -1050,8 +1058,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				layer.inHeight = 0
 			}
 			
-			const boxWidth = boundingBoxes[layer.screenAuxKey]?.right - boundingBoxes[layer.screenAuxKey]?.x ?? layer.w
-			const boxHeight = boundingBoxes[layer.screenAuxKey]?.bottom - boundingBoxes[layer.screenAuxKey]?.y ?? layer.h
+			const boxWidth = boundingBoxes[layer.screenAuxKey]?.right - boundingBoxes[layer.screenAuxKey]?.x
+			const boxHeight = boundingBoxes[layer.screenAuxKey]?.bottom - boundingBoxes[layer.screenAuxKey]?.y
 
 			const context = {
 				sw: screenWidth,
@@ -1083,10 +1091,12 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Aux',
 					choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenAuxChoices()],
 					default: 'sel',
+					disableAutoExpression: true,
 				},
 				{
 					id: 'preset',
@@ -1102,7 +1112,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
 					choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...Array.from({length: this.constants.maxLayers}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
 					default: 'sel',
-					isVisible: (options) => {return options.screen === 'sel'},
+					isVisibleExpression: "$(options:screen) == 'sel'",
 				},
 				...this.screens.map((screen) => {
 					return{
@@ -1112,10 +1122,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
 						choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...this.choices.getLayerChoices(screen.id, false)],
 						default: 'sel',
-						isVisibleData: screen.id,
-						isVisible: (options: any, screenID: string) => {
-							return options.screen === screenID
-						}
+						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
 					}
 				}),
 				{
@@ -1129,6 +1136,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						{ id: 'h', label: 'Height' },
 					],
 					default: ['x', 'y', 'w', 'h'],
+					disableAutoExpression: true,
 				},
 				{
 					id: 'x',
@@ -1137,7 +1145,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip,
 					default: '',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('x')},
+					isVisibleExpression: "arrayIncludes($(options:parameters), 'x')",
 				},
 				{
 					id: 'y',
@@ -1146,7 +1154,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip,
 					default: '',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('y')},
+					isVisibleExpression: "arrayIncludes($(options:parameters), 'y')",
 				},
 				{
 					id: 'w',
@@ -1155,7 +1163,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip,
 					default: '',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('w')},
+					isVisibleExpression: "arrayIncludes($(options:parameters), 'w')",
 				},
 				{
 					id: 'h',
@@ -1164,7 +1172,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip,
 					default: '',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('h')},
+					isVisibleExpression: "arrayIncludes($(options:parameters), 'h')",
 				},
 				{
 					id: 'xAnchor',
@@ -1173,7 +1181,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip,
 					default: 'lx + 0.5 * lw',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('x') || options.parameters.includes('w') || options.parameters.includes('h')},
+					isVisibleExpression: "arrayIncludes($(options:parameters), 'x') || arrayIncludes($(options:parameters), 'w') || arrayIncludes($(options:parameters), 'h')",
 				},
 				{
 					id: 'yAnchor',
@@ -1182,7 +1190,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip,
 					default: 'ly + 0.5 * lh',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('y') || options.parameters.includes('w') || options.parameters.includes('h')},
+					isVisibleExpression: "arrayIncludes($(options:parameters), 'y') || arrayIncludes($(options:parameters), 'w') || arrayIncludes($(options:parameters), 'h')",
 				},
 				{
 					id: 'ar',
@@ -1191,7 +1199,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					tooltip: `use "keep" to keep the aspect ratio, use notations like 16/9, 4/3, 1.678 to set to a specific ratio, use nothing or any other word to change aspect ratio`,
 					default: '',
 					useVariables: true,
-					isVisible: (options) => {return options.parameters.includes('h') && !options.parameters.includes('w') || !options.parameters.includes('h') && options.parameters.includes('w')},
+					isVisibleExpression: "(arrayIncludes($(options:parameters), 'h') && !arrayIncludes($(options:parameters), 'w')) || (!arrayIncludes($(options:parameters), 'h') && arrayIncludes($(options:parameters), 'w'))",
 				},
 			],
 			learn: async (action) => {
@@ -1235,13 +1243,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 				newoptions.parameters = ['x', 'y', 'w', 'h']
 
-				const xAnchorPromise = this.instance.parseVariablesInString(action.options.xAnchor)
-				const yAnchorPromise = this.instance.parseVariablesInString(action.options.yAnchor)
-
-				const [xAnchorParsed, yAnchorParsed] = await Promise.all([xAnchorPromise, yAnchorPromise])
-
-				let   xAnchor     = parseExpressionString(xAnchorParsed, context, 0)
-				let   yAnchor     = parseExpressionString(yAnchorParsed, context, 0)
+				let   xAnchor     = parseExpressionString(action.options.xAnchor, context, 0)
+				let   yAnchor     = parseExpressionString(action.options.yAnchor, context, 0)
 				
 				
 				newoptions.w = context.lw.toString()
@@ -1286,28 +1289,18 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 					if (context === undefined) continue
 
-					const xAnchorPromise = this.instance.parseVariablesInString(action.options.xAnchor)
-					const xPromise       = this.instance.parseVariablesInString(action.options.x)
-					const yAnchorPromise = this.instance.parseVariablesInString(action.options.yAnchor)
-					const yPromise       = this.instance.parseVariablesInString(action.options.y)
-					const wPromise       = this.instance.parseVariablesInString(action.options.w)
-					const hPromise       = this.instance.parseVariablesInString(action.options.h)
-					const arPromise      = this.instance.parseVariablesInString(action.options.ar)
-
-					const [xAnchorParsed, xParsed, yAnchorParsed, yParsed, wParsed, hParsed, arParsed] = await Promise.all([xAnchorPromise, xPromise, yAnchorPromise, yPromise, wPromise, hPromise, arPromise])
-
-					let   xAnchor     = parseExpressionString(xAnchorParsed, context, 0)
-					const xPos        = parseExpressionString(xParsed, context, layer.x)
-					let   yAnchor     = parseExpressionString(yAnchorParsed, context, 0)
-					const yPos        = parseExpressionString(yParsed, context, layer.y)
-					const widthInput  = parseExpressionString(wParsed, context, layer.w)
-					const heightInput = parseExpressionString(hParsed, context, layer.h)
+					let   xAnchor     = parseExpressionString(action.options.xAnchor, context, 0)
+					const xPos        = parseExpressionString(action.options.x, context, layer.x)
+					let   yAnchor     = parseExpressionString(action.options.yAnchor, context, 0)
+					const yPos        = parseExpressionString(action.options.y, context, layer.y)
+					const widthInput  = parseExpressionString(action.options.w, context, layer.w)
+					const heightInput = parseExpressionString(action.options.h, context, layer.h)
 
 					let ar: number | undefined
 					if (action.options.ar.match(/keep/i)) {
 						ar = calculateAr(layer.w, layer.h)?.value ?? 0
 					} else {
-						ar = parseExpressionString(arParsed, context, calculateAr(layer.w, layer.h)?.value)
+						ar = parseExpressionString(action.options.ar, context, calculateAr(layer.w, layer.h)?.value)
 					}
 
 					// adjust position according anchor
@@ -1410,6 +1403,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			options: [
 				{
 					id: 'screens',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
 					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
@@ -1549,6 +1543,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			options: [
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					label: 'Screen',
 					type: 'dropdown',
 					choices: this.choices.getScreenAuxChoices(),
@@ -1674,6 +1669,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				{
 					
 					id: 'screens',
+					allowInvalidValues: true,
 					label: 'Screen',
 					type: 'multidropdown',
 					choices: [{ id: 'all', label: 'ALL' }, { id: 'sel', label: 'Selected' }, ...this.choices.getScreenAuxChoices()],
@@ -1877,16 +1873,17 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						{ id: 'seltgl', label: 'Toggle layers of selected screens and preset' },
 					],
 					default: 'spec',
+					disableAutoExpression: true,
 				},
 				{
 					id: 'screen',
+					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen / Aux',
 					choices: this.choices.getScreenAuxChoices(),
 					default: [this.choices.getScreenAuxChoices()[0]?.id],
-					isVisible: (options) => {
-						return options.method.startsWith('spec')
-					},
+					isVisibleExpression: "indexOf($(options:method), 'spec') == 0",
+					disableAutoExpression: true,
 				},
 				{
 					id: `layersel`,
@@ -1896,9 +1893,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						'Choose all the layers you want to be selected, every other layer on any screen will be deselected. This action does not change the preset, if you want a specific preset, add the according action.',
 					choices: this.choices.getLayerChoices(48, true),
 					default: ['1'],
-					isVisible: (options) => {
-						return options.method.startsWith('sel')
-					},
+					isVisibleExpression: "indexOf($(options:method), 'sel') == 0",
 				},
 			],
 			callback: (action) => {
@@ -1952,7 +1947,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		}
 		for (const screen of this.screens) {
 			const layerChoices = this.choices.getLayerChoices(screen.id, true)
-			let defaultChoice: DropdownChoiceId
+			let defaultChoice: string | number
 			if (layerChoices.find((choice: DropdownChoice) => choice.id === '1')) defaultChoice = '1'
 			else defaultChoice = layerChoices[0].id
 
@@ -1962,10 +1957,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				label: 'Layer ' + screen.id,
 				choices: layerChoices,
 				default: [defaultChoice],
-				isVisibleData: screen.id,
-				isVisible: (options, screenId) => {
-					return options.method.startsWith('spec') && options.screen.includes(screenId)
-				},
+				isVisibleExpression: `indexOf($(options:method), 'spec') == 0 && arrayIncludes($(options:screen), '${screen.id}')`,
 			})
 		}
 
@@ -2135,16 +2127,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Route Audio (Block)',
 			options: [
-				{
-					type: 'dropdown',
+				// TODO(isVisible-migration): build-time-only visibility (based on number of linked devices at field-construction time, not a live option); field is only included when there is more than one linked device
+				...(this.choices.getLinkedDevicesChoices().length > 1 ? [{
+					type: 'dropdown' as const,
 					label: 'Device',
 					id: 'device',
 					choices: this.choices.getLinkedDevicesChoices(),
 					default: '1',
-					isVisibleData: this.choices.getLinkedDevicesChoices(),
-					isVisible: (_opt, choices) => {return choices.length > 1},
 					minChoicesForSearch: 3,
-				},
+				}] : []),
 				{
 					type: 'dropdown',
 					label: 'First Output Channel',
@@ -2189,16 +2180,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Route Audio (Channels)',
 			options: [
-				{
-					type: 'dropdown',
+				// TODO(isVisible-migration): build-time-only visibility (based on number of linked devices at field-construction time, not a live option); field is only included when there is more than one linked device
+				...(this.choices.getLinkedDevicesChoices().length > 1 ? [{
+					type: 'dropdown' as const,
 					label: 'Device',
 					id: 'device',
 					choices: this.choices.getLinkedDevicesChoices(),
 					default: 1,
-					isVisibleData: this.choices.getLinkedDevicesChoices(),
-					isVisible: (_opt, choices) => {return choices.length > 1},
 					minChoicesForSearch: 3,
-				},
+				}] : []),
 				{
 					type: 'dropdown',
 					label: '(first) output channel',
@@ -2248,6 +2238,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						{ id: 'STOPWATCH', label: 'Count up' },
 					],
 					default: 'COUNTDOWN',
+					disableAutoExpression: true,
 				},
 				{
 					id: 'currentTimeMode',
@@ -2258,9 +2249,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						{ id: '12H_AM_PM', label: '12 hours' },
 					],
 					default: '24H',
-					isVisible: (options) => {
-						return options.type === 'CURRENTTIME'
-					},
+					isVisibleExpression: "$(options:type) == 'CURRENTTIME'",
 				},
 				{
 					id: 'unitMode',
@@ -2272,9 +2261,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						{ id: 'IN_HOURS', label: 'In hours' },
 					],
 					default: 'IN_MINUTES',
-					isVisible: (options) => {
-						return options.type != 'CURRENTTIME'
-					},
+					isVisibleExpression: "$(options:type) != 'CURRENTTIME'",
 				},
 				{
 					id: 'fg_color',
@@ -2341,7 +2328,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					timetype = 'timeOffset'
 				}
 				let time = this.state.get(['DEVICE', 'device', 'timerList', 'items', action.options.timer, 'control', 'pp', timetype])
-				const inputvalue = await this.instance.parseVariablesInString(action.options.time)
+				const inputvalue = action.options.time
 				if (action.options.action === 'add') {
 					time += timeToSeconds(inputvalue)
 				} else if (action.options.action === 'sub') {
@@ -2520,6 +2507,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					{ id: 'inputList', label: 'Input Group' },
 				],
 				default: 'outputList',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'screenList',
@@ -2527,9 +2515,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				label: 'Screen',
 				choices: this.choices.getScreenAuxChoices(),
 				default: this.choices.getScreenAuxChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'screenList'
-				},
+				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
 				id: 'outputList',
@@ -2537,9 +2523,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'outputList'
-				},
+				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
 				id: 'inputList',
@@ -2547,9 +2531,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				label: 'Input',
 				choices: this.choices.getLiveInputChoices(),
 				default: this.choices.getLiveInputChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'inputList'
-				},
+				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{
 				id: 'patall',
@@ -2557,9 +2539,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				label: 'Pattern',
 				choices: [{ id: '0', label: 'Off' }],
 				default: '0',
-				isVisible: (options) => {
-					return options.group === 'all'
-				},
+				isVisibleExpression: "$(options:group) == 'all'",
 			},
 			{
 				id: 'screenListPat',
@@ -2569,9 +2549,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					{ id: 'NONE', label: 'Off' },
 				],
 				default: 'NONE',
-				isVisible: (options) => {
-					return options.group === 'screenList'
-				},
+				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
 				id: 'inputListPat',
@@ -2581,9 +2559,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					{ id: 'NO_PATTERN', label: 'Off' },
 				],
 				default: 'NO_PATTERN',
-				isVisible: (options) => {
-					return options.group === 'inputList'
-				},
+				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{
 				id: 'outputListPat',
@@ -2593,9 +2569,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					{ id: 'NO_PATTERN', label: 'Off' },
 				],
 				default: 'NO_PATTERN',
-				isVisible: (options) => {
-					return options.group === 'outputList'
-				},
+				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 		]
 
@@ -2632,19 +2606,20 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						{ id: '4', label: 'Object' },
 					],
 					default: '1',
+					disableAutoExpression: true,
 				},
 				{
 					type: 'textinput',
 					id: 'textValue',
 					label: 'value',
 					useVariables: true,
-					isVisible: (options) => options.valuetype === '1',
+					isVisibleExpression: "$(options:valuetype) == '1'",
 				},
 				{
 					type: 'number',
 					id: 'numericValue',
 					label: 'value',
-					isVisible: (options) => options.valuetype === '2',
+					isVisibleExpression: "$(options:valuetype) == '2'",
 					default: 0,
 					min: -32768,
 					max: 32768,
@@ -2653,7 +2628,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					type: 'checkbox',
 					id: 'booleanValue',
 					label: 'value',
-					isVisible: (options) => options.valuetype === '3',
+					isVisibleExpression: "$(options:valuetype) == '3'",
 					default: false
 				},
 				{
@@ -2661,7 +2636,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					id: 'objectValue',
 					label: 'value',
 					useVariables: true,
-					isVisible: (options) => options.valuetype === '4',
+					isVisibleExpression: "$(options:valuetype) == '4'",
 				},
 				{
 					type: 'checkbox',
@@ -2672,8 +2647,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			],
 			callback: async (action) => {
 				let value: string | number | boolean | string[] = ''
-				if (action.options.valuetype === '1') {	
-					value = await this.instance.parseVariablesInString(action.options.textValue)
+				if (action.options.valuetype === '1') {
+					value = action.options.textValue
 				} else if (action.options.valuetype === '2') {
 					value = action.options.numericValue
 				} else if (action.options.valuetype === '3') {
@@ -2683,11 +2658,11 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						value = false
 					}
 				} else if (action.options.valuetype === '4') {
-					value = JSON.parse(await this.instance.parseVariablesInString(action.options.objectValue))
+					value = JSON.parse(action.options.objectValue)
 				}
 				try {
 					//const obj = JSON.parse(action.options.command) // check if the data is a valid json TODO: further validation
-					const path = this.instance.AWJtoJsonPath(await this.instance.parseVariablesInString(action.options.path))
+					const path = this.instance.AWJtoJsonPath(action.options.path)
 					if (path.length > 1) {
 						this.connection.sendWSmessage(path, value)
 						//this.device.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":${JSON.stringify(path)},"value":${value}}}`)
@@ -2764,12 +2739,12 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					label: 'Variable to store type'
 				},
 			],
-			callback: async (action) => {
+			callback: async (action, context) => {
 				let value: string | number | boolean | object= 'undefined'
 				let type = 'undefined'
 				try {
 					//const obj = JSON.parse(action.options.command) // check if the data is a valid json TODO: further validation
-					const path = this.instance.AWJtoJsonPath(await this.instance.parseVariablesInString(action.options.path))
+					const path = this.instance.AWJtoJsonPath(action.options.path)
 					if (path.length > 1) {
 						value = this.state.get(['DEVICE', ...path])
 						type = typeof value
@@ -2784,10 +2759,10 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				if (typeof value !== 'string') value = value.toString()
 
 				if (typeof action.options.variableValue === 'string') {
-					this.instance.setCustomVariableValue(action.options.variableValue, value)
+					context.setCustomVariableValue(action.options.variableValue, value)
 				}
 				if (typeof action.options.variableType === 'string') {
-					this.instance.setCustomVariableValue(action.options.variableType, type)
+					context.setCustomVariableValue(action.options.variableType, type)
 				}
 			},
 			learn: (action) => {

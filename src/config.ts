@@ -1,6 +1,6 @@
-import { combineRgb, SomeCompanionConfigField } from '@companion-module/base'
+import { combineRgb, JsonObject, SomeCompanionConfigField } from '@companion-module/base'
 
-export interface Config {
+export interface Config extends JsonObject {
 	deviceaddr: string
 	macaddress: string
 	sync: boolean

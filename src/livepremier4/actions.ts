@@ -1,6 +1,7 @@
 import {AWJinstance} from '../index.js'
 
 import {
+	CompanionActionContext,
 	CompanionActionEvent,
 	CompanionInputFieldDropdown,
 	SomeCompanionActionInputField,
@@ -16,7 +17,7 @@ type AWJaction<T> = {
 	description?: string
 	tooltip?: string,
 	options: SomeAWJactionInputfield<T>[]
-	callback?: (action: ActionEvent<T>) => void
+	callback?: (action: ActionEvent<T>, context: CompanionActionContext) => void
 	subscribe?: (action: ActionEvent<T>) => void
 	unsubscribe?: (action: ActionEvent<T>) => void
 	learn?: (
@@ -297,10 +298,7 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Layer ' + screen.id,
 				choices: this.choices.getLayerChoices(screen.id, isScreen),
 				default: ['1'],
-				isVisibleData: screen.id,
-				isVisible: (options, screenId) => {
-					return options.method === 'spec' && options.screen.includes(screenId)
-				},
+				isVisibleExpression: `$(options:method) == 'spec' && arrayIncludes($(options:screen), '${screen.id}')`,
 			})
 		})
 		deviceSelectSource.options.push(
@@ -310,15 +308,12 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Screen Layer Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getSourceChoices()],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					if (options.method === 'spec') {
-						for (const screen of options.screen.filter((screen) => screen.startsWith('S'))) {
-							if (options[`layer${screen}`].find((elem: string) => elem.match(/^\d+$/))) return true
-						}
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected S-prefixed screens have a non-NATIVE (numeric) layer selected in their per-screen layer field.
+				// This depends on a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot be
+				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
+				// silently hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 			{
 				id: 'sourceNative',
@@ -326,15 +321,12 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Screen Background Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.choicesBackgroundSourcesPlusNone],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					if (options.method === 'spec') {
-						for (const screen of options.screen.filter((screen) => screen.startsWith('S'))) {
-							if (options[`layer${screen}`].find((elem: string) => elem === 'NATIVE')) return true
-						}
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected S-prefixed screens have a NATIVE layer selected in their per-screen layer field. This depends
+				// on a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot be expressed
+				// generically in Companion's expression language. Falling back to always-visible to avoid silently
+				// hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 			{
 				id: 'sourceBack',
@@ -342,15 +334,12 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Aux Layer Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getAuxSourceChoices()],
 				default: 'keep',
-				isVisible: (options) => {
-					if (options.method === 'sel') return true
-					if (options.method === 'spec') {
-						for (const screen of options.screen.filter((screen) => screen.startsWith('A'))) {
-							if (options[`layer${screen}`].find((elem: string) => elem.match(/^\d+$/))) return true
-						}
-					}
-					return false
-				},
+				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
+				// selected A-prefixed screens have a non-NATIVE (numeric) layer selected in their per-screen layer field.
+				// This depends on a dynamic, per-screen set of multidropdown fields (layer<screenId>) that cannot be
+				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
+				// silently hiding functionality; needs manual review.
+				isVisibleExpression: 'true',
 			},
 		)
 		
@@ -583,9 +572,13 @@ export default class ActionsLivepremier4 extends Actions {
 					id: 'device',
 					choices: this.choices.getLinkedDevicesChoices(),
 					default: 1,
-					isVisibleData: devices,
-					isVisible: (_opt, devices) => {return devices > 1},
 					minChoicesForSearch: 3,
+					// NOTE: visibility here is a build-time constant (number of linked devices known when the action's
+					// options are constructed), not a live option, so it is baked in as a literal 'true'/'false' rather
+					// than a dynamic expression. The field itself must stay present (rather than being omitted) because
+					// its default value of 1 is relied upon by the callback below even for a single-device setup.
+					isVisibleExpression: devices > 1 ? 'true' : 'false',
+					disableAutoExpression: true,
 				},
 				...audioOutputChoices.map((choices, i) => {
 					return {
@@ -595,8 +588,7 @@ export default class ActionsLivepremier4 extends Actions {
 						choices: choices,
 						default: choices[0]?.id,
 						minChoicesForSearch: 0,
-						isVisibleData: i + 1,
-						isVisible: (opt, device) => {return opt.device == device}
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
 					}
 				}),
 				...audioInputChoices.map((choices, i) => {
@@ -607,8 +599,7 @@ export default class ActionsLivepremier4 extends Actions {
 						choices: choices,
 						default: choices[0]?.id,
 						minChoicesForSearch: 0,
-						isVisibleData: i + 1,
-						isVisible: (opt, device) => {return opt.device == device}
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
 					}
 				}),
 				{
@@ -650,7 +641,7 @@ export default class ActionsLivepremier4 extends Actions {
 				}
 			}
 		}
-		
+
 		return deviceAudioRouteBlock
 	}
 
@@ -677,8 +668,12 @@ export default class ActionsLivepremier4 extends Actions {
 					id: 'device',
 					choices: this.choices.getLinkedDevicesChoices(),
 					default: 1,
-					isVisibleData: devices,
-					isVisible: (_opt, devices) => {return devices > 1},
+					// NOTE: visibility here is a build-time constant (number of linked devices known when the action's
+					// options are constructed), not a live option, so it is baked in as a literal 'true'/'false' rather
+					// than a dynamic expression. The field itself must stay present (rather than being omitted) because
+					// its default value of 1 is relied upon by the callback below even for a single-device setup.
+					isVisibleExpression: devices > 1 ? 'true' : 'false',
+					disableAutoExpression: true,
 					minChoicesForSearch: 3,
 				},
 				...audioOutputChoices.map((choices, i) => {
@@ -689,8 +684,7 @@ export default class ActionsLivepremier4 extends Actions {
 						choices: choices,
 						default: choices[0]?.id,
 						minChoicesForSearch: 0,
-						isVisibleData: i + 1,
-						isVisible: (opt, device) => {return opt.device == device}
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
 					}
 				}),
 				...audioInputChoices.map((choices, i) => {
@@ -702,8 +696,7 @@ export default class ActionsLivepremier4 extends Actions {
 						default: ['NONE'],
 						minChoicesForSearch: 0,
 						minSelection: 0,
-						isVisibleData: i + 1,
-						isVisible: (opt, device) => {return opt.device == device}
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
 					}
 				}),
 			],
@@ -846,6 +839,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'inputList', label: 'Input Group' },
 				],
 				default: 'outputList',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'screenList',
@@ -853,9 +847,7 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Screen',
 				choices: this.choices.getScreenChoices(),
 				default: this.choices.getScreenChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'screenList'
-				},
+				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
 				id: 'outputList',
@@ -863,9 +855,7 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'outputList'
-				},
+				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
 				id: 'inputList',
@@ -873,9 +863,7 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Input',
 				choices: this.choices.getLiveInputChoices(),
 				default: this.choices.getLiveInputChoices()[0]?.id,
-				isVisible: (options) => {
-					return options.group === 'inputList'
-				},
+				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{
 				id: 'patall',
@@ -883,9 +871,7 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Pattern',
 				choices: [{ id: '0', label: 'Off' }],
 				default: '0',
-				isVisible: (options) => {
-					return options.group === 'all'
-				},
+				isVisibleExpression: "$(options:group) == 'all'",
 			},
 			{
 				id: 'screenListPat',
@@ -909,9 +895,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'THIRTY_BPP_2', label: '30 Bit per Pixel 2' },
 				],
 				default: 'NONE',
-				isVisible: (options) => {
-					return options.group === 'screenList'
-				},
+				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
 				id: 'inputListPat',
@@ -938,9 +922,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'ID', label: 'ID' },
 				],
 				default: 'NO_PATTERN',
-				isVisible: (options) => {
-					return options.group === 'inputList'
-				},
+				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{
 				id: 'outputListPat',
@@ -969,9 +951,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'SOFTEDGE', label: 'Softedge' },
 				],
 				default: 'NO_PATTERN',
-				isVisible: (options) => {
-					return options.group === 'outputList'
-				},
+				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 		]
 
