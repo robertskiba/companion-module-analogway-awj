@@ -28,6 +28,7 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 	readonly feedbacksToUse = [		
 		'syncselection',
 		'presetToggle',
+		'globalAnchorPoint',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
 		// 'deviceAuxMemory',

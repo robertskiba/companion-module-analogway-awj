@@ -21,6 +21,12 @@ export default class Subscriptions {
 		'syncselection',
 		// 'liveselection',
 		// 'layerselection',
+		// 'selectedLayerRect',
+		// 'selectedLayerSelectionChange',
+		// 'globalAnchorPointChange',
+		// 'selectedLayerSourceChange',
+		// 'selectedLayerSourceSignalChange',
+		// 'selectedScreenChange',
 		// 'widgetSelection',
 		// 'screenLock',
 		// 'sourceVisibility',
@@ -37,6 +43,7 @@ export default class Subscriptions {
 		// 'layerMemoryLabel',
 		// 'stillLabel',
 		// 'stillValid',
+		// 'stillLibraryChange',
 		// 'screenLabel',
 		// 'auxscreenLabel',
 		// 'screenEnabled',
@@ -171,6 +178,138 @@ export default class Subscriptions {
 		return {
 			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(source|position|size|opacity|crop|mask)',
 			fbk: 'deviceSourceTally',
+		}
+	}
+
+	/**
+	 * Refreshes SelectedLayer.count plus the SelectedLayer.x/.y/.width/.height/.number and
+	 * SelectedLayer.Input.Number/.Name/.width/.height variables for whichever layer was selected first
+	 * (confirmed live: the device's layerIds array is in Ctrl-click order, not layer number order - the
+	 * first entry is whichever layer was Ctrl-clicked first, not necessarily the lowest-numbered one).
+	 * Deliberately scoped to only the first of the selection - not a per-layer variable set, which would be
+	 * unbounded across many screens/layers - so this stays cheap: it just re-derives "who is selected right
+	 * now" and reads that one layer's already locally-synced state (no live device query). Shared by
+	 * selectedLayerRect (fires on position/size change), selectedLayerSelectionChange (selection changes),
+	 * globalAnchorPointChange (anchor point changes) and selectedLayerSourceChange/
+	 * selectedLayerSourceSignalChange (source reassigned or its signal changes), so the variables can't go
+	 * stale from any of those.
+	 */
+	private refreshSelectedLayerRect = (): boolean => {
+		const selectedLayers = this.instance.choices.getSelectedLayers()
+		this.instance.setVariableValues({ 'SelectedLayer.count': selectedLayers.length })
+		const layer = selectedLayers[0]
+		if (layer && layer.layerKey.match(/^\d+$/)) {
+			const screeninfo = this.instance.choices.getScreenInfo(layer.screenAuxKey)
+			const presetKey = this.instance.choices.getPreset(screeninfo.id, this.instance.choices.getPresetSelection('sel'))
+			const path = [
+				...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+				'items', screeninfo.platformId,
+				'presetList', 'items', presetKey,
+				...this.instance.choices.getLayerPath(layer.layerKey),
+			]
+			const sizeH = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH'])
+			const sizeV = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV'])
+			if (sizeH !== undefined && sizeV !== undefined) {
+				const posH = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posH']) ?? 0
+				const posV = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posV']) ?? 0
+				const anchor = this.instance.choices.getGlobalAnchorPoint()
+				const anchorPos = anchor === 'CENTER' ? { x: posH, y: posV } : this.instance.choices.convertAnchorPosition(posH, posV, sizeH, sizeV, 'CENTER', anchor)
+				const source = this.instance.choices.getLayerSourceInfo(path)
+				this.instance.setVariableValues({
+					'SelectedLayer.x': anchorPos.x,
+					'SelectedLayer.y': anchorPos.y,
+					'SelectedLayer.width': sizeH,
+					'SelectedLayer.height': sizeV,
+					'SelectedLayer.number': layer.layerKey,
+					'SelectedLayer.Input.Number': source.number,
+					'SelectedLayer.Input.Name': source.name,
+					'SelectedLayer.Input.width': source.width,
+					'SelectedLayer.Input.height': source.height,
+				})
+				return false
+			}
+		}
+		// nothing selected, or the selected "layer" is the background/NATIVE layer, which has no position/size
+		this.instance.setVariableValues({
+			'SelectedLayer.x': '',
+			'SelectedLayer.y': '',
+			'SelectedLayer.width': '',
+			'SelectedLayer.height': '',
+			'SelectedLayer.number': '',
+			'SelectedLayer.Input.Number': '',
+			'SelectedLayer.Input.Name': '',
+			'SelectedLayer.Input.width': '',
+			'SelectedLayer.Input.height': '',
+		})
+		return false
+	}
+
+	get selectedLayerRect():Subscription {
+		return {
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(position|size)',
+			fun: this.refreshSelectedLayerRect,
+		}
+	}
+
+	/** Selected layer changes - refreshes SelectedLayer.x/.y/.width/.height/.number and SelectedLayer.Input.*, see refreshSelectedLayerRect */
+	get selectedLayerSelectionChange():Subscription {
+		return {
+			pat: 'live/screens/layerSelection/layerIds',
+			fun: this.refreshSelectedLayerRect,
+		}
+	}
+
+	/** The globally selected Anchor Point changes (from this module, WebRCS, or another client) */
+	get globalAnchorPointChange():Subscription {
+		return {
+			pat: 'live/screens/layers/anchorPoint',
+			fbk: 'globalAnchorPoint',
+			fun: this.refreshSelectedLayerRect,
+		}
+	}
+
+	/** A layer's assigned source changes (new input/still picked) - refreshes SelectedLayer.Input.*, see refreshSelectedLayerRect */
+	get selectedLayerSourceChange():Subscription {
+		return {
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/source/pp/inputNum',
+			fun: this.refreshSelectedLayerRect,
+		}
+	}
+
+	/** A live input's detected signal resolution changes - refreshes SelectedLayer.Input.width/.height
+	 * if that input happens to be the selected layer's source, see refreshSelectedLayerRect */
+	get selectedLayerSourceSignalChange():Subscription {
+		return {
+			pat: 'device/inputList/items/(\\w+)/plugList/items/(\\w+)/status/signal/pp/image(Width|Height)',
+			fun: this.refreshSelectedLayerRect,
+		}
+	}
+
+	/**
+	 * Refreshes the SelectedScreen.number/.numberOfLayers variables for whichever screen/aux is currently
+	 * selected (the first one, if several are). Same "just the selection, not an unbounded per-screen set"
+	 * scoping as refreshSelectedLayerRect above - layer count per screen is effectively static (a device
+	 * config property, not something that changes live during a show), so this only needs to run when the
+	 * screen selection itself changes.
+	 */
+	get selectedScreenChange():Subscription {
+		return {
+			pat: 'live/screens/screenAuxSelection',
+			fun: () => {
+				const screenId = this.instance.choices.getSelectedScreens()[0]
+				if (screenId) {
+					this.instance.setVariableValues({
+						'SelectedScreen.number': screenId,
+						'SelectedScreen.numberOfLayers': this.instance.choices.getLayerChoices(screenId, false).length,
+					})
+				} else {
+					this.instance.setVariableValues({
+						'SelectedScreen.number': '',
+						'SelectedScreen.numberOfLayers': '',
+					})
+				}
+				return false
+			},
 		}
 	}
 
@@ -348,6 +487,16 @@ export default class Subscriptions {
 	get stillValid():Subscription {
 		return {
 			pat: 'DEVICE/device/stillList/items/(\\d+)/status/pp/isValid',
+			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
+				return true
+			},
+		}
+	}
+
+	/** An image in the Image Library gets added, replaced or removed - triggers a rebuild of the "assign image" action's choices */
+	get stillLibraryChange():Subscription {
+		return {
+			pat: `${this.constants.stillLibraryPath}/items/(\\d+)/status/pp/isValid`,
 			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
 				return true
 			},
@@ -682,7 +831,11 @@ export default class Subscriptions {
 				if (!path) return false;
 				const memory = Array.isArray(path) ? path[6] : path.split('/')[6];
 				const label = memory.toString() !== '0' ? this.instance.state.get(path) : '';
-				this.instance.setVariableValues({ ['auxMemory' + memory + 'label']: label });
+				const auxMemoryVarId = 'auxMemory' + memory + 'label'
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'auxMemoryLabel', variableId: auxMemoryVarId, name: `Label of Aux Memory ${memory}` })
+				}
+				this.instance.setVariableValues({ [auxMemoryVarId]: label });
 				for (const screenId of this.instance.choices.getChosenAuxes('all')) {
 					const pgmmem = this.instance.state.get([
 						'DEVICE',
@@ -698,7 +851,9 @@ export default class Subscriptions {
 						'memoryId',
 					]);
 					if (memory == pgmmem) {
-						this.instance.setVariableValues({ ['screen' + screenId + 'memoryLabelPGM']: label });
+						const pgmVarId = 'screen' + screenId + 'memoryLabelPGM'
+						this.instance.addVariable({ id: 'auxMemoryLabel', variableId: pgmVarId, name: `Label of memory in Program for ${screenId}` })
+						this.instance.setVariableValues({ [pgmVarId]: label });
 					}
 					const pvwmem = this.instance.state.get([
 						'DEVICE',
@@ -714,7 +869,9 @@ export default class Subscriptions {
 						'memoryId',
 					]);
 					if (memory == pvwmem) {
-						this.instance.setVariableValues({ ['screen' + screenId + 'memoryLabelPVW']: label });
+						const pvwVarId = 'screen' + screenId + 'memoryLabelPVW'
+						this.instance.addVariable({ id: 'auxMemoryLabel', variableId: pvwVarId, name: `Label of memory in Preview for ${screenId}` })
+						this.instance.setVariableValues({ [pvwVarId]: label });
 					}
 				}
 				return true;
@@ -730,8 +887,13 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false;
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4];
+				const num = input.replace(/^\w+_/, '')
+				const varId = this.varName(`INPUT_${num}label`, `IN${num}.label`)
+				if (this.instance.choices.getLiveInputArray().some(inp => inp.id === input)) {
+					this.instance.addVariable({ id: 'plugChange', variableId: varId, name: `Label of Input ${input}` })
+				}
 				this.instance.setVariableValues({
-					[input.replace(/^\w+_/, 'INPUT_') + 'label']: this.instance.state.get([
+					[varId]: this.instance.state.get([
 						'DEVICE', 'device', 'inputList', 'items', input,
 						'plugList', 'items', this.instance.state.get(path),
 						'control', 'pp', 'label'

@@ -1,6 +1,6 @@
 import {AWJinstance} from '../index.js'
 
-import Choices, { Choicemeta } from './choices.js'
+import Choices, { Choicemeta, AnchorPoint } from './choices.js'
 import {
 	CompanionActionContext,
 	CompanionActionDefinitions,
@@ -15,7 +15,7 @@ import { AWJconnection } from '../connection.js'
 import { splitRgb } from '@companion-module/base'
 import { StateMachine } from '../state.js'
 import Constants from './constants.js'
-import { timeToSeconds } from '../util.js'
+import { timeToSeconds, parseBoolean } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -30,7 +30,7 @@ type AWJaction<T> = {
 	unsubscribe?: (action: ActionEvent<T>) => void
 	learn?: (
 		action: ActionEvent<T>
-	) => AWJoptionValues<T> | undefined | Promise<AWJoptionValues<T> | undefined>
+	) => Partial<AWJoptionValues<T>> | undefined | Promise<Partial<AWJoptionValues<T>> | undefined>
 }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -71,8 +71,11 @@ export default class Actions {
 		'deviceInputFreeze',
 		'deviceLayerFreeze',
 		'deviceScreenFreeze',
+		'deviceAssignImageLibraryToStore',
 		'devicePositionSize',
 		'devicePositionSizeV3',
+		'deviceSetAnchorPoint',
+		'deviceResetLayerSize',
 		'deviceCopyProgram',
 		'devicePresetToggle',
 		'remoteMultiviewerSelectWidget',
@@ -84,20 +87,15 @@ export default class Actions {
 		'remoteSync',
 		'deviceStreamControl',
 		'deviceStreamAudioMute',
-		'deviceAudioRouteBlock_livepremier',
-		'deviceAudioRouteBlock_midra',
-		'deviceAudioRouteChannels_livepremier',
-		'deviceAudioRouteChannels_midra',
-		'deviceTimerSetup_livepremier',
-		'deviceTimerSetup_midra',
+		'deviceAudioRouteBlock',
+		'deviceAudioRouteChannels',
+		'deviceTimerSetup',
 		'deviceTimerAdjust',
 		'deviceTimerTransport',
-		'deviceTestpatterns_livepremier',
-		'deviceTestpatterns_midra',
+		'deviceTestpatterns',
 		'cstawjcmd',
 		'cstawjgetcmd',
-		'devicePower_livepremier',
-		'devicePower_midra'
+		'devicePower',
 	]
 	
 	constructor (instance: AWJinstance) {
@@ -210,7 +208,7 @@ export default class Actions {
 					id: 'layer',
 					type: 'multidropdown',
 					label: 'Layer',
-					choices: this.choices.getLayerChoices(this.constants.maxLayers, true),
+					choices: this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true),
 					default: ['1'],
 					isVisibleExpression: "$(options:method) == 'spec'",
 				},
@@ -863,14 +861,69 @@ export default class Actions {
 	}
 
 	/**
+	 * MARK: Assign an image from the Image Library to an Image Store slot
+	 */
+	get deviceAssignImageLibraryToStore() {
+		type DeviceAssignImageLibraryToStore = { store: string, source: string, allowDownscale: boolean }
+
+		const deviceAssignImageLibraryToStore: AWJaction<DeviceAssignImageLibraryToStore> = {
+			name: 'Assign Image from Library to Image Store',
+			options: [
+				{
+					id: 'store',
+					type: 'dropdown',
+					label: 'Image Slot',
+					choices: this.choices.getStillStoreChoices(),
+					default: this.choices.getStillStoreChoices()[0]?.id,
+					allowInvalidValues: true,
+				},
+				{
+					id: 'source',
+					type: 'dropdown',
+					label: 'Library Image / Timer',
+					choices: this.choices.getStillTimerAndLibraryChoices(),
+					default: this.choices.getStillTimerAndLibraryChoices()[0]?.id,
+					allowInvalidValues: true,
+				},
+				{
+					id: 'allowDownscale',
+					type: 'checkbox',
+					label: 'Allow Downscale',
+					default: true,
+				},
+			],
+			callback: (action) => {
+				const store = action.options.store
+				const source = action.options.source
+				if (!store || !source) return
+				const path = ['device', 'stillList', 'items', store, 'control', 'pp']
+				if (source.startsWith('TIMER_')) {
+					this.connection.sendWSmessage([...path, 'mode'], 'TIMER')
+					this.connection.sendWSmessage([...path, 'timer'], source)
+				} else {
+					const library = Number(source)
+					if (isNaN(library)) return
+					this.connection.sendWSmessage([...path, 'mode'], 'IMAGE')
+					this.connection.sendWSmessage([...path, 'source'], library)
+				}
+				this.connection.sendWSmessage([...path, 'rescale'], parseBoolean(action.options.allowDownscale) ? 'SCALE_TO_CAPABILITY' : 'NO_RESCALE')
+			},
+		}
+
+		return deviceAssignImageLibraryToStore
+	}
+
+	/**
 	 * MARK: Layer position and size V3
 	 * Sends the given values 1:1 to the device (posH/posV/sizeH/sizeV) without any conversion, so the raw AWJ
 	 * value is directly visible. An empty field leaves that value untouched. No anchor point, no aspect-ratio
 	 * derivation, no cross-layer bounding box math - unlike the old (deprecated V2) action.
 	 */
 	get devicePositionSizeV3() {
-		type DevicePositionSizeV3 = {screen: string, preset: string, layersel: string, x: string, y: string, w: string, h: string} & Record<string, string>
+		type DevicePositionSizeV3 = {screen: string, preset: string, layersel: string, anchor: AnchorPoint | 'sel', x: string, y: string, w: string, h: string, keepAspectRatio: boolean, refW: string, refH: string} & Record<string, string>
 		type LayerPositionData = {path: string[], posH: number, posV: number, sizeH: number, sizeV: number}
+
+		const convertAnchorPosition = this.choices.convertAnchorPosition.bind(this.choices)
 
 		const getLayerPositionData = (screenId: string, preset: string, layerId: string): LayerPositionData | undefined => {
 			const screninfo = this.choices.getScreenInfo(screenId)
@@ -893,8 +946,25 @@ export default class Actions {
 			}
 		}
 
+		/** Resolves the "screen"/"layersel"/"layer{screen}" options into concrete target layers. "first" targets
+		 * only the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a
+		 * multi-selection - safer than "sel" (all selected layers) for X/Y/W/H values that were read from those
+		 * variables, since those only ever describe that one layer. */
+		const resolveLayers = (opt: DevicePositionSizeV3): {screenAuxKey: string, layerKey: string}[] => {
+			if (opt.screen === 'sel') {
+				if (opt.layersel === 'sel') return this.choices.getSelectedLayers()
+				if (opt.layersel === 'first') return this.choices.getSelectedLayers().slice(0, 1)
+				return [{screenAuxKey: opt.screen, layerKey: opt.layersel}]
+			} else {
+				const layerOpt = opt[`layer${opt.screen}`]
+				if (layerOpt === 'sel') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen)
+				if (layerOpt === 'first') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen).slice(0, 1)
+				return [{screenAuxKey: opt.screen, layerKey: layerOpt}]
+			}
+		}
+
 		const devicePositionSizeV3: AWJaction<DevicePositionSizeV3> = {
-			name: 'Set Position and Size V3',
+			name: 'Set Layer Position and Size V3',
 			options: [
 				{
 					id: 'screen',
@@ -916,9 +986,9 @@ export default class Actions {
 					id: `layersel`,
 					type: 'dropdown',
 					label: 'Layer',
-					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
-					choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...Array.from({length: this.constants.maxLayers}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
-					default: 'sel',
+					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch.',
+					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
+					default: 'first',
 					isVisibleExpression: "$(options:screen) == 'sel'",
 				},
 				...this.screens.map((screen) => {
@@ -926,25 +996,33 @@ export default class Actions {
 						id: `layer${screen.id}`,
 						type: 'dropdown' as const,
 						label: 'Layer',
-						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
-						choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...this.choices.getLayerChoices(screen.id, false)],
-						default: 'sel',
+						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch.',
+						choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...this.choices.getLayerChoices(screen.id, false)],
+						default: 'first',
 						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
 					}
 				}),
 				{
+					id: 'anchor',
+					type: 'dropdown',
+					label: 'Anchor Point',
+					tooltip: 'Which point of the layer box the X/Y position refers to, exactly like the anchor point selector in WebRCS. "Center" is the raw AWJ posH/posV value directly (matches the previous, anchor-less behavior of this action). Picking a fixed point here also becomes the new globally selected Anchor Point (same as using the "Set Anchor Point" action), so WebRCS and the SelectedLayer.x/.y variables stay in sync with it.',
+					choices: [{ id: 'sel', label: 'Use Global Anchor Point' }, ...this.choices.getAnchorPointChoices()],
+					default: 'sel',
+				},
+				{
 					id: 'x',
 					type: 'textinput',
-					label: 'X position (posH, raw AWJ value)',
-					tooltip: 'Leave empty to not change this value. Sent 1:1 to the device without any conversion.',
+					label: 'X position (posH at chosen Anchor Point)',
+					tooltip: 'Leave empty to not change this value. With Anchor Point = Center, this is the raw AWJ posH value, sent 1:1 without conversion.',
 					default: '',
 					useVariables: true,
 				},
 				{
 					id: 'y',
 					type: 'textinput',
-					label: 'Y position (posV, raw AWJ value)',
-					tooltip: 'Leave empty to not change this value. Sent 1:1 to the device without any conversion.',
+					label: 'Y position (posV at chosen Anchor Point)',
+					tooltip: 'Leave empty to not change this value. With Anchor Point = Center, this is the raw AWJ posV value, sent 1:1 without conversion.',
 					default: '',
 					useVariables: true,
 				},
@@ -964,90 +1042,151 @@ export default class Actions {
 					default: '',
 					useVariables: true,
 				},
+				{
+					id: 'keepAspectRatio',
+					type: 'checkbox',
+					label: 'Keep Aspect Ratio if one value is empty',
+					tooltip: 'If only one of Width/Height is given, derive the other from an aspect ratio (rounded). Has no effect if both or neither are given.',
+					default: false,
+				},
+				{
+					id: 'refW',
+					type: 'textinput',
+					label: 'Reference Width (optional)',
+					tooltip: 'Only used together with Keep Aspect Ratio. If both Reference Width and Height are given, the aspect ratio is derived from these fixed values instead of the layer\'s current size. Important for repeated small steps (e.g. an encoder wheel): deriving from the ever-changing current size instead re-rounds on every step and drifts away from the true ratio over many steps - a fixed reference avoids that entirely. Leave both empty to derive from the current size (fine for a single change).',
+					default: '',
+					useVariables: true,
+				},
+				{
+					id: 'refH',
+					type: 'textinput',
+					label: 'Reference Height (optional)',
+					tooltip: 'See Reference Width.',
+					default: '',
+					useVariables: true,
+				},
 			],
 			learn: async (action) => {
 				const options = action.options
-				const newoptions: DevicePositionSizeV3 = {...options}
+				const newoptions: Partial<DevicePositionSizeV3> = {}
 
-				let layers: {screenAuxKey: string, layerKey: string}[]
-				if (options.screen === 'sel') {
-					if (options.layersel === 'sel') {
-						layers = this.choices.getSelectedLayers()
-					} else {
-						layers = [{screenAuxKey: options.screen, layerKey: options.layersel}]
-					}
-				} else {
-					if (options[`layer${options.screen}`] === 'sel') {
-						layers = this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == options.screen)
-					} else {
-						layers = [{screenAuxKey: options.screen, layerKey: options[`layer${options.screen}`]}]
-					}
-				}
+				const layers = resolveLayers(options)
 
-				if (layers.length === 0) return options
+				if (layers.length === 0) return undefined
 
 				const preset = this.choices.getPresetSelection()
 				const screeninfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const laydata = getLayerPositionData(screeninfo.id, preset, layers[0].layerKey)
-				if (laydata === undefined) return options
+				if (laydata === undefined) return undefined
 
 				newoptions.screen = screeninfo.id
 				newoptions[`layer${screeninfo.id}`] = layers[0].layerKey.replace(/^\w+_/, '')
 				newoptions.preset = preset
-				newoptions.x = laydata.posH.toString()
-				newoptions.y = laydata.posV.toString()
+				const anchor: AnchorPoint = (options.anchor === undefined || options.anchor === 'sel') ? this.choices.getGlobalAnchorPoint() : options.anchor
+				const anchorPos = anchor === 'CENTER'
+					? { x: laydata.posH, y: laydata.posV }
+					: convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
+				newoptions.x = anchorPos.x.toString()
+				newoptions.y = anchorPos.y.toString()
 				newoptions.w = laydata.sizeH.toString()
 				newoptions.h = laydata.sizeV.toString()
 
 				return newoptions
 			},
 			callback: async (action) => {
-				let layers: {screenAuxKey: string, layerKey: string}[]
-				if (action.options.screen === 'sel') {
-					if (action.options.layersel === 'sel') {
-						layers = this.choices.getSelectedLayers()
-					} else {
-						layers = [{screenAuxKey: action.options.screen, layerKey: action.options.layersel}]
-					}
-				} else {
-					if (action.options[`layer${action.options.screen}`] === 'sel') {
-						layers = this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == action.options.screen)
-					} else {
-						layers = [{screenAuxKey: action.options.screen, layerKey: action.options[`layer${action.options.screen}`]}]
-					}
-				}
+				let layers = resolveLayers(action.options)
 
 				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
 				layers = layers.filter(layer => (!this.choices.isLocked(layer.screenAuxKey, preset) && layer.layerKey.match(/^\d+$/))) // wipe out layers of locked screens and native layer
 				if (layers.length === 0) return
 
+				let anchor: AnchorPoint
+				if (action.options.anchor === 'sel' || action.options.anchor === undefined) {
+					anchor = this.choices.getGlobalAnchorPoint()
+				} else {
+					anchor = action.options.anchor
+					if (anchor !== this.choices.getGlobalAnchorPoint()) {
+						this.connection.sendWSdata('REMOTE', 'setAnchorPoint', '/live/screens/layers', [anchor])
+					}
+				}
+
+				const keepAspectRatio = parseBoolean(action.options.keepAspectRatio)
+				// A fixed reference avoids rounding drift over many repeated small steps (e.g. an encoder
+				// wheel): deriving from the layer's ever-changing current size instead re-rounds on every
+				// single step, each time starting from the previous step's already-rounded result rather
+				// than the true original ratio, so the error compounds. With a fixed reference every step
+				// derives from the exact same ratio, so it can't drift no matter how many steps there are.
+				const refWGiven = action.options.refW !== '' && !isNaN(Number(action.options.refW)) && Number(action.options.refW) > 0
+				const refHGiven = action.options.refH !== '' && !isNaN(Number(action.options.refH)) && Number(action.options.refH) > 0
+				const hasFixedRatio = refWGiven && refHGiven
+
 				for (const layer of layers) {
 					const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
 					if (laydata === undefined) continue // this layer does not allow for sizing
 
-					if (action.options.x !== '' && !isNaN(Number(action.options.x))) {
-						const posH = Math.round(Number(action.options.x))
-						if (posH !== laydata.posH) {
-							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], posH)
-							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], posH)
-						}
+					const ratioSizeH = hasFixedRatio ? Number(action.options.refW) : laydata.sizeH
+					const ratioSizeV = hasFixedRatio ? Number(action.options.refH) : laydata.sizeV
+
+					const wGiven = action.options.w !== '' && !isNaN(Number(action.options.w))
+					const hGiven = action.options.h !== '' && !isNaN(Number(action.options.h))
+					let targetSizeH = wGiven ? Math.round(Number(action.options.w)) : laydata.sizeH
+					let targetSizeV = hGiven ? Math.round(Number(action.options.h)) : laydata.sizeV
+					// "Keep Aspect Ratio" only kicks in when exactly one of Width/Height was actually given -
+					// with both given the user's explicit values always win, with neither given there is nothing to derive.
+					if (keepAspectRatio && ratioSizeH !== 0 && ratioSizeV !== 0) {
+						if (wGiven && !hGiven) targetSizeV = Math.round(targetSizeH * ratioSizeV / ratioSizeH)
+						else if (hGiven && !wGiven) targetSizeH = Math.round(targetSizeV * ratioSizeH / ratioSizeV)
 					}
-					if (action.options.y !== '' && !isNaN(Number(action.options.y))) {
-						const posV = Math.round(Number(action.options.y))
-						if (posV !== laydata.posV) {
-							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], posV)
-							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], posV)
-						}
+					const sizeChanges = wGiven || (keepAspectRatio && hGiven)
+					const sizeVChanges = hGiven || (keepAspectRatio && wGiven)
+
+					const xGiven = action.options.x !== '' && !isNaN(Number(action.options.x))
+					const yGiven = action.options.y !== '' && !isNaN(Number(action.options.y))
+
+					let newPosH: number | undefined
+					let newPosV: number | undefined
+					if (xGiven || yGiven) {
+						// The anchor point refers to the box AFTER this call's resize (if any), not its current size.
+						const rawX = xGiven ? Math.round(Number(action.options.x)) : 0
+						const rawY = yGiven ? Math.round(Number(action.options.y)) : 0
+						const centerPos = anchor === 'CENTER'
+							? { x: rawX, y: rawY }
+							: convertAnchorPosition(rawX, rawY, targetSizeH, targetSizeV, anchor, 'CENTER')
+						if (xGiven) newPosH = centerPos.x
+						if (yGiven) newPosV = centerPos.y
 					}
-					if (action.options.w !== '' && !isNaN(Number(action.options.w))) {
-						const sizeH = Math.round(Number(action.options.w))
+					// Resizing without an explicit new position would otherwise always grow/shrink the box
+					// around AWJ's native center point (posH/posV), no matter which Anchor Point is chosen -
+					// since that's what leaving posH/posV untouched literally means at the protocol level.
+					// To make a non-Center anchor actually behave like an anchor (its own point of the box
+					// stays put while the opposite side moves), re-derive the position needed to keep that
+					// same anchor point fixed at its current location whenever the size is actually changing.
+					// At Center this is a no-op by construction (Center -> Center conversion never moves
+					// anything), matching "only grows symmetrically when the anchor is Center".
+					if (anchor !== 'CENTER' && (targetSizeH !== laydata.sizeH || targetSizeV !== laydata.sizeV)) {
+						const currentAnchorPos = convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
+						const compensatedPos = convertAnchorPosition(currentAnchorPos.x, currentAnchorPos.y, targetSizeH, targetSizeV, anchor, 'CENTER')
+						if (newPosH === undefined) newPosH = compensatedPos.x
+						if (newPosV === undefined) newPosV = compensatedPos.y
+					}
+
+					if (newPosH !== undefined && newPosH !== laydata.posH) {
+						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+					}
+					if (newPosV !== undefined && newPosV !== laydata.posV) {
+						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+					}
+					if (sizeChanges) {
+						const sizeH = targetSizeH
 						if (sizeH !== laydata.sizeH) {
 							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
 							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
 						}
 					}
-					if (action.options.h !== '' && !isNaN(Number(action.options.h))) {
-						const sizeV = Math.round(Number(action.options.h))
+					if (sizeVChanges) {
+						const sizeV = targetSizeV
 						if (sizeV !== laydata.sizeV) {
 							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
 							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
@@ -1061,6 +1200,236 @@ export default class Actions {
 
 		return devicePositionSizeV3
 
+	}
+
+	/**
+	 * MARK: Set Anchor Point
+	 * Sets the globally selected Anchor Point (the same shared value WebRCS's own Position & Size panel
+	 * uses and displays - confirmed live: writing it here updates WebRCS's display and vice versa). Also
+	 * settable implicitly by picking a point in "Set Layer Position and Size V3"; this action exists for
+	 * setting it on its own, e.g. from a dedicated row of anchor-point buttons.
+	 */
+	get deviceSetAnchorPoint() {
+		type DeviceSetAnchorPoint = { anchor: AnchorPoint }
+
+		const deviceSetAnchorPoint: AWJaction<DeviceSetAnchorPoint> = {
+			name: 'Set Anchor Point',
+			options: [
+				{
+					id: 'anchor',
+					type: 'dropdown',
+					label: 'Anchor Point',
+					choices: this.choices.getAnchorPointChoices(),
+					default: 'CENTER',
+				},
+			],
+			callback: (action) => {
+				this.connection.sendWSdata('REMOTE', 'setAnchorPoint', '/live/screens/layers', [action.options.anchor])
+			},
+		}
+
+		return deviceSetAnchorPoint
+	}
+
+	/**
+	 * MARK: Reset Layer Size or Ratio
+	 * Mirrors WebRCS's own layer-toolbar buttons "Set Layer size to source ratio", "Set Layer size to its
+	 * content size" and "Set to full screen" - all three are computed client-side in WebRCS from the
+	 * layer's current source resolution / the screen's canvas resolution, not backed by a dedicated device
+	 * command, so this action reproduces that same math instead of sending a special command.
+	 * Source Ratio keeps the current height and derives the width from the source's aspect ratio. Content
+	 * Size takes the source's pixel-exact resolution. Both keep the chosen Anchor Point visually fixed
+	 * while the box resizes, exactly like Set Layer Position and Size V3. Fullscreen ignores aspect ratio
+	 * and the anchor entirely and always covers the screen/aux exactly.
+	 */
+	get deviceResetLayerSize() {
+		type DeviceResetLayerSize = {screen: string, preset: string, layersel: string, anchor: AnchorPoint | 'sel', mode: 'sourceRatio' | 'contentSize' | 'fullscreen'} & Record<string, string>
+		type LayerPositionData = {path: string[], posH: number, posV: number, sizeH: number, sizeV: number}
+
+		const convertAnchorPosition = this.choices.convertAnchorPosition.bind(this.choices)
+
+		const getLayerPositionData = (screenId: string, preset: string, layerId: string): LayerPositionData | undefined => {
+			const screninfo = this.choices.getScreenInfo(screenId)
+			const presetKey = this.choices.getPreset(screninfo.id, preset)
+			const path = [
+				...(screninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+				'items', screninfo.platformId,
+				'presetList', 'items', presetKey,
+				...this.choices.getLayerPath(layerId)
+			]
+
+			if (this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath]) === undefined) return undefined // this layer does not allow for sizing
+
+			return {
+				path,
+				posH: this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posH']) ?? 0,
+				posV: this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posV']) ?? 0,
+				sizeH: this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920,
+				sizeV: this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080,
+			}
+		}
+
+		/** Resolves the "screen"/"layersel"/"layer{screen}" options into concrete target layers. "first" targets
+		 * only the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a
+		 * multi-selection - safer than "sel" (all selected layers) for Source Ratio/Content Size, which resize
+		 * relative to each layer's own current size. */
+		const resolveLayers = (opt: DeviceResetLayerSize): {screenAuxKey: string, layerKey: string}[] => {
+			if (opt.screen === 'sel') {
+				if (opt.layersel === 'sel') return this.choices.getSelectedLayers()
+				if (opt.layersel === 'first') return this.choices.getSelectedLayers().slice(0, 1)
+				return [{screenAuxKey: opt.screen, layerKey: opt.layersel}]
+			} else {
+				const layerOpt = opt[`layer${opt.screen}`]
+				if (layerOpt === 'sel') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen)
+				if (layerOpt === 'first') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen).slice(0, 1)
+				return [{screenAuxKey: opt.screen, layerKey: layerOpt}]
+			}
+		}
+
+		const deviceResetLayerSize: AWJaction<DeviceResetLayerSize> = {
+			name: 'Reset Layer Size or Ratio',
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen / Aux',
+					choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenAuxChoices()],
+					default: 'sel',
+					disableAutoExpression: true,
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset',
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					default: 'sel',
+				},
+				{
+					id: `layersel`,
+					type: 'dropdown',
+					label: 'Layer',
+					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended.',
+					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
+					default: 'first',
+					isVisibleExpression: "$(options:screen) == 'sel'",
+				},
+				...this.screens.map((screen) => {
+					return{
+						id: `layer${screen.id}`,
+						type: 'dropdown' as const,
+						label: 'Layer',
+						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended.',
+						choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...this.choices.getLayerChoices(screen.id, false)],
+						default: 'first',
+						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
+					}
+				}),
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Set Layer Size to',
+					choices: [
+						{ id: 'sourceRatio', label: 'Source Ratio' },
+						{ id: 'contentSize', label: 'its Content Size' },
+						{ id: 'fullscreen', label: 'Fullscreen' },
+					],
+					default: 'sourceRatio',
+				},
+				{
+					id: 'anchor',
+					type: 'dropdown',
+					label: 'Anchor Point',
+					tooltip: 'Which point of the layer box stays visually fixed while resizing, exactly like the anchor point selector in WebRCS. Has no effect with "Fullscreen". Picking a fixed point here also becomes the new globally selected Anchor Point (same as using the "Set Anchor Point" action), so WebRCS and the SelectedLayer.x/.y variables stay in sync with it.',
+					choices: [{ id: 'sel', label: 'Use Global Anchor Point' }, ...this.choices.getAnchorPointChoices()],
+					default: 'sel',
+					isVisibleExpression: "$(options:mode) != 'fullscreen'",
+				},
+			],
+			callback: async (action) => {
+				let layers = resolveLayers(action.options)
+
+				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
+				layers = layers.filter(layer => (!this.choices.isLocked(layer.screenAuxKey, preset) && layer.layerKey.match(/^\d+$/))) // wipe out layers of locked screens and native layer
+				if (layers.length === 0) return
+
+				let anchor: AnchorPoint
+				if (action.options.anchor === 'sel' || action.options.anchor === undefined) {
+					anchor = this.choices.getGlobalAnchorPoint()
+				} else {
+					anchor = action.options.anchor
+					if (anchor !== this.choices.getGlobalAnchorPoint()) {
+						this.connection.sendWSdata('REMOTE', 'setAnchorPoint', '/live/screens/layers', [anchor])
+					}
+				}
+
+				for (const layer of layers) {
+					const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
+					if (laydata === undefined) continue // this layer does not allow for sizing
+
+					let targetSizeH: number
+					let targetSizeV: number
+					let newPosH: number | undefined
+					let newPosV: number | undefined
+
+					if (action.options.mode === 'fullscreen') {
+						const screninfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const screenpath = [
+							...(screninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screninfo.platformId,
+							...this.constants.screenSizePath
+						]
+						const screenWidth = this.state.get(['DEVICE', ...screenpath, 'sizeH']) ?? 1920
+						const screenHeight = this.state.get(['DEVICE', ...screenpath, 'sizeV']) ?? 1080
+						targetSizeH = screenWidth
+						targetSizeV = screenHeight
+						newPosH = Math.round(screenWidth / 2)
+						newPosV = Math.round(screenHeight / 2)
+					} else {
+						const source = this.choices.getLayerSourceInfo(laydata.path)
+						if (source.width === '' || source.height === '') continue // unknown source resolution - nothing to derive from, leave untouched
+
+						if (action.options.mode === 'sourceRatio') {
+							targetSizeV = laydata.sizeV
+							targetSizeH = Math.round(targetSizeV * source.width / source.height)
+						} else {
+							targetSizeH = source.width
+							targetSizeV = source.height
+						}
+
+						// Keep the chosen anchor point visually fixed while the box resizes, exactly like the
+						// resize-compensation in Set Layer Position and Size V3.
+						if (anchor !== 'CENTER' && (targetSizeH !== laydata.sizeH || targetSizeV !== laydata.sizeV)) {
+							const currentAnchorPos = convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
+							const compensatedPos = convertAnchorPosition(currentAnchorPos.x, currentAnchorPos.y, targetSizeH, targetSizeV, anchor, 'CENTER')
+							newPosH = compensatedPos.x
+							newPosV = compensatedPos.y
+						}
+					}
+
+					if (newPosH !== undefined && newPosH !== laydata.posH) {
+						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+					}
+					if (newPosV !== undefined && newPosV !== laydata.posV) {
+						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+					}
+					if (targetSizeH !== laydata.sizeH) {
+						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], targetSizeH)
+						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], targetSizeH)
+					}
+					if (targetSizeV !== laydata.sizeV) {
+						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], targetSizeV)
+						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], targetSizeV)
+					}
+				}
+
+				this.instance.sendXupdate()
+			},
+		}
+
+		return deviceResetLayerSize
 	}
 
 	/**
@@ -1417,7 +1786,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			],
 			learn: async (action) => {
 				const options = action.options
-				const newoptions:DevicePositionSize = {...options}
+				const newoptions:Partial<DevicePositionSize> = {}
 
 				let layers: Layer[] //{screenAuxKey: string, layerKey: string}[]
 				if (options.screen === 'sel') {
@@ -1434,7 +1803,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					}
 				}
 
-				if (layers.length === 0) return options
+				if (layers.length === 0) return undefined
 
 				const preset = this.choices.getPresetSelection()
 				const boundingBoxes = getBoundingBox(layers, preset)
@@ -1448,7 +1817,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 				const context = getLayerContext(layers[0], 1, preset, boundingBoxes, allLayerValues )
 
-				if (context === undefined) return options
+				if (context === undefined) return undefined
 
 				newoptions.screen = screeninfo.id
 				newoptions[`layer${screeninfo.id}`] = layer.replace(/^\w+_/, '')
@@ -2865,11 +3234,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				} else if (action.options.valuetype === '2') {
 					value = action.options.numericValue
 				} else if (action.options.valuetype === '3') {
-					if (action.options.booleanValue === true) {
-						value = true
-					} else {
-						value = false
-					}
+					value = parseBoolean(action.options.booleanValue)
 				} else if (action.options.valuetype === '4') {
 					value = JSON.parse(action.options.objectValue)
 				}
@@ -2880,15 +3245,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						this.connection.sendWSmessage(path, value)
 						//this.device.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":${JSON.stringify(path)},"value":${value}}}`)
 					}
-					if (action.options.xUpdate) {
+					if (parseBoolean(action.options.xUpdate)) {
 						this.instance.sendXupdate()
 					}
 				} catch (error) {
 					this.instance.log('warn', 'Custom command transmission failed')
 				}
 			},
-			learn: (action) => {
-				const newoptions = {}
+			learn: (_action) => {
+				const newoptions: Partial<Cstawjcmd> = {}
 				const lastMsg = this.state.get('LOCAL/lastMsg')
 				const path = lastMsg.path
 				const value = lastMsg.value
@@ -2914,10 +3279,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						newoptions['objectValue'] = JSON.stringify(value)
 				}
 
-				return {
-					...action.options,
-					...newoptions,
-				}
+				return newoptions
 			},
 		}
 
@@ -2978,8 +3340,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					context.setCustomVariableValue(action.options.variableType, type)
 				}
 			},
-			learn: (action) => {
-				const newoptions = {}
+			learn: (_action) => {
+				const newoptions: Partial<Cstawjgetcmd> = {}
 				const lastMsg = this.state.get('LOCAL/lastMsg')
 				const path = lastMsg.path
 				const value = lastMsg.value
@@ -2988,10 +3350,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				}
 				newoptions['path'] = this.instance.jsonToAWJpath(path)
 
-				return {
-					...action.options,
-					...newoptions,
-				}
+				return newoptions
 			},
 		}
 

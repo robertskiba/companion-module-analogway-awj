@@ -6,6 +6,37 @@ type Dropdown<t> = {id: t, label: string}
 
 export type Choicemeta = { id: string, label: string, index?: string, longname?: string, device?: number }
 
+export type AnchorPoint = 'TOP_LEFT' | 'TOP_CENTER' | 'TOP_RIGHT' | 'LEFT_CENTER' | 'CENTER' | 'RIGHT_CENTER' | 'BOTTOM_LEFT' | 'BOTTOM_CENTER' | 'BOTTOM_RIGHT'
+
+/**
+ * Anchor-point math ported 1:1 from WebRCS's own source (aw-utils/geometry/position/anchor/anchor.ts,
+ * changeAnchorPoint()), so this module's behavior matches WebRCS exactly, including its documented
+ * pixel-rounding quirk for odd-sized boxes on certain anchors (their comment cites an internal ticket
+ * about following real device rounding behavior).
+ */
+const ANCHOR_RATIO: Record<AnchorPoint, {x: number, y: number}> = {
+	TOP_LEFT: {x: 0, y: 0},
+	TOP_CENTER: {x: 0.5, y: 0},
+	TOP_RIGHT: {x: 1, y: 0},
+	LEFT_CENTER: {x: 0, y: 0.5},
+	CENTER: {x: 0.5, y: 0.5},
+	RIGHT_CENTER: {x: 1, y: 0.5},
+	BOTTOM_LEFT: {x: 0, y: 1},
+	BOTTOM_CENTER: {x: 0.5, y: 1},
+	BOTTOM_RIGHT: {x: 1, y: 1},
+}
+const isPixelOffsetRequired = (anchor: AnchorPoint): boolean =>
+	anchor === 'TOP_LEFT' || anchor === 'TOP_CENTER' || anchor === 'LEFT_CENTER' || anchor === 'BOTTOM_LEFT'
+const adjustPixelValue = (value: number, oldAnchor: AnchorPoint, newAnchor: AnchorPoint): number => {
+	if (!Number.isInteger(value)) {
+		if (isPixelOffsetRequired(oldAnchor) || isPixelOffsetRequired(newAnchor)) {
+			return Math.trunc(value) + (value > 0 ? 1 : -1)
+		}
+		return Math.trunc(value)
+	}
+	return value
+}
+
 /**
  * Methods for retrieving device dependent data like properties, lists, choices out of the state or generating it
  */
@@ -216,6 +247,55 @@ export default class Choices {
 				}
 			}) ?? []
 		)
+	}
+
+	/** All Image Store slots that actually exist on this device (licensed/available), meant as the target of an "assign image" action. Empty slots are included, since assigning is how you fill them. */
+	public getStillStoreChoices(): Dropdown<string>[] {
+		const bankpath = 'DEVICE/device/stillList/'
+		return (
+			this.state.get(this.state.concat(bankpath, 'itemKeys'))?.filter((itm: string) => {
+				return this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isAvailable']))
+			}).map((itm: string) => {
+				const label = this.state.get(this.state.concat(bankpath, ['items', itm, 'control', 'pp', 'label']))
+				const isValid = this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isValid']))
+				return {
+					id: itm,
+					label: `${itm}${label ? ' - ' + label : ''}${isValid ? '' : ' (empty)'}`,
+				}
+			}) ?? []
+		)
+	}
+
+	/** All valid images in the Image Library, with file name and resolution, meant as the source of an "assign image" action */
+	public getStillLibraryArray(): Choicemeta[] {
+		const bankpath = this.constants.stillLibraryPath
+		return (
+			this.state.get(bankpath + '/itemKeys')?.filter((itm: string) => {
+				return this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isValid']))
+			}).map((itm: string) => {
+				const fileName = this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'fileName']))
+				const width = this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'width']))
+				const height = this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'height']))
+				return {
+					id: itm,
+					label: `${fileName}${width && height ? ` (${width}x${height})` : ''}`,
+				}
+			}) ?? []
+		)
+	}
+
+	public getStillLibraryChoices(): Dropdown<string>[] {
+		return this.getStillLibraryArray().map((itm) => {
+			return {
+				id: itm.id,
+				label: `${itm.id} - ${itm.label}`,
+			}
+		})
+	}
+
+	/** The 4 device timers plus all occupied Image Library slots, meant as the source of an "assign to Image Store" action. Timer ids (e.g. "TIMER_1") and library ids (plain numbers) never collide. */
+	public getStillTimerAndLibraryChoices(): Dropdown<string>[] {
+		return [...this.getTimerChoices(), ...this.getStillLibraryChoices()]
 	}
 
 	public getSourceChoices(): Dropdown<string>[] {
@@ -459,6 +539,18 @@ export default class Choices {
 		return ret
 	}
 
+	/** The highest number of (non-background) layers actually configured on any single screen/aux on this
+	 * device right now - meant to size a screen-unspecified Layer dropdown to what's really there instead of
+	 * this platform's theoretical per-screen maximum (this.constants.maxLayers, which can be far higher than
+	 * any real show ever uses - e.g. 128 on LivePremier4 - making such a dropdown needlessly long). Screen-
+	 * specific Layer dropdowns already get this for free via getLayerChoices(screenId, ...), which reads that
+	 * one screen's own configured layerCount - this is only needed where no single screen is chosen yet. */
+	public getMaxConfiguredLayerCount(): number {
+		return this.getScreenAuxChoices().reduce((max, screen) => {
+			return Math.max(max, this.getLayersAsArray(screen.id, false).length)
+		}, 1)
+	}
+
 	public getOutputArray(): Choicemeta[] {
 		return this.state.get('DEVICE/device/outputList/itemKeys')?.filter((itm: string) => {
 			return this.state.get('DEVICE/device/outputList/items/'+itm+'/status/pp/isAvailable') === true
@@ -523,6 +615,79 @@ export default class Choices {
 				label: `Timer ${itm.index}${itm.label === '' ? '' : ' - ' + itm.label}`
 			}
 		})
+	}
+
+	public getAnchorPointChoices(): Dropdown<AnchorPoint>[] {
+		return [
+			{ id: 'TOP_LEFT', label: 'Top Left' },
+			{ id: 'TOP_CENTER', label: 'Top Center' },
+			{ id: 'TOP_RIGHT', label: 'Top Right' },
+			{ id: 'LEFT_CENTER', label: 'Middle Left' },
+			{ id: 'CENTER', label: 'Center' },
+			{ id: 'RIGHT_CENTER', label: 'Middle Right' },
+			{ id: 'BOTTOM_LEFT', label: 'Bottom Left' },
+			{ id: 'BOTTOM_CENTER', label: 'Bottom Center' },
+			{ id: 'BOTTOM_RIGHT', label: 'Bottom Right' },
+		]
+	}
+
+	/**
+	 * The anchor point currently selected in WebRCS's live Position & Size panel (a shared/synced value,
+	 * confirmed live: writing it via the "Set Anchor Point" action updates WebRCS's own display and vice
+	 * versa). Falls back to Center (the AWJ-native posH/posV reference point) if not yet known.
+	 */
+	public getGlobalAnchorPoint(): AnchorPoint {
+		return (this.state.get('REMOTE/live/screens/layers/anchorPoint') as AnchorPoint | undefined) ?? 'CENTER'
+	}
+
+	/** Converts a position given relative to fromAnchor into the equivalent position relative to toAnchor, for a box of the given size. */
+	public convertAnchorPosition(x: number, y: number, sizeH: number, sizeV: number, fromAnchor: AnchorPoint, toAnchor: AnchorPoint): {x: number, y: number} {
+		const dx = adjustPixelValue((ANCHOR_RATIO[toAnchor].x - ANCHOR_RATIO[fromAnchor].x) * sizeH, fromAnchor, toAnchor)
+		const dy = adjustPixelValue((ANCHOR_RATIO[toAnchor].y - ANCHOR_RATIO[fromAnchor].y) * sizeV, fromAnchor, toAnchor)
+		return { x: x + dx, y: y + dy }
+	}
+
+	/** Resolves info about whatever is currently assigned as a layer's source: a normalized "number" (the
+	 * bare input/Image Store id, without the IN_/STILL_ prefix - blank if nothing meaningful is assigned),
+	 * a human-readable "name" (the input's or still's own label, falling back to "Input n"/"Still n" if
+	 * unlabeled, or "none"/"Color"/"Timer n" for sources that aren't an input or still), and the pixel
+	 * resolution - a live input's detected signal resolution, or a still image's stored resolution (looked
+	 * up on the Image Store slot itself, falling back to the Image Library item it was assigned from).
+	 * width/height are '' if unknown (e.g. Color, a Timer, or no signal detected). `layerPath` is a layer's
+	 * DEVICE-relative path as returned by getLayerPath (prefixed onto screenPath/auxPath + presetList/items/{preset}). */
+	public getLayerSourceInfo(layerPath: string[]): {number: string, name: string, width: number | '', height: number | ''} {
+		const input = this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum'])
+
+		if (typeof input === 'string' && input.match(/^IN_/)) {
+			const number = input.replace(/^IN_/, '')
+			const name = this.state.get(`DEVICE/device/inputList/items/${input}/control/pp/label`) || `Input ${number}`
+			const plug = this.state.get(`DEVICE/device/inputList/items/${input}/control/pp/plug`) || '1'
+			const width = this.state.get(`DEVICE/device/inputList/items/${input}/plugList/items/${plug}/status/signal/pp/imageWidth`)
+			const height = this.state.get(`DEVICE/device/inputList/items/${input}/plugList/items/${plug}/status/signal/pp/imageHeight`)
+			return { number, name, width: width || '', height: height || '' }
+		}
+
+		// A layer's source references an Image Store slot as "STILL_<n>", while the store's own state is
+		// keyed by the bare "<n>" (same id as getStillStoreChoices()) - strip the prefix before looking it up.
+		const stillMatch = typeof input === 'string' ? input.match(/^STILL_(\d+)$/) : null
+		if (stillMatch) {
+			const stillId = stillMatch[1]
+			const name = this.state.get(['DEVICE', 'device', 'stillList', 'items', stillId, 'control', 'pp', 'label']) || `Still ${stillId}`
+			let width = this.state.get(['DEVICE', 'device', 'stillList', 'items', stillId, 'status', 'pp', 'width'])
+			let height = this.state.get(['DEVICE', 'device', 'stillList', 'items', stillId, 'status', 'pp', 'height'])
+			if (!width || !height) {
+				const librarySource = this.state.get(['DEVICE', 'device', 'stillList', 'items', stillId, 'control', 'pp', 'source'])
+				if (librarySource !== undefined) {
+					width = this.state.get(this.state.concat(this.constants.stillLibraryPath, ['items', librarySource.toString(), 'status', 'pp', 'width']))
+					height = this.state.get(this.state.concat(this.constants.stillLibraryPath, ['items', librarySource.toString(), 'status', 'pp', 'height']))
+				}
+			}
+			return { number: stillId, name, width: width || '', height: height || '' }
+		}
+
+		if (input === 'COLOR') return { number: '', name: 'Color', width: '', height: '' }
+		if (typeof input === 'string' && input.match(/^TIMER_/)) return { number: input.replace(/^TIMER_/, ''), name: `Timer ${input.replace(/^TIMER_/, '')}`, width: '', height: '' }
+		return { number: '', name: 'none', width: '', height: '' }
 	}
 
 	/** Is a screen / preset combination locked */

@@ -110,16 +110,16 @@ export default class PresetsLivepremier extends Presets {
 					},
 				],
 			}
-			Array.of('sourceLayer', 'sourceNative', 'sourceBack', 'sourceFront').forEach(layer => {
-				preparedPreset.steps[0].down[0].options[layer] = 'keep'	
+			Array.of('sourceLayer', 'sourceNative', 'sourceBack').forEach(layer => {
+				preparedPreset.steps[0].down[0].options[layer] = 'keep'
 			})
-			layertypes.forEach(layertype => {	
+			layertypes.forEach(layertype => {
 				preparedPreset.steps[0].down[0].options[layertype] = input.id
 			})
 			presets[preparedPreset.name] = preparedPreset
 		}
-		
-		makeInputSelectionPreset({ id: 'NONE', label: 'None' }, ['sourceLayer', 'sourceNative', 'sourceFront', 'sourceBack'], '')
+
+		makeInputSelectionPreset({ id: 'NONE', label: 'None' }, ['sourceLayer', 'sourceNative', 'sourceBack'], '')
 
 		this.choices.getSourceChoices().filter(choice => choice.id !== 'NONE' && choice.id !== 'COLOR').forEach((choice: Dropdown<string>) => {
 			makeInputSelectionPreset(choice, ['sourceLayer', 'sourceBack'], '')

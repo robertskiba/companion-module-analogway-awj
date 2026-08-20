@@ -20,6 +20,12 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'screenPreset',
 		'liveselection',
 		'layerselection',
+		'selectedLayerRect',
+		'selectedLayerSelectionChange',
+		'globalAnchorPointChange',
+		'selectedLayerSourceChange',
+		'selectedLayerSourceSignalChange',
+		'selectedScreenChange',
 		'widgetSelection',
 		'screenLock',
 		'sourceVisibility',
@@ -386,8 +392,12 @@ export default class SubscriptionsMidra extends Subscriptions {
 						'presetList', 'items', preset,
 						'status', 'pp', 'isModified',
 					])
-					this.instance.setVariableValues({ ['screen' + prefix + screenNum + 'memory' + variableSuffix]: mem ? 'M' + mem : '' });
-					this.instance.setVariableValues({ ['screen' + prefix + screenNum + 'memoryModified' + variableSuffix]: mem && modified ? '*' : '' });
+					const memVarId = 'screen' + prefix + screenNum + 'memory' + variableSuffix
+					const modVarId = 'screen' + prefix + screenNum + 'memoryModified' + variableSuffix
+					this.instance.addVariable({ id: 'screenPreset', variableId: memVarId, name: `Active memory for ${prefix}${screenNum} ${variableSuffix}` })
+					this.instance.addVariable({ id: 'screenPreset', variableId: modVarId, name: `Modified flag of active memory for ${prefix}${screenNum} ${variableSuffix}` })
+					this.instance.setVariableValues({ [memVarId]: mem ? 'M' + mem : '' });
+					this.instance.setVariableValues({ [modVarId]: mem && modified ? '*' : '' });
 					this.instance.setVariableValues({
 						['screen' + prefix + screenNum + 'memoryLabel' + variableSuffix]: mem
 							? this.instance.state.get(['DEVICE', 'device', 'preset', prefix === 'A' ? 'auxBank' : 'bank', 'slotList', 'items', mem, 'control', 'pp', 'label'])
@@ -418,9 +428,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 					this.instance.state.set(`LOCAL/screens/${prefix}${screenNum}/pgm/preset`, program);
 					this.instance.state.set(`LOCAL/screens/${prefix}${screenNum}/pvw/preset`, preview);
 					
-					this.instance.setVariableValues({ ['screen' + prefix + screenNum + 'timePGM']: takeTime } )
-					this.instance.setVariableValues({ ['screen' + prefix + screenNum + 'timePVW']: takeTime } )
-					
+					this.instance.setVariableValues({ [this.varName(`screen${prefix}${screenNum}timePGM`, `${prefix}${screenNum}.pgm.time`)]: takeTime } )
+					this.instance.setVariableValues({ [this.varName(`screen${prefix}${screenNum}timePVW`, `${prefix}${screenNum}.pvw.time`)]: takeTime } )
+
 					setMemoryVariables(program, 'PGM');
 					setMemoryVariables(preview, 'PVW');
 				}
@@ -430,8 +440,8 @@ export default class SubscriptionsMidra extends Subscriptions {
 					this.instance.state.set(`LOCAL/screens/${prefix}${screenNum}/pgm/preset`, program);
 					this.instance.state.set(`LOCAL/screens/${prefix}${screenNum}/pvw/preset`, preview);
 
-					this.instance.setVariableValues({ ['screen' + prefix + screenNum + 'timePGM']: takeTime } )
-					this.instance.setVariableValues({ ['screen' + prefix + screenNum + 'timePVW']: takeTime } )
+					this.instance.setVariableValues({ [this.varName(`screen${prefix}${screenNum}timePGM`, `${prefix}${screenNum}.pgm.time`)]: takeTime } )
+					this.instance.setVariableValues({ [this.varName(`screen${prefix}${screenNum}timePVW`, `${prefix}${screenNum}.pvw.time`)]: takeTime } )
 					
 					setMemoryVariables(program, 'PGM');
 					setMemoryVariables(preview, 'PVW');
@@ -460,7 +470,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7];
 				const presname = pres === this.instance.state.get(`LOCAL/screens/${screenPrefix}${screenNum}/pgm/preset`) ? 'PGM' : 'PVW';
 				const memorystr = value ? value.toString() : '';
-				this.instance.setVariableValues({ ['screen' + screenPrefix + screenNum + 'memory' + presname]: memorystr });
+				const memVarId = 'screen' + screenPrefix + screenNum + 'memory' + presname
+				this.instance.addVariable({ id: 'screenMemoryChange', variableId: memVarId, name: `Active memory for ${screenPrefix}${screenNum} ${presname}` })
+				this.instance.setVariableValues({ [memVarId]: memorystr });
 				this.instance.setVariableValues({
 					['screen' + screenPrefix + screenNum + 'memoryLabel' + presname]: memorystr !== ''
 						? this.instance.state.get([
@@ -493,8 +505,10 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const screenNum = Array.isArray(path) ? path[4] : path.split('/')[4];
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7];
 				const presName = pres === this.instance.state.get(`LOCAL/screens/${screenPrefix}${screenNum}/pgm/preset`) ? 'PGM' : 'PVW';
+				const modVarId = 'screen' + screenPrefix + screenNum + 'memoryModified' + presName
+				this.instance.addVariable({ id: 'screenMemoryModifiedChange', variableId: modVarId, name: `Modified flag of active memory for ${screenPrefix}${screenNum} ${presName}` })
 				this.instance.setVariableValues({
-					['screen' + screenPrefix + screenNum + 'memoryModified' + presName]: this.instance.state.get(
+					[modVarId]: this.instance.state.get(
 						[
 							'DEVICE','device',
 							screenType,'items', screenNum, 

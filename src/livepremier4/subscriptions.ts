@@ -21,6 +21,12 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'liveInputsChange',
 		'liveselection',
 		'layerselection',
+		'selectedLayerRect',
+		'selectedLayerSelectionChange',
+		'globalAnchorPointChange',
+		'selectedLayerSourceChange',
+		'selectedLayerSourceSignalChange',
+		'selectedScreenChange',
 		'widgetSelection',
 		'screenLock',
 		'sourceVisibility',
@@ -35,6 +41,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'layerMemoryLabel',
 		'stillLabel',
 		'stillValid',
+		'stillLibraryChange',
 		'screenLabel',
 		'auxscreenLabel',
 		'masterMemoriesChange',
@@ -225,8 +232,12 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 						...mempath,
 						'isNotModified',
 					])
-					this.instance.setVariableValues({ ['screen' + screen + 'memory' + variableSuffix]: mem ? 'M' + mem : '' });
-					this.instance.setVariableValues({ ['screen' + screen + 'memoryModified' + variableSuffix]: mem && !unmodified ? '*' : '' });
+					const memVarId = 'screen' + screen + 'memory' + variableSuffix
+					const modVarId = 'screen' + screen + 'memoryModified' + variableSuffix
+					this.instance.addVariable({ id: 'screenPreset', variableId: memVarId, name: `Active memory for ${screen} ${variableSuffix}` })
+					this.instance.addVariable({ id: 'screenPreset', variableId: modVarId, name: `Modified flag of active memory for ${screen} ${variableSuffix}` })
+					this.instance.setVariableValues({ [memVarId]: mem ? 'M' + mem : '' });
+					this.instance.setVariableValues({ [modVarId]: mem && !unmodified ? '*' : '' });
 					this.instance.setVariableValues({
 						['screen' + screen + 'memoryLabel' + variableSuffix]: mem
 							? this.instance.state.get(['DEVICE', 'device', 'presetBank', 'bankList', 'items', mem, 'control', 'pp', 'label'])
@@ -251,12 +262,12 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 					this.instance.state.set(`LOCAL/screens/${screen}/pgm/preset`, program)
 					this.instance.state.set(`LOCAL/screens/${screen}/pvw/preset`, preview)
 					this.instance.setVariableValues({
-						['screen' + screen + 'timePGM']: deciSceondsToString(
+						[this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)]: deciSceondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenAuxGroupList', 'items', screen, 'control', 'pp', 'takeUpTime'])
 						)
 					});
 					this.instance.setVariableValues({
-						['screen' + screen + 'timePVW']: deciSceondsToString(
+						[this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)]: deciSceondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenAuxGroupList', 'items', screen, 'control', 'pp', 'takeDownTime'])
 						)
 					});
@@ -269,7 +280,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 					this.instance.state.set(`LOCAL/screens/${screen}/pgm/preset`, program)
 					this.instance.state.set(`LOCAL/screens/${screen}/pvw/preset`, preview)
 					this.instance.setVariableValues({
-						['screen' + screen + 'timePGM']: deciSceondsToString(
+						[this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)]: deciSceondsToString(
 							this.instance.state.get([
 								'DEVICE',
 								'device',
@@ -281,7 +292,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 						)
 					})
 					this.instance.setVariableValues({
-						['screen' + screen + 'timePVW']: deciSceondsToString(
+						[this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)]: deciSceondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenAuxGroupList', 'items', screen, 'control', 'pp', 'takeUpTime'])
 						)
 					})
@@ -304,7 +315,9 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 				const pres = Array.isArray(path) ? path[10] : path.split('/')[10]
 				const presname = pres === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PGM' : 'PVW'
 				const memorystr = value ? value.toString() : ''
-				this.instance.setVariableValues({ ['screen' + screen + 'memory' + presname]:  memorystr !== '' ? 'M' + memorystr : '' })
+				const memVarId = 'screen' + screen + 'memory' + presname
+				this.instance.addVariable({ id: 'screenMemoryChange', variableId: memVarId, name: `Active memory for ${screen} ${presname}` })
+				this.instance.setVariableValues({ [memVarId]:  memorystr !== '' ? 'M' + memorystr : '' })
 				this.instance.setVariableValues({
 					['screen' + screen + 'memoryLabel' + presname]: memorystr !== ''
 						? this.instance.state.get([
@@ -335,8 +348,10 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 				const screen = Array.isArray(path) ? path[7] : path.split('/')[7]
 				const pres = Array.isArray(path) ? path[10] : path.split('/')[10]
 				const presname = pres === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PGM' : 'PVW'
+				const modVarId = 'screen' + screen + 'memoryModified' + presname
+				this.instance.addVariable({ id: 'screenMemoryModifiedChange', variableId: modVarId, name: `Modified flag of active memory for ${screen} ${presname}` })
 				this.instance.setVariableValues({
-					['screen' + screen + 'memoryModified' + presname]: this.instance.state.get(
+					[modVarId]: this.instance.state.get(
 						['DEVICE','device','presetBank','status','presetId',screenList,'items',screen,'presetList','items',pres,'pp','id']
 					) && !this.instance.state.get(path)
 						? '*'

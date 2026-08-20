@@ -101,7 +101,7 @@ class AWJconnection {
 			if (isAuth !== undefined && deviceObj !== undefined) {
 				// it seems we are speaking to an AWJ device
 
-				const handleApiStateResponse = (res: {[name: string]: any}): void => {
+				const handleApiStateResponse = async (res: {[name: string]: any}): Promise<void> => {
 					if (res.device) {
 						this.instance.state.set('DEVICE', res)
 						//console.log('rest get API device state result')
@@ -210,31 +210,43 @@ class AWJconnection {
 						try {
 							this.instance.setDevice(newPlatform)
 						} catch (error: any) {
-							this.instance.log('error', `setting device platform to ${newPlatform} failed:\n${error}`) 
+							this.instance.log('error', `setting device platform to ${newPlatform} failed:\n${error}`)
 						}
 						try {
 							this.instance.subscriptions.initSubscriptions()
 						} catch (error: any) {
-							this.instance.log('error', `setting up subscriptions for device failed:\n${error.stack}`) 
+							this.instance.log('error', `setting up subscriptions for device failed:\n${error.stack}`)
+						}
+						// setDevice() may have swapped in fresh actions/feedbacks/choices instances (platform change,
+						// or fresh connect) - always republish definitions here instead of relying on some subscription
+						// happening to signal an update during initSubscriptions(), which is not guaranteed.
+						try {
+							await this.instance.updateInstance()
+						} catch (error: any) {
+							this.instance.log('error', `updating instance after connect failed:\n${error}`)
 						}
 
 
-						if (this.instance.config.sync === true && this.hadError === false) {
-							console.log('switching sync on because of config')
-							this.instance.switchSync(1)
-						} else if (this.hadError === true) {
-							this.instance.switchSync(3)
-							console.log('setting sync again after reconnection')
-						} else {
-							this.instance.switchSync(0)
-							console.log('setting sync off by default')
+						try {
+							if (this.instance.config.sync === true && this.hadError === false) {
+								console.log('switching sync on because of config')
+								this.instance.switchSync(1)
+							} else if (this.hadError === true) {
+								this.instance.switchSync(3)
+								console.log('setting sync again after reconnection')
+							} else {
+								this.instance.switchSync(0)
+								console.log('setting sync off by default')
+							}
+						} catch (error: any) {
+							this.instance.log('error', `switching sync after connect failed:\n${error}`)
 						}
 						this.hadError = false
 						
 
 						try {
 							const deviceMacaddr = this.instance.choices.getMACaddress()
-							const configMacaddr = this.instance.config.macaddress.split(/[,:-_.\s]/).join(':')
+							const configMacaddr = this.instance.config.macaddress.split(/[,:_.\s-]/).join(':')
 							if (configMacaddr !== deviceMacaddr) {
 								this.instance.config.macaddress = deviceMacaddr
 								this.instance.saveConfig(this.instance.config)
@@ -242,6 +254,23 @@ class AWJconnection {
 						} catch (error) {
 							this.instance.log('error', 'getting MAC address from device failed ' + error)
 						}
+
+						// The REMOTE channel (current selection, global anchor point) only ever streams deltas over
+						// the websocket - unlike DEVICE, there is no REST snapshot for it. If nothing about the
+						// selection actually changes right after a (re)connect, these variables stay blank until
+						// the user makes a new selection, since our subscriptions only ever saw them go from
+						// "unset" to "unset". Re-running these once more after the websocket's initial burst had
+						// time to land catches up on whatever was already selected before the (re)connect.
+						setTimeout(() => {
+							try {
+								this.instance.subscriptions.initSubscriptions('selectedLayerSelectionChange')
+								this.instance.subscriptions.initSubscriptions('globalAnchorPointChange')
+								this.instance.subscriptions.initSubscriptions('selectedScreenChange')
+							} catch (error: any) {
+								this.instance.log('error', `refreshing selection-derived variables after connect failed:\n${error}`)
+							}
+						}, 1500)
+
 						return
 						
 					} else {
@@ -252,6 +281,20 @@ class AWJconnection {
 
 				const setupDevice = async () => {
 					//const _device = setDevice()
+
+					// A previous websocket instance (e.g. from an earlier attempt during a reconnect storm,
+					// with reconnects starting as fast as every 100ms) might still be open/connecting here -
+					// overwriting the reference without closing it first leaks the underlying OS socket and
+					// its listeners on every single reconnect attempt. Over an extended outage (reconnects
+					// keep happening until the max interval, dozens of attempts for a multi-minute outage)
+					// this can exhaust the OS's socket buffer ("no buffer space available"). Remove its
+					// listeners first so its own close handler can't itself trigger another reconnect, then
+					// force-terminate it (not the graceful .close(), which could itself hang against an
+					// already-unreachable device) before creating the new one.
+					if (this.websocket) {
+						this.websocket.removeAllListeners()
+						this.websocket.terminate()
+					}
 
 					const webSocketProtocol = urlObj.protocol() === 'https' ? 'wss://' : 'ws://'
 					this.websocket = new WebSocket(`${webSocketProtocol}${urlObj.host()}`, { handshakeTimeout: 1234, maxRedirects: 1 })
@@ -316,7 +359,7 @@ class AWJconnection {
 
 					const download = await this.downloadDevicestate(urlObj)
 
-					handleApiStateResponse(download)
+					await handleApiStateResponse(download)
 
 				}
 
@@ -380,10 +423,13 @@ class AWJconnection {
 			if (this.reconnectinterval > this.reconnectmax) this.reconnectinterval = this.reconnectmax
 			const retrysec = Math.round(this.reconnectinterval / 100)/10
 			if(String(error).match(/fetch failed/)) {
+				this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Device unreachable, retrying in ${retrysec}s`)
 				this.instance.log('error', `Can't connect to device, probably offline. Will retry in ${retrysec}s`)
 			} else if(String(error).match(/terminated/)) {
+				this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Connection terminated, retrying in ${retrysec}s`)
 				this.instance.log('error', `Connection to device has been terminated unexpectedly. Will retry in ${retrysec}s`)
 			} else {
+				this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Connection failed, retrying in ${retrysec}s`)
 				this.instance.log('error', `Can't connect to device webserver. ${error}\nWill retry in ${retrysec}s`)
 			}
 		}		
@@ -510,6 +556,7 @@ class AWJconnection {
 		clearTimeout(this.wsTimeout)
 		this.shouldBeConnected = false
 		this.hadError = false
+		this.websocket?.close()
 		this.websocket = null
 		//this.tcpsocket.destroy()
 		this.buffer = ''

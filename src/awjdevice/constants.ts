@@ -53,6 +53,8 @@ export default class Constants {
     static readonly multiviewerWidgetSelectionMap = (key: any) => key
     static readonly multiviewerMemoryPath: string = 'DEVICE/device/monitoringBank/bankList'
 
+    static readonly stillLibraryPath: string = 'DEVICE/device/stillList/library/bankList'
+
     
     
     
