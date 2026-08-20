@@ -17,7 +17,7 @@ export function initVariables(_instance: AWJinstance): TrackedVariable[] {
 		},
 		{
 			variableId: 'selectedPreset',
-			name: 'Selected Preset',
+			name: 'Selected Preset (Program/Preview)',
 		},
 	]
 

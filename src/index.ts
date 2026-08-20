@@ -153,7 +153,8 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.config.color_greengrey = combineRgb(45,79,49)
 			this.config.color_red = combineRgb(213,0,0)
 			this.config.color_reddark = combineRgb(82,0,0)
-			this.config.color_redgrey = combineRgb(79,31,31)		
+			this.config.color_redgrey = combineRgb(79,31,31)
+			this.config.useOldVariableNames = false
 			this.saveConfig(this.config)
 		}
 

@@ -56,6 +56,7 @@ export default class ActionsMidra extends Actions {
 		'deviceLayerFreeze',
 		'deviceScreenFreeze',
 		'devicePositionSize',
+		'devicePositionSizeV3',
 		'deviceCopyProgram',
 		'devicePresetToggle',
 		'remoteMultiviewerSelectWidget',
@@ -654,12 +655,12 @@ export default class ActionsMidra extends Actions {
 
 
 	/**
-	 * MARK: Layer position and size
+	 * MARK: Layer position and size V3
 	 */
-	get devicePositionSize() {
-		const devicePositionSize = super.devicePositionSize
-		
-		devicePositionSize.options[0] = {
+	get devicePositionSizeV3() {
+		const devicePositionSizeV3 = super.devicePositionSizeV3
+
+		devicePositionSizeV3.options[0] = {
 			id: 'screen',
 			type: 'dropdown',
 			label: 'Screen',
@@ -667,9 +668,29 @@ export default class ActionsMidra extends Actions {
 			default: 'sel',
 			allowInvalidValues: true,
 		}
-		
+
+		return devicePositionSizeV3
+
+	}
+
+	/**
+	 * MARK: Layer position and size (deprecated V2)
+	 */
+	get devicePositionSize() {
+		const devicePositionSize = super.devicePositionSize
+
+		devicePositionSize.options[0] = {
+			id: 'screen',
+			type: 'dropdown',
+			label: 'Screen',
+			choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenChoices()],
+			default: 'sel',
+			allowInvalidValues: true,
+			disableAutoExpression: true,
+		}
+
 		return devicePositionSize
-		
+
 	}
 
 	// MARK: Set Preset Toggle - Midra

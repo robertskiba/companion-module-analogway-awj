@@ -73,6 +73,14 @@ export default class Presets {
 		this.config= this.instance.config
 	}
 
+	/**
+	 * Picks the old (V2) or new (V3) id for a dynamic variable, based on the "Use old (V2) variable names"
+	 * config checkbox, so generated button texts reference whichever variable id is actually being kept live.
+	 */
+	varName(oldName: string, newName: string): string {
+		return this.config.useOldVariableNames ? oldName : newName
+	}
+
 	inverseColorBW(color: number): number {
 		return (0.2126 * splitRgb(color).r + 0.7152 * splitRgb(color).g + 0.0722* splitRgb(color).b) > 127
 		? 0x000000
@@ -136,7 +144,7 @@ export default class Presets {
 				name: `Load Master Memory ${memory.id}`,
 				category: 'Master Memories',
 				style: {
-					text: `MM${memory.id}\\n$(${ilabel}:masterMemory${memory.id}label)`,
+					text: `MM${memory.id}\\n$(${ilabel}:${this.varName(`masterMemory${memory.id}label`, `MM${memory.id}.label`)})`,
 					size: 'auto',
 					color: this.inverseColorBW(bgcolor),
 					bgcolor,
@@ -201,7 +209,7 @@ export default class Presets {
 					name: `Load Screen Memory ${memory.id} into screen ${screen.id}${screen.label ? ' ('+screen.label+')' : ''}`,
 					category: `Screen Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
 					style: {
-						text: `SM${memory.id}${screen.id != 'sel' ? ' '+screen.id : ''}\\n$(${ilabel}:screenMemory${memory.id}label)`,
+						text: `SM${memory.id}${screen.id != 'sel' ? ' '+screen.id : ''}\\n$(${ilabel}:${this.varName(`screenMemory${memory.id}label`, `SM${memory.id}.label`)})`,
 						size: 'auto',
 						color: this.inverseColorBW(bgcolor),
 						bgcolor,
@@ -301,7 +309,7 @@ export default class Presets {
 				name: `Load Layer Memory ${memory.id} ${memory.label}`,
 				category: 'Layer Memories',
 				style: {
-					text: `LM${memory.id}\\n$(${ilabel}:layerMemory${memory.id}label)`,
+					text: `LM${memory.id}\\n$(${ilabel}:${this.varName(`layerMemory${memory.id}label`, `LM${memory.id}.label`)})`,
 					size: 'auto',
 					color: this.inverseColorBW(bgcolor),
 					bgcolor,
@@ -613,7 +621,7 @@ export default class Presets {
 
 		presets['Toggle Preset'] = {
 			type: 'simple',
-			name: 'Toggle Preset',
+			name: 'Toggle Preset (Program/Preview)',
 			category: 'Live',
 			style: {
 				text: 'Toggle preset\\nPGM/PVW',
@@ -673,7 +681,7 @@ export default class Presets {
 
 		presets['Preset Toggle'] = {
 			type: 'simple',
-			name: 'Preset Toggle',
+			name: 'Preset Toggle (Program/Preview)',
 			category: 'Live',
 			style: {
 				text: 'Preset\\nToggle\\noff',
@@ -799,7 +807,7 @@ export default class Presets {
 				name: 'Toggle Screen ' + screen + ' Selection and show some useful data of PGM',
 				category: 'Screens',
 				style: {
-					text: `${screen} PGM\\n$(${ilabel}:screen${screen}label)\\n$(${ilabel}:screen${screen}timePGM)\\n$(${ilabel}:screen${screen}memoryPGM)$(${ilabel}:screen${screen}memoryModifiedPGM)\\n$(${ilabel}:screen${screen}memoryLabelPGM)`,
+					text: `${screen} PGM\\n$(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)})\\n$(${ilabel}:${this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)})\\n$(${ilabel}:screen${screen}memoryPGM)$(${ilabel}:screen${screen}memoryModifiedPGM)\\n$(${ilabel}:${this.varName(`screen${screen}memoryLabelPGM`, `${screen}.pgm.memory.label`)})`,
 					size: 'auto',
 					color: this.config.color_bright,
 					bgcolor: this.config.color_reddark,
@@ -836,7 +844,7 @@ export default class Presets {
 				name: 'Copy PGM of ' + screen + ' to PVW and show some useful data of PVW',
 				category: 'Screens',
 				style: {
-					text: `${screen} PVW\\n$(${ilabel}:screen${screen}label)\\n$(${ilabel}:screen${screen}timePVW)\\n$(${ilabel}:screen${screen}memoryPVW)$(${ilabel}:screen${screen}memoryModifiedPVW)\\n$(${ilabel}:screen${screen}memoryLabelPVW)`,
+					text: `${screen} PVW\\n$(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)})\\n$(${ilabel}:${this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)})\\n$(${ilabel}:screen${screen}memoryPVW)$(${ilabel}:screen${screen}memoryModifiedPVW)\\n$(${ilabel}:${this.varName(`screen${screen}memoryLabelPVW`, `${screen}.pvw.memory.label`)})`,
 					size: 'auto',
 					color: this.config.color_bright,
 					bgcolor: this.config.color_greendark,
@@ -1800,7 +1808,7 @@ export default class Presets {
 					name: 'Load MV' + memory.id + nameSuffix,
 					category: 'Multiviewer Memories',
 					style: {
-						text: (multimulti ? `MV${multiviewer} `: '') +  `MV${memory.id}\\n$(${ilabel}:multiviewerMemory${memory.id}label)`,
+						text: (multimulti ? `MV${multiviewer} `: '') +  `MV${memory.id}\\n$(${ilabel}:${this.varName(`multiviewerMemory${memory.id}label`, `MV${memory.id}.label`)})`,
 						size: 'auto',
 						color: this.inverseColorBW(bgcolor),
 						bgcolor,

@@ -92,6 +92,21 @@ const UpgradeScripts = [
         }
 
 	},
+	// V3 renamed most dynamic variables to a clearer scheme (e.g. "SM1.label" instead of "screenMemory1label").
+	// Any config that already existed before this change keeps using the old names, so existing button texts
+	// and triggers referencing them by name keep working unchanged. Only brand new connections start on the new names.
+	function useOldVariableNamesForExistingConfigs(_context, props: LooseObj) {
+		let updatedConfig: LooseObj | null = null
+		if (props.config && props.config.useOldVariableNames === undefined) {
+			updatedConfig = { ...props.config, useOldVariableNames: true }
+		}
+
+		return {
+			updatedConfig,
+			updatedActions: [],
+			updatedFeedbacks: [],
+		}
+	},
 ]
 
 export { UpgradeScripts }

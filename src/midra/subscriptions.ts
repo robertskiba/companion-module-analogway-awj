@@ -52,6 +52,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 		// 'screenPreset',
 		'screenMemoryModifiedChange',
 		'inputLabel',
+		'screenSize',
+		'outputStatus',
+		'outputPlugStatus',
 		'shutdown',
 		// Midra
 		'presetToggle',
@@ -83,21 +86,32 @@ export default class SubscriptionsMidra extends Subscriptions {
 
 	get screenTransitionTime():Subscription {
 		return {
-			pat: 'DEVICE/device/transition/screenList/items/\\d{1,3}/control/pp/takeTime',
+			pat: 'DEVICE/device/transition/screenList/items/(\\d{1,3})/control/pp/takeTime',
 			ini: ():string[] => {
 				return Array.from({ length: this.constants.maxScreens }, (_, i) => `DEVICE/device/transition/screenList/items/${ i+1 }/control/pp/takeTime`)
 			},
 			fun: (path, _value) => {
 				if (!path) return false
 				const screenNumber = Array.isArray(path) ? path[5] : path.split('/')[5]
+				const pvwVarId = this.varName(`screenS${screenNumber}timePVW`, `S${screenNumber}.pvw.time`)
+				const pgmVarId = this.varName(`screenS${screenNumber}timePGM`, `S${screenNumber}.pgm.time`)
+				const deciseconds = this.instance.state.get(path)
 
+				if (this.instance.choices.getScreensArray().some(scr => scr.id === 'S' + screenNumber)) {
+					this.instance.addVariable({ id: 'screenTransitionTime', variableId: pvwVarId, name: `Transition time for S${screenNumber} PVW` })
+					this.instance.addVariable({ id: 'screenTransitionTime', variableId: pgmVarId, name: `Transition time for S${screenNumber} PGM` })
+					this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${pvwVarId}.ms`, name: `Transition time for S${screenNumber} PVW (ms)` })
+					this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${pgmVarId}.ms`, name: `Transition time for S${screenNumber} PGM (ms)` })
+				}
 				this.instance.setVariableValues({
-					['screenS' + screenNumber + 'timePVW']: deciSceondsToString(this.instance.state.get(path))
+					[pvwVarId]: deciSceondsToString(deciseconds),
+					[`${pvwVarId}.ms`]: deciseconds * 100,
 				})
 				this.instance.setVariableValues({
-					['screenS' + screenNumber + 'timePGM']: deciSceondsToString(this.instance.state.get(path))
+					[pgmVarId]: deciSceondsToString(deciseconds),
+					[`${pgmVarId}.ms`]: deciseconds * 100,
 				})
-			
+
 				return false
 			},
 		}
@@ -105,21 +119,32 @@ export default class SubscriptionsMidra extends Subscriptions {
 
 	get auxScreenTransitionTime():Subscription {
 		return {
-			pat: 'DEVICE/device/transition/auxiliaryScreenList/items/\\d{1,3}/control/pp/takeTime',
+			pat: 'DEVICE/device/transition/auxiliaryScreenList/items/(\\d{1,3})/control/pp/takeTime',
 			ini: ():string[] => {
 				return Array.from({ length: this.constants.maxAuxScreens }, (_, i) => `DEVICE/device/transition/auxiliaryScreenList/items/${ i+1 }/control/pp/takeTime`)
 			},
 			fun: (path, _value) => {
 				if (!path) return false
 				const screenNumber = Array.isArray(path) ? path[5] : path.split('/')[5]
+				const pvwVarId = this.varName(`screenA${screenNumber}timePVW`, `A${screenNumber}.pvw.time`)
+				const pgmVarId = this.varName(`screenA${screenNumber}timePGM`, `A${screenNumber}.pgm.time`)
+				const deciseconds = this.instance.state.get(path)
 
+				if (this.instance.choices.getAuxArray().some(scr => scr.id === 'A' + screenNumber)) {
+					this.instance.addVariable({ id: 'auxScreenTransitionTime', variableId: pvwVarId, name: `Transition time for A${screenNumber} PVW` })
+					this.instance.addVariable({ id: 'auxScreenTransitionTime', variableId: pgmVarId, name: `Transition time for A${screenNumber} PGM` })
+					this.instance.addVariable({ id: 'auxScreenTransitionTime', variableId: `${pvwVarId}.ms`, name: `Transition time for A${screenNumber} PVW (ms)` })
+					this.instance.addVariable({ id: 'auxScreenTransitionTime', variableId: `${pgmVarId}.ms`, name: `Transition time for A${screenNumber} PGM (ms)` })
+				}
 				this.instance.setVariableValues({
-					['screenA' + screenNumber + 'timePVW']: deciSceondsToString(this.instance.state.get(path))
+					[pvwVarId]: deciSceondsToString(deciseconds),
+					[`${pvwVarId}.ms`]: deciseconds * 100,
 				})
 				this.instance.setVariableValues({
-					['screenA' + screenNumber + 'timePGM']: deciSceondsToString(this.instance.state.get(path))
+					[pgmVarId]: deciSceondsToString(deciseconds),
+					[`${pgmVarId}.ms`]: deciseconds * 100,
 				})
-			
+
 				return false
 			},
 		}
@@ -133,8 +158,12 @@ export default class SubscriptionsMidra extends Subscriptions {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[6] : path.split('/')[6] || '0'
 				const label = memory.toString() !== '0' ? this.instance.state.get(path) : ''
-				this.instance.setVariableValues({['screenMemory' + memory + 'label']:  label})
-				
+				const varId = this.varName(`screenMemory${memory}label`, `SM${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'screenMemoryLabel', variableId: varId, name: `Label of Screen Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  label})
+
 				const screens = this.instance.choices.getChosenScreens('all')
 
 				for (const screen of screens) {
@@ -146,7 +175,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 						'status','pp','memoryId'
 					])
 					if (memory == pgmmem) {
-						this.instance.setVariableValues({['screen' + screen + 'memoryLabelPGM']:  label})
+						const pgmVarId = this.varName(`screen${screen}memoryLabelPGM`, `${screen}.pgm.memory.label`)
+						this.instance.addVariable({ id: 'screenMemoryLabel', variableId: pgmVarId, name: `Label of memory in Program for ${screen}` })
+						this.instance.setVariableValues({[pgmVarId]:  label})
 					}
 					const pvwmem = this.instance.state.get([
 						'DEVICE',
@@ -156,7 +187,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 						'status','pp','memoryId'
 					])
 					if (memory == pvwmem) {
-						this.instance.setVariableValues({['screen' + screen + 'memoryLabelPVW']:  label})
+						const pvwVarId = this.varName(`screen${screen}memoryLabelPVW`, `${screen}.pvw.memory.label`)
+						this.instance.addVariable({ id: 'screenMemoryLabel', variableId: pvwVarId, name: `Label of memory in Preview for ${screen}` })
+						this.instance.setVariableValues({[pvwVarId]:  label})
 					}
 				}
 				return true
@@ -179,7 +212,11 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[6] : path.split('/')[6]
-				this.instance.setVariableValues({['masterMemory' + memory + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`masterMemory${memory}label`, `MM${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'masterMemoryLabel', variableId: varId, name: `Label of Master Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -187,12 +224,16 @@ export default class SubscriptionsMidra extends Subscriptions {
 
 	get multiviewerMemoryLabel():Subscription {
 		return {
-			pat: 'DEVICE/device/multiviewer/bankList/item/(\\d+)/control/pp/label',
+			pat: 'DEVICE/device/multiviewer/bankList/items/(\\d+)/control/pp/label',
 			ini: Array.from({ length: 49 }, (_, i) => (i + 1).toString()),
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[5] : path.split('/')[5]
-				this.instance.setVariableValues({['multiviewerMemory' + memory + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`multiviewerMemory${memory}label`, `MV${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'multiviewerMemoryLabel', variableId: varId, name: `Label of Multiviewer Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -205,7 +246,11 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[5] : path.split('/')[5]
-				this.instance.setVariableValues({['STILL_' + input + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`STILL_${input}label`, `STILL${input}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'stillLabel', variableId: varId, name: `Label of Still ${input}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -227,8 +272,21 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({['SCREEN_' + input + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screenS' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.choices.getScreensArray().some(scr => scr.id === 'S' + input)
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `SCREEN_${input}label`, name: `Label of Screen S${input}` })
+						this.instance.addVariable({ id: 'screenLabel', variableId: `screenS${input}label`, name: `Label of Screen S${input}` })
+					}
+					this.instance.setVariableValues({['SCREEN_' + input + 'label']: label})
+					this.instance.setVariableValues({['screenS' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `S${input}.label`, name: `Label of Screen S${input}` })
+					}
+					this.instance.setVariableValues({[`S${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -241,8 +299,21 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({['AUXSCREEN_' + input + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screenA' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.choices.getAuxArray().some(scr => scr.id === 'A' + input)
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `AUXSCREEN_${input}label`, name: `Label of Auxscreen A${input}` })
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screenA${input}label`, name: `Label of Auxscreen A${input}` })
+					}
+					this.instance.setVariableValues({['AUXSCREEN_' + input + 'label']: label})
+					this.instance.setVariableValues({['screenA' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `A${input}.label`, name: `Label of Auxscreen A${input}` })
+					}
+					this.instance.setVariableValues({[`A${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -446,8 +517,13 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false;
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4];
+				const num = input.replace(/^\w+_/, '')
+				const varId = this.varName(`INPUT_${num}label`, `IN${num}.label`)
+				if (this.instance.choices.getLiveInputArray().some(inp => inp.id === input)) {
+					this.instance.addVariable({ id: 'plugChange', variableId: varId, name: `Label of Input ${input}` })
+				}
 				this.instance.setVariableValues({
-					[input.replace(/^\w+_/, 'INPUT_') + 'label']: this.instance.state.get([
+					[varId]: this.instance.state.get([
 						'DEVICE', 'device', 'inputList', 'items', input,
 						'plugList', 'items', this.instance.state.get(path),
 						'control', 'pp', 'label'
@@ -468,8 +544,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 				if (this.instance.state.get([
 					'DEVICE', 'device', 'inputList', 'items', input, 'status', 'pp', 'plug'
 				]) == plug) {
+					const num = input.replace(/^\w+_/, '')
 					this.instance.setVariableValues({
-						[input.replace(/^\w+_/, 'INPUT_') + 'label']: this.instance.state.get(path)
+						[this.varName(`INPUT_${num}label`, `IN${num}.label`)]: this.instance.state.get(path)
 					});
 					return true;
 				} else {

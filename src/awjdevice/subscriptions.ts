@@ -85,6 +85,14 @@ export default class Subscriptions {
 	}
 
 	/**
+	 * Picks the old (V2) or new (V3) id for a dynamic variable, based on the "Use old (V2) variable names"
+	 * config checkbox. Existing configs are upgraded to keep using the old names automatically (see upgrades.ts).
+	 */
+	varName(oldName: string, newName: string): string {
+		return this.instance.config.useOldVariableNames ? oldName : newName
+	}
+
+	/**
 	 * The names of the currently active subscriptions
 	 */
 	get subscriptionList() {
@@ -198,8 +206,10 @@ export default class Subscriptions {
 			ini: Array.from( {length: this.constants.maxTimers}, (_, i) => (i + 1).toString() ),
 			fun: (path, _value) => {
 				if (!path) return false
-				const timer = path.toString().match(/(?<=TIMER_)(\d)\//) || ['0']
-				this.instance.setVariableValues({['timer' + timer[0] + '_status']:  this.instance.state.get(path)})
+				const timer = path.toString().match(/(?<=TIMER_)(\d)\//) || ['0', '0']
+				const varId = this.varName(`timer${timer[1]}_status`, `TIMER${timer[1]}.status`)
+				this.instance.addVariable({ id: 'timerState', variableId: varId, name: `Status of Timer ${timer[1]}` })
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return false
 			},
 		}
@@ -216,8 +226,12 @@ export default class Subscriptions {
 				const label = memory.toString() !== '0' ? this.instance.state.get(path) : ''
 				const screens = this.instance.choices.getChosenScreenAuxes('all')
 
-				this.instance.setVariableValues({['screenMemory' + memory + 'label']:  label})
-				
+				const varId = this.varName(`screenMemory${memory}label`, `SM${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'screenMemoryLabel', variableId: varId, name: `Label of Screen Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  label})
+
 				for (const screen of screens) {
 					const pgmmem = this.instance.state.get([
 						'DEVICE',
@@ -227,7 +241,9 @@ export default class Subscriptions {
 						'presetId','status','pp','id'
 					])
 					if (memory == pgmmem) {
-						this.instance.setVariableValues({['screen' + screen + 'memoryLabelPGM']:  label})
+						const pgmVarId = this.varName(`screen${screen}memoryLabelPGM`, `${screen}.pgm.memory.label`)
+						this.instance.addVariable({ id: 'screenMemoryLabel', variableId: pgmVarId, name: `Label of memory in Program for ${screen}` })
+						this.instance.setVariableValues({[pgmVarId]:  label})
 					}
 					const pvwmem = this.instance.state.get([
 						'DEVICE',
@@ -237,7 +253,9 @@ export default class Subscriptions {
 						'presetId','status','pp','id'
 					])
 					if (memory == pvwmem) {
-						this.instance.setVariableValues({['screen' + screen + 'memoryLabelPVW']:  label})
+						const pvwVarId = this.varName(`screen${screen}memoryLabelPVW`, `${screen}.pvw.memory.label`)
+						this.instance.addVariable({ id: 'screenMemoryLabel', variableId: pvwVarId, name: `Label of memory in Preview for ${screen}` })
+						this.instance.setVariableValues({[pvwVarId]:  label})
 					}
 				}
 				return true
@@ -262,7 +280,11 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[5] : path.split('/')[5]
-				this.instance.setVariableValues({['masterMemory' + memory + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`masterMemory${memory}label`, `MM${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'masterMemoryLabel', variableId: varId, name: `Label of Master Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -276,7 +298,11 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[5] : path.split('/')[5]
-				this.instance.setVariableValues({['multiviewerMemory' + memory + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`multiviewerMemory${memory}label`, `MV${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'multiviewerMemoryLabel', variableId: varId, name: `Label of Multiviewer Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -290,7 +316,11 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[5] : path.split('/')[5]
-				this.instance.setVariableValues({['layerMemory' + memory + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`layerMemory${memory}label`, `LM${memory}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'layerMemoryLabel', variableId: varId, name: `Label of Layer Memory ${memory}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -304,7 +334,11 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({['STILL_' + input + 'label']:  this.instance.state.get(path)})
+				const varId = this.varName(`STILL_${input}label`, `STILL${input}.label`)
+				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
+					this.instance.addVariable({ id: 'stillLabel', variableId: varId, name: `Label of Still ${input}` })
+				}
+				this.instance.setVariableValues({[varId]:  this.instance.state.get(path)})
 				return true
 			},
 		}
@@ -328,8 +362,21 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screen' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `${input.replace('S', 'SCREEN_')}label`, name: `Label of Screen ${input}` })
+						this.instance.addVariable({ id: 'screenLabel', variableId: `screen${input}label`, name: `Label of Screen ${input}` })
+					}
+					this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']: label})
+					this.instance.setVariableValues({['screen' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `${input}.label`, name: `Label of Screen ${input}` })
+					}
+					this.instance.setVariableValues({[`${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -343,8 +390,21 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screen' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input.replace('A', 'AUXSCREEN_')}label`, name: `Label of Auxscreen ${input}` })
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screen${input}label`, name: `Label of Auxscreen ${input}` })
+					}
+					this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']: label})
+					this.instance.setVariableValues({['screen' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input}.label`, name: `Label of Auxscreen ${input}` })
+					}
+					this.instance.setVariableValues({[`${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -438,8 +498,155 @@ export default class Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false;
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4];
-				this.instance.setVariableValues({ [input.replace(/^\w+_/, 'INPUT_') + 'label']: this.instance.state.get(path) });
+				const num = input.replace(/^\w+_/, '')
+				const varId = this.varName(`INPUT_${num}label`, `IN${num}.label`)
+				if (this.instance.choices.getLiveInputArray().some(inp => inp.id === input)) {
+					this.instance.addVariable({ id: 'inputLabel', variableId: varId, name: `Label of Input ${input}` })
+				}
+				this.instance.setVariableValues({ [varId]: this.instance.state.get(path) });
 				return true;
+			},
+		}
+	}
+
+	/**
+	 * A screen or auxscreen's canvas resolution changes. Registers S{n}.width/height and A{n}.width/height
+	 * module variables (used to build V3 position/size expressions) and keeps their values live.
+	 */
+	get screenSize():Subscription {
+		const pathForProp = (isAux: boolean, platformId: string, prop: 'sizeH' | 'sizeV') => [
+			'DEVICE',
+			...(isAux ? this.constants.auxPath : this.constants.screenPath),
+			'items', platformId,
+			...this.constants.screenSizePath,
+			prop,
+		].join('/')
+
+		return {
+			pat: [...this.constants.screenSizePath, 'size(H|V)'].join('/'),
+			ini: () => {
+				this.instance.removeVariable('screenSize')
+				const paths: string[] = []
+				for (const scr of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
+					const info = this.instance.choices.getScreenInfo(scr.id)
+					const kind = info.isAux ? 'Auxscreen' : 'Screen'
+					this.instance.addVariable({ id: 'screenSize', variableId: `${info.id}.width`, name: `Width of ${kind} ${info.id}` })
+					this.instance.addVariable({ id: 'screenSize', variableId: `${info.id}.height`, name: `Height of ${kind} ${info.id}` })
+					paths.push(pathForProp(info.isAux, info.platformId, 'sizeH'))
+					paths.push(pathForProp(info.isAux, info.platformId, 'sizeV'))
+				}
+				return paths
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				for (const scr of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
+					const info = this.instance.choices.getScreenInfo(scr.id)
+					if (path === pathForProp(info.isAux, info.platformId, 'sizeH')) {
+						this.instance.setVariableValues({ [`${info.id}.width`]: this.instance.state.get(path) })
+						return false
+					}
+					if (path === pathForProp(info.isAux, info.platformId, 'sizeV')) {
+						this.instance.setVariableValues({ [`${info.id}.height`]: this.instance.state.get(path) })
+						return false
+					}
+				}
+				return false
+			},
+		}
+	}
+
+	/**
+	 * A physical output's resolution, refresh rate, or format changes. Registers out{n}.width/height/refreshrate/
+	 * format/formatkind/totalwidth/totalheight/aspectratio module variables (for the outputs that actually exist /
+	 * are available) and keeps their values live.
+	 */
+	get outputStatus():Subscription {
+		const pathFor = (item: string, prop: string) => `DEVICE/device/outputList/items/${item}/status/pp/${prop}`
+		const props: [string, string][] = [
+			['sizeH', 'width'],
+			['sizeV', 'height'],
+			['rate', 'refreshrate'],
+			['format', 'format'],
+			['formatKind', 'formatkind'],
+			['totalH', 'totalwidth'],
+			['totalV', 'totalheight'],
+			['aspectRatio', 'aspectratio'],
+		]
+
+		return {
+			pat: `device/outputList/items/(\\w+)/status/pp/(?:${props.map(([p]) => p).join('|')})`,
+			ini: () => {
+				this.instance.removeVariable('outputStatus')
+				const items: string[] = this.instance.state.get('DEVICE/device/outputList/itemKeys') ?? []
+				const paths: string[] = []
+				for (const item of items) {
+					if (!this.instance.state.get(pathFor(item, 'isAvailable'))) continue
+					for (const [, varProp] of props) {
+						this.instance.addVariable({ id: 'outputStatus', variableId: `out${item}.${varProp}`, name: `${varProp} of Output ${item}` })
+					}
+					paths.push(...props.map(([awjProp]) => pathFor(item, awjProp)))
+				}
+				return paths
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				const match = path.match(new RegExp(`outputList/items/(\\w+)/status/pp/(${props.map(([p]) => p).join('|')})`))
+				if (!match) return false
+				const [, item, awjProp] = match
+				if (!this.instance.state.get(pathFor(item, 'isAvailable'))) return false
+				const varProp = props.find(([p]) => p === awjProp)?.[1]
+				if (!varProp) return false
+				if (awjProp === 'rate') {
+					const rate = this.instance.state.get(path)
+					this.instance.setVariableValues({ [`out${item}.refreshrate`]: Math.round((rate / 1000) * 100) / 100 })
+				} else {
+					this.instance.setVariableValues({ [`out${item}.${varProp}`]: this.instance.state.get(path) })
+				}
+				return false
+			},
+		}
+	}
+
+	/**
+	 * A physical output's plug (connector) status changes. Registers out{n}.hdcp/colorspace/sinkdetected/
+	 * sinkname module variables (for the outputs that actually exist / are available) and keeps them live.
+	 * "Sink" is the correct AV/HDMI term for whatever is on the receiving end (monitor, projector, LED wall, ...).
+	 */
+	get outputPlugStatus():Subscription {
+		const outputAvailablePath = (item: string) => `DEVICE/device/outputList/items/${item}/status/pp/isAvailable`
+		const pathFor = (item: string, prop: string) => `DEVICE/device/outputList/items/${item}/plugList/items/1/status/pp/${prop}`
+		const props: [string, string][] = [
+			['isHdcp', 'hdcp'],
+			['colorSpace', 'colorspace'],
+			['isMonitorDetected', 'sinkdetected'],
+			['monitorName', 'sinkname'],
+		]
+
+		return {
+			pat: `device/outputList/items/(\\w+)/plugList/items/1/status/pp/(?:${props.map(([p]) => p).join('|')})`,
+			ini: () => {
+				this.instance.removeVariable('outputPlugStatus')
+				const items: string[] = this.instance.state.get('DEVICE/device/outputList/itemKeys') ?? []
+				const paths: string[] = []
+				for (const item of items) {
+					if (!this.instance.state.get(outputAvailablePath(item))) continue
+					for (const [, varProp] of props) {
+						this.instance.addVariable({ id: 'outputPlugStatus', variableId: `out${item}.${varProp}`, name: `${varProp} of Output ${item}` })
+					}
+					paths.push(...props.map(([awjProp]) => pathFor(item, awjProp)))
+				}
+				return paths
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				const match = path.match(new RegExp(`outputList/items/(\\w+)/plugList/items/1/status/pp/(${props.map(([p]) => p).join('|')})`))
+				if (!match) return false
+				const [, item, awjProp] = match
+				if (!this.instance.state.get(outputAvailablePath(item))) return false
+				const varProp = props.find(([p]) => p === awjProp)?.[1]
+				if (!varProp) return false
+				this.instance.setVariableValues({ [`out${item}.${varProp}`]: this.instance.state.get(path) })
+				return false
 			},
 		}
 	}
