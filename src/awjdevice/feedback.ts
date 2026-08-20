@@ -10,6 +10,7 @@ import {
 	CompanionFeedbackDefinitions, 
 } from '@companion-module/base'
 import Constants from './constants.js'
+import { parseBoolean } from '../util.js'
 
 
 /** Helper type for replacing the very generic options with the real structure of options */
@@ -40,6 +41,7 @@ export default class Feedbacks {
 	readonly feedbacksToUse = [		
 		'syncselection',
 		'presetToggle',
+		'globalAnchorPoint',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
 		// 'deviceAuxMemory',
@@ -131,6 +133,34 @@ export default class Feedbacks {
 		}
 
 		return presetToggle
+	}
+
+	// MARK: Global Anchor Point
+	get globalAnchorPoint()  {
+
+		const globalAnchorPoint: CompanionBooleanFeedbackDefinition = {
+			type: 'boolean',
+			name: 'Global Anchor Point',
+			description: 'Shows whether the given Anchor Point is the currently globally selected one (the same value WebRCS uses)',
+			defaultStyle: {
+				color: this.config.color_bright,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'anchor',
+					type: 'dropdown',
+					label: 'Anchor Point',
+					choices: this.choices.getAnchorPointChoices(),
+					default: 'CENTER',
+				},
+			],
+			callback: (feedback) => {
+				return feedback.options.anchor === this.choices.getGlobalAnchorPoint()
+			},
+		}
+
+		return globalAnchorPoint
 	}
 
 	// MARK: Master Memory
@@ -818,7 +848,7 @@ export default class Feedbacks {
 							isVisibleExpression: `$(options:screen) == '${screen.id}'`,
 						}
 						if (screen.id === 'any') {
-							opt.choices.push(...this.choices.getLayerChoices(this.constants.maxLayers, false))
+							opt.choices.push(...this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), false))
 						} else {
 							opt.label += ' ' + screen.id
 							opt.choices.push(...this.choices.getLayerChoices(screen.id, false))
@@ -1114,7 +1144,7 @@ export default class Feedbacks {
 					id: 'numericValue',
 					label: 'value1',
 					default: 0,
-					min: Number.MIN_VALUE,
+					min: -Number.MAX_VALUE,
 					max: Number.MAX_VALUE,
 					isVisibleExpression: "$(options:valuetype) == 'n'",
 				},
@@ -1123,7 +1153,7 @@ export default class Feedbacks {
 					id: 'numericValue2',
 					label: 'value 2',
 					default: 0,
-					min: Number.MIN_VALUE,
+					min: -Number.MAX_VALUE,
 					max: Number.MAX_VALUE,
 					isVisibleExpression: "$(options:valuetype) == 'n' && ($(options:actionsn) == '...' || $(options:actionsn) == '%')",
 				},
@@ -1295,14 +1325,14 @@ export default class Feedbacks {
 					} else if (typeof value === 'string') {
 						ret = value.match(/^y(es)?|true|0*1|go|\+|right|correct|ok(ay)?$/i) !== null
 					}
-					const bool = feedback.options.invert ? !ret : ret
+					const bool = parseBoolean(feedback.options.invert) ? !ret : ret
 					this.instance.setVariableValues({ [varId]: bool ? 1 : 0 })
 				} else if (feedback.options.valuetype === 'o') { 
 					const valueo = JSON.stringify(value)
 					this.instance.setVariableValues({ [varId]: valueo })
 					ret = valueo.length > 0
 				}
-				return feedback.options.invert ? !ret : ret
+				return parseBoolean(feedback.options.invert) ? !ret : ret
 			},
 			unsubscribe: (feedback) => {
 				this.instance.subscriptions.removeSubscription(feedback.id)

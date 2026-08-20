@@ -8,6 +8,7 @@ import {
 } from '@companion-module/base'
 import { InstanceStatus } from '@companion-module/base'
 import Actions from '../awjdevice/actions.js'
+import { parseBoolean } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -22,7 +23,7 @@ type AWJaction<T> = {
 	unsubscribe?: (action: ActionEvent<T>) => void
 	learn?: (
 		action: ActionEvent<T>
-	) => AWJoptionValues<T> | undefined | Promise<AWJoptionValues<T> | undefined>
+	) => Partial<AWJoptionValues<T>> | undefined | Promise<Partial<AWJoptionValues<T>> | undefined>
 }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -57,6 +58,8 @@ export default class ActionsMidra extends Actions {
 		'deviceScreenFreeze',
 		'devicePositionSize',
 		'devicePositionSizeV3',
+		'deviceSetAnchorPoint',
+		'deviceResetLayerSize',
 		'deviceCopyProgram',
 		'devicePresetToggle',
 		'remoteMultiviewerSelectWidget',
@@ -120,7 +123,7 @@ export default class ActionsMidra extends Actions {
 				this.connection.sendWSmessage(path,false, true)
 				this.instance.sendXupdate()
 
-				if (action.options.selectScreens) {
+				if (parseBoolean(action.options.selectScreens)) {
 					if (this.state.syncSelection) {
 						this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 					} else {
@@ -164,7 +167,7 @@ export default class ActionsMidra extends Actions {
 				this.connection.sendWSmessage( fullpath, false, true)
 				this.instance.sendXupdate()
 
-				if (action.options.selectScreens) {
+				if (parseBoolean(action.options.selectScreens)) {
 					if (this.state.syncSelection) {
 						this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 					} else {
@@ -671,6 +674,24 @@ export default class ActionsMidra extends Actions {
 
 		return devicePositionSizeV3
 
+	}
+
+	/**
+	 * MARK: Reset Layer Size or Ratio
+	 */
+	get deviceResetLayerSize() {
+		const deviceResetLayerSize = super.deviceResetLayerSize
+
+		deviceResetLayerSize.options[0] = {
+			id: 'screen',
+			type: 'dropdown',
+			label: 'Screen',
+			choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenChoices()],
+			default: 'sel',
+			allowInvalidValues: true,
+		}
+
+		return deviceResetLayerSize
 	}
 
 	/**

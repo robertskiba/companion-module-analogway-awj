@@ -360,12 +360,25 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	/**
 	 * Switches sync on or off
 	 * @param action 0: switch off, 1: switch on, 2: toggle, 3: resend local sync state
+	 * @param attempt internal retry counter - do not pass this in from calling code
 	 */
-	public switchSync(action: number): void {
+	public switchSync(action: number, attempt = 0): void {
 		const clients = this.state.get('REMOTE/system/network/websocketServer/clients')
 		// this.log('debug', 'REMOTE ' + JSON.stringify(this.device.get('REMOTE')))
-		let syncstate: boolean
 		const myid: string = this.state.get('LOCAL/socketId')
+		// The REMOTE client list and our own socket id only arrive via the websocket's separate,
+		// asynchronous INIT message, which races against the REST-based device state download that
+		// triggers this call right after connect - so either can still be missing here. Retry briefly
+		// instead of crashing (clients undefined) or silently sending a broken path (myid not found yet).
+		if (!Array.isArray(clients) || !myid) {
+			if (attempt < 10) {
+				setTimeout(() => this.switchSync(action, attempt + 1), 300)
+			} else {
+				this.log('warn', 'Could not enable/disable remote sync selection: REMOTE client list never became available')
+			}
+			return
+		}
+		let syncstate: boolean
 		const myindex = clients.findIndex((elem: Record<string, unknown>) => {
 			if (elem.id === myid) {
 				return true
@@ -373,6 +386,14 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 				return false
 			}
 		})
+		if (myindex === -1) {
+			if (attempt < 10) {
+				setTimeout(() => this.switchSync(action, attempt + 1), 300)
+			} else {
+				this.log('warn', 'Could not enable/disable remote sync selection: own client id not found in REMOTE client list')
+			}
+			return
+		}
 		switch (action) {
 			case 0:
 				syncstate = false

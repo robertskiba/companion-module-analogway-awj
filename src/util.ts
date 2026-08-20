@@ -102,8 +102,20 @@ export const timeToSeconds = (timestring: string): number => {
 }
 
 /**
+ * Coerces an option value that is nominally a boolean (a checkbox field) but, when driven by an
+ * expression (e.g. a page variable), may actually arrive as a string like "false" or "0" instead of a
+ * real boolean - and JavaScript's own truthiness would treat the non-empty string "false" as true.
+ * Treats false/"false"/0/"0"/""/undefined/null (case-insensitively for strings) as false, everything
+ * else (true/"true"/1/"1"/any other value) as true.
+ */
+export const parseBoolean = (value: unknown): boolean => {
+    if (typeof value === 'string') value = value.toLowerCase()
+    return !([false, 'false', 0, '0', '', undefined, null] as unknown[]).includes(value)
+}
+
+/**
  * process times
- * @param time as number of deciseconds 
+ * @param time as number of deciseconds
  * @returns timestring in format M:SS.S
  */
 export const deciSceondsToString = (time: number): string => {

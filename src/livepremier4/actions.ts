@@ -8,6 +8,7 @@ import {
 } from '@companion-module/base'
 import { splitRgb } from '@companion-module/base'
 import Actions from '../awjdevice/actions.js'
+import { parseBoolean } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -22,7 +23,7 @@ type AWJaction<T> = {
 	unsubscribe?: (action: ActionEvent<T>) => void
 	learn?: (
 		action: ActionEvent<T>
-	) => AWJoptionValues<T> | undefined | Promise<AWJoptionValues<T> | undefined>
+	) => Partial<AWJoptionValues<T>> | undefined | Promise<Partial<AWJoptionValues<T>> | undefined>
 }
 
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
@@ -54,8 +55,11 @@ export default class ActionsLivepremier4 extends Actions {
 		'deviceInputFreeze',
 		// 'deviceLayerFreeze',
 		// 'deviceScreenFreeze',
+		'deviceAssignImageLibraryToStore',
 		'devicePositionSize',
 		'devicePositionSizeV3',
+		'deviceSetAnchorPoint',
+		'deviceResetLayerSize',
 		'deviceCopyProgram',
 		'devicePresetToggle',
 		'remoteMultiviewerSelectWidget',
@@ -142,7 +146,7 @@ export default class ActionsLivepremier4 extends Actions {
 				this.connection.sendWSmessage(path,false, true)
 				this.instance.sendXupdate()
 
-				if (action.options.selectScreens) {
+				if (parseBoolean(action.options.selectScreens)) {
 					if (this.state.syncSelection) {
 						this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 					} else {

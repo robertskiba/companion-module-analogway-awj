@@ -33,7 +33,7 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			type: 'textinput',
 			label: 'Device MAC Address',
 			tooltip: 'Will be automaticalle filled with the MAC of the last connected Device',
-			regex: '/^$|^([0-9a-fA-F]{2}[,:-_.\\s]){5}[0-9a-fA-F]{2}$/',
+			regex: '/^$|^([0-9a-fA-F]{2}[,:_.\\s-]){5}[0-9a-fA-F]{2}$/',
 			default: '',
 			width: 12,
 		},

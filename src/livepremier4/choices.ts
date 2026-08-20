@@ -311,6 +311,21 @@ export default class ChoicesLivepremier4 extends Choices {
 	}
 
 	/**
+	 * In a system of multiple linked devices, the global/continuous video input numbering (IN_x, no gaps)
+	 * does NOT reserve a fixed address block per linked device - each device simply contributes however
+	 * many real inputs it actually has next in line (same "no padding" principle as within one device's
+	 * card slots, just one level up). So the global video input number a device's local input N maps to
+	 * is the sum of every preceding linked device's real input count, plus N.
+	 */
+	private getPrecedingDevicesInputCount(device: number): number {
+		let total = 0
+		for (let d = 1; d < device; d += 1) {
+			total += this.getAudioInputSlotCapacities(d).reduce((sum, cap) => sum + cap, 0)
+		}
+		return total
+	}
+
+	/**
 	 * Translates an audio input number (INPUT_x_CHANNEL_c addressing, always 8 reserved addresses per
 	 * card slot) to the corresponding real, continuous video input number (IN_x, as shown elsewhere in
 	 * this module and in Web RCS), or undefined if the audio address falls in an unused padding region
@@ -334,16 +349,18 @@ export default class ChoicesLivepremier4 extends Choices {
 		const ret = [{ id: 'NONE', label: 'No Source' }]
 		const inputs = this.state.get(`DEVICE/device/audio/control/deviceList/items/${device}/rxList/itemKeys`) ?? []
 		const slotCapacities = this.getAudioInputSlotCapacities(device)
+		const precedingDevicesInputCount = this.getPrecedingDevicesInputCount(device)
 		for (const input of inputs) {
 			// eslint-disable-next-line @typescript-eslint/no-unused-vars
 			const [inputtype, inputnum, _channel, channelnum] = input.split('_')
 			if (inputtype === 'INPUT') {
 				const videoInputNum = this.audioInputNumberToVideoInputNumber(Number(inputnum), slotCapacities)
 				if (videoInputNum === undefined) continue // unused padding address, not a real input
-				const inputLabel = this.state.get(`DEVICE/device/inputList/items/IN_${ (device-1) * 64 + videoInputNum}/control/pp/label`)
+				const globalVideoInputNum = precedingDevicesInputCount + videoInputNum
+				const inputLabel = this.state.get(`DEVICE/device/inputList/items/IN_${globalVideoInputNum}/control/pp/label`)
 				ret.push({
 					id: input,
-					label: `Input ${videoInputNum} Channel ${channelnum}${inputLabel === '' ? '' : ' - ' + inputLabel}`,
+					label: `Input ${globalVideoInputNum} Channel ${channelnum}${inputLabel === '' ? '' : ' - ' + inputLabel}`,
 				})
 			} else if (
 				inputtype === 'DANTE' &&

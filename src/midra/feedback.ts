@@ -28,6 +28,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 	readonly feedbacksToUse = [		
 		'syncselection',
 		'presetToggle',
+		'globalAnchorPoint',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
 		'deviceAuxMemory',
