@@ -1,3 +1,5 @@
+This is a fork of the original companion-module-analogway-awj repository. It is under active development with the goal of eventually contributing these changes back to the upstream project via pull request.
+
 # companion-module-analogway-awj
 
 Companion module for Analog Way products supporting the AWJ protocol (although this module actually is not using the AWJ protocol).
