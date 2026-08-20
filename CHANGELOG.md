@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (work in progress, 2026-08-20)
+## v3.0Beta1 (work in progress, 2026-08-20)
 
 ### Major: migrated to `@companion-module/base` v2.1.3
 
