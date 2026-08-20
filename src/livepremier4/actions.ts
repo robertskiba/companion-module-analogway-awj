@@ -55,6 +55,7 @@ export default class ActionsLivepremier4 extends Actions {
 		// 'deviceLayerFreeze',
 		// 'deviceScreenFreeze',
 		'devicePositionSize',
+		'devicePositionSizeV3',
 		'deviceCopyProgram',
 		'devicePresetToggle',
 		'remoteMultiviewerSelectWidget',

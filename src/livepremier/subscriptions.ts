@@ -52,6 +52,9 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		'screenTransitionTime',
 		'screenMemoryLabel',
 		'inputLabel',
+		'screenSize',
+		'outputStatus',
+		'outputPlugStatus',
 		'shutdown',
 		// Midra
 		// 'presetToggle',
@@ -114,19 +117,34 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 				if (!path) return false
 				const screen = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7]
+				const exists = [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()].some(scr => scr.id === screen)
 				if (pres === 'takeUpTime') {
 					const presname = 'B' === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PVW' : 'PGM'
+					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname.toLowerCase()}.time`)
+					const deciseconds = this.instance.state.get(path)
+					if (exists) {
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${varId}.ms`, name: `Transition time for ${screen} ${presname} (ms)` })
+					}
 					this.instance.setVariableValues({
-						['screen' + screen + 'time' + presname]: deciSceondsToString(this.instance.state.get(path))
+						[varId]: deciSceondsToString(deciseconds),
+						[`${varId}.ms`]: deciseconds * 100,
 					})
 				}
 				if (pres === 'takeDownTime') {
 					const presname = 'A' === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PVW' : 'PGM'
+					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname.toLowerCase()}.time`)
+					const deciseconds = this.instance.state.get(path)
+					if (exists) {
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${varId}.ms`, name: `Transition time for ${screen} ${presname} (ms)` })
+					}
 					this.instance.setVariableValues({
-						['screen' + screen + 'time' + presname]: deciSceondsToString(this.instance.state.get(path))
+						[varId]: deciSceondsToString(deciseconds),
+						[`${varId}.ms`]: deciseconds * 100,
 					})
 				}
-				
+
 				return false
 			},
 		}
@@ -139,8 +157,21 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screen' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `${input.replace('S', 'SCREEN_')}label`, name: `Label of Screen ${input}` })
+						this.instance.addVariable({ id: 'screenLabel', variableId: `screen${input}label`, name: `Label of Screen ${input}` })
+					}
+					this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']: label})
+					this.instance.setVariableValues({['screen' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `${input}.label`, name: `Label of Screen ${input}` })
+					}
+					this.instance.setVariableValues({[`${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -153,8 +184,21 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screen' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input.replace('A', 'AUXSCREEN_')}label`, name: `Label of Auxscreen ${input}` })
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screen${input}label`, name: `Label of Auxscreen ${input}` })
+					}
+					this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']: label})
+					this.instance.setVariableValues({['screen' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input}.label`, name: `Label of Auxscreen ${input}` })
+					}
+					this.instance.setVariableValues({[`${input}.label`]: label})
+				}
 				return true
 			},
 		}

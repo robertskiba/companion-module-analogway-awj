@@ -118,7 +118,7 @@ export default class Feedbacks {
 		
 		const presetToggle: CompanionBooleanFeedbackDefinition = {
 			type: 'boolean',
-			name: 'Preset Toggle',
+			name: 'Preset Toggle Status (Program/Preview)',
 			description: 'Shows whether preset toggle is on or off',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -588,7 +588,7 @@ export default class Feedbacks {
 		
 		const livePresetSelection: AWJfeedback<{preset: string }> = {
 			type: 'boolean',
-			name: 'Preset Selection',
+			name: 'Preset Selection (Program/Preview)',
 			description: 'Shows whether program or preview is currently selected',
 			defaultStyle: {
 				color: this.config.color_dark,

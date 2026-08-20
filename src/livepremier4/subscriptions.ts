@@ -52,6 +52,9 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'screenTransitionTime',
 		'screenMemoryLabel',
 		'inputLabel',
+		'screenSize',
+		'outputStatus',
+		'outputPlugStatus',
 		'shutdown',
 		//LivePremier4
 		'timerValue',
@@ -116,19 +119,34 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 				if (!path) return false
 				const screen = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7]
+				const exists = [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()].some(scr => scr.id === screen)
 				if (pres === 'takeUpTime') {
 					const presname = 'B' === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PVW' : 'PGM'
+					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname.toLowerCase()}.time`)
+					const deciseconds = this.instance.state.get(path)
+					if (exists) {
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${varId}.ms`, name: `Transition time for ${screen} ${presname} (ms)` })
+					}
 					this.instance.setVariableValues({
-						['screen' + screen + 'time' + presname]: deciSceondsToString(this.instance.state.get(path))
+						[varId]: deciSceondsToString(deciseconds),
+						[`${varId}.ms`]: deciseconds * 100,
 					})
 				}
 				if (pres === 'takeDownTime') {
 					const presname = 'A' === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PVW' : 'PGM'
+					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname.toLowerCase()}.time`)
+					const deciseconds = this.instance.state.get(path)
+					if (exists) {
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
+						this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${varId}.ms`, name: `Transition time for ${screen} ${presname} (ms)` })
+					}
 					this.instance.setVariableValues({
-						['screen' + screen + 'time' + presname]: deciSceondsToString(this.instance.state.get(path))
+						[varId]: deciSceondsToString(deciseconds),
+						[`${varId}.ms`]: deciseconds * 100,
 					})
 				}
-				
+
 				return false
 			},
 		}
@@ -141,8 +159,21 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screen' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `${input.replace('S', 'SCREEN_')}label`, name: `Label of Screen ${input}` })
+						this.instance.addVariable({ id: 'screenLabel', variableId: `screen${input}label`, name: `Label of Screen ${input}` })
+					}
+					this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']: label})
+					this.instance.setVariableValues({['screen' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'screenLabel', variableId: `${input}.label`, name: `Label of Screen ${input}` })
+					}
+					this.instance.setVariableValues({[`${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -155,8 +186,21 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']:  this.instance.state.get(path)})
-				this.instance.setVariableValues({['screen' + input + 'label']:  this.instance.state.get(path)})
+				const label = this.instance.state.get(path)
+				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
+				if (this.instance.config.useOldVariableNames) {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input.replace('A', 'AUXSCREEN_')}label`, name: `Label of Auxscreen ${input}` })
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screen${input}label`, name: `Label of Auxscreen ${input}` })
+					}
+					this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']: label})
+					this.instance.setVariableValues({['screen' + input + 'label']: label})
+				} else {
+					if (exists) {
+						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input}.label`, name: `Label of Auxscreen ${input}` })
+					}
+					this.instance.setVariableValues({[`${input}.label`]: label})
+				}
 				return true
 			},
 		}
@@ -312,15 +356,32 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 
 	get timerValue():Subscription {
 		return {
-			pat: 'DEVICE/device/timerList/items/TIMER_\\d+/status/pp/value',
+			pat: 'DEVICE/device/timerList/items/TIMER_(\\d+)/status/pp/value',
 			ini: Array.from({ length: this.constants.maxTimers }, (_, i) => (i + 1).toString()),
 			fun: (path, _value) => {
 				if (!path) return false
 				const timer = ( Array.isArray(path) ? path[4] : path.split('/')[4] ).replaceAll(/\D/g, '')
 				const time = this.instance.state.get(path)
 
-				this.instance.setVariableValues({[`timer${timer}`]: time})
+				const varId = this.varName(`timer${timer}`, `TIMER${timer}.value`)
+				this.instance.addVariable({ id: 'timerValue', variableId: varId, name: `Current time of Timer ${timer} (ms)` })
+				this.instance.setVariableValues({[varId]: time})
 
+				const ms = typeof time === 'number' ? time : 0
+				const h = Math.floor(ms / 3600000)
+				const m = Math.floor((ms % 3600000) / 60000)
+				const s = Math.floor((ms % 60000) / 1000)
+				const pad = (n: number) => n.toString().padStart(2, '0')
+				this.instance.addVariable({ id: 'timerValue', variableId: `TIMER${timer}.value.hms`, name: `Current time of Timer ${timer} (hh:mm:ss)` })
+				this.instance.addVariable({ id: 'timerValue', variableId: `TIMER${timer}.value.h`, name: `Current time of Timer ${timer}, hours` })
+				this.instance.addVariable({ id: 'timerValue', variableId: `TIMER${timer}.value.m`, name: `Current time of Timer ${timer}, minutes` })
+				this.instance.addVariable({ id: 'timerValue', variableId: `TIMER${timer}.value.s`, name: `Current time of Timer ${timer}, seconds` })
+				this.instance.setVariableValues({
+					[`TIMER${timer}.value.hms`]: `${pad(h)}:${pad(m)}:${pad(s)}`,
+					[`TIMER${timer}.value.h`]: h,
+					[`TIMER${timer}.value.m`]: m,
+					[`TIMER${timer}.value.s`]: s,
+				})
 
 				return false
 			}

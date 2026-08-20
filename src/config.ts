@@ -14,6 +14,7 @@ export interface Config extends JsonObject {
 	color_red: number
 	color_reddark: number
 	color_redgrey: number
+	useOldVariableNames: boolean
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -47,6 +48,15 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			id: 'showDisabled',
 			type: 'checkbox',
 			label: 'Show also disabled inputs in dropdowns',
+			default: false,
+			width: 12,
+		},
+		{
+			id: 'useOldVariableNames',
+			type: 'checkbox',
+			label: 'Use old (V2) variable names',
+			tooltip:
+				'V3 renamed most dynamic variables to a clearer, consistent scheme (e.g. "SM1.label" instead of "screenMemory1label"). Enable this to keep using the old V2 names if you already reference them in button texts or triggers. New connections start with this off.',
 			default: false,
 			width: 12,
 		},

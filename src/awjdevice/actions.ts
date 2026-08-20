@@ -72,6 +72,7 @@ export default class Actions {
 		'deviceLayerFreeze',
 		'deviceScreenFreeze',
 		'devicePositionSize',
+		'devicePositionSizeV3',
 		'deviceCopyProgram',
 		'devicePresetToggle',
 		'remoteMultiviewerSelectWidget',
@@ -862,12 +863,217 @@ export default class Actions {
 	}
 
 	/**
-	 * MARK: Layer position and size
+	 * MARK: Layer position and size V3
+	 * Sends the given values 1:1 to the device (posH/posV/sizeH/sizeV) without any conversion, so the raw AWJ
+	 * value is directly visible. An empty field leaves that value untouched. No anchor point, no aspect-ratio
+	 * derivation, no cross-layer bounding box math - unlike the old (deprecated V2) action.
+	 */
+	get devicePositionSizeV3() {
+		type DevicePositionSizeV3 = {screen: string, preset: string, layersel: string, x: string, y: string, w: string, h: string} & Record<string, string>
+		type LayerPositionData = {path: string[], posH: number, posV: number, sizeH: number, sizeV: number}
+
+		const getLayerPositionData = (screenId: string, preset: string, layerId: string): LayerPositionData | undefined => {
+			const screninfo = this.choices.getScreenInfo(screenId)
+			const presetKey = this.choices.getPreset(screninfo.id, preset)
+			const path = [
+				...(screninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+				'items', screninfo.platformId,
+				'presetList', 'items', presetKey,
+				...this.choices.getLayerPath(layerId)
+			]
+
+			if (this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath]) === undefined) return undefined // this layer does not allow for sizing
+
+			return {
+				path,
+				posH: this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posH']) ?? 0,
+				posV: this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posV']) ?? 0,
+				sizeH: this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920,
+				sizeV: this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080,
+			}
+		}
+
+		const devicePositionSizeV3: AWJaction<DevicePositionSizeV3> = {
+			name: 'Set Position and Size V3',
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen / Aux',
+					choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenAuxChoices()],
+					default: 'sel',
+					disableAutoExpression: true,
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset',
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					default: 'sel',
+				},
+				{
+					id: `layersel`,
+					type: 'dropdown',
+					label: 'Layer',
+					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
+					choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...Array.from({length: this.constants.maxLayers}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
+					default: 'sel',
+					isVisibleExpression: "$(options:screen) == 'sel'",
+				},
+				...this.screens.map((screen) => {
+					return{
+						id: `layer${screen.id}`,
+						type: 'dropdown' as const,
+						label: 'Layer',
+						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
+						choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...this.choices.getLayerChoices(screen.id, false)],
+						default: 'sel',
+						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
+					}
+				}),
+				{
+					id: 'x',
+					type: 'textinput',
+					label: 'X position (posH, raw AWJ value)',
+					tooltip: 'Leave empty to not change this value. Sent 1:1 to the device without any conversion.',
+					default: '',
+					useVariables: true,
+				},
+				{
+					id: 'y',
+					type: 'textinput',
+					label: 'Y position (posV, raw AWJ value)',
+					tooltip: 'Leave empty to not change this value. Sent 1:1 to the device without any conversion.',
+					default: '',
+					useVariables: true,
+				},
+				{
+					id: 'w',
+					type: 'textinput',
+					label: 'Width (sizeH, raw AWJ value)',
+					tooltip: 'Leave empty to not change this value. Sent 1:1 to the device without any conversion.',
+					default: '',
+					useVariables: true,
+				},
+				{
+					id: 'h',
+					type: 'textinput',
+					label: 'Height (sizeV, raw AWJ value)',
+					tooltip: 'Leave empty to not change this value. Sent 1:1 to the device without any conversion.',
+					default: '',
+					useVariables: true,
+				},
+			],
+			learn: async (action) => {
+				const options = action.options
+				const newoptions: DevicePositionSizeV3 = {...options}
+
+				let layers: {screenAuxKey: string, layerKey: string}[]
+				if (options.screen === 'sel') {
+					if (options.layersel === 'sel') {
+						layers = this.choices.getSelectedLayers()
+					} else {
+						layers = [{screenAuxKey: options.screen, layerKey: options.layersel}]
+					}
+				} else {
+					if (options[`layer${options.screen}`] === 'sel') {
+						layers = this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == options.screen)
+					} else {
+						layers = [{screenAuxKey: options.screen, layerKey: options[`layer${options.screen}`]}]
+					}
+				}
+
+				if (layers.length === 0) return options
+
+				const preset = this.choices.getPresetSelection()
+				const screeninfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
+				const laydata = getLayerPositionData(screeninfo.id, preset, layers[0].layerKey)
+				if (laydata === undefined) return options
+
+				newoptions.screen = screeninfo.id
+				newoptions[`layer${screeninfo.id}`] = layers[0].layerKey.replace(/^\w+_/, '')
+				newoptions.preset = preset
+				newoptions.x = laydata.posH.toString()
+				newoptions.y = laydata.posV.toString()
+				newoptions.w = laydata.sizeH.toString()
+				newoptions.h = laydata.sizeV.toString()
+
+				return newoptions
+			},
+			callback: async (action) => {
+				let layers: {screenAuxKey: string, layerKey: string}[]
+				if (action.options.screen === 'sel') {
+					if (action.options.layersel === 'sel') {
+						layers = this.choices.getSelectedLayers()
+					} else {
+						layers = [{screenAuxKey: action.options.screen, layerKey: action.options.layersel}]
+					}
+				} else {
+					if (action.options[`layer${action.options.screen}`] === 'sel') {
+						layers = this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == action.options.screen)
+					} else {
+						layers = [{screenAuxKey: action.options.screen, layerKey: action.options[`layer${action.options.screen}`]}]
+					}
+				}
+
+				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
+				layers = layers.filter(layer => (!this.choices.isLocked(layer.screenAuxKey, preset) && layer.layerKey.match(/^\d+$/))) // wipe out layers of locked screens and native layer
+				if (layers.length === 0) return
+
+				for (const layer of layers) {
+					const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
+					if (laydata === undefined) continue // this layer does not allow for sizing
+
+					if (action.options.x !== '' && !isNaN(Number(action.options.x))) {
+						const posH = Math.round(Number(action.options.x))
+						if (posH !== laydata.posH) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], posH)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], posH)
+						}
+					}
+					if (action.options.y !== '' && !isNaN(Number(action.options.y))) {
+						const posV = Math.round(Number(action.options.y))
+						if (posV !== laydata.posV) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], posV)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], posV)
+						}
+					}
+					if (action.options.w !== '' && !isNaN(Number(action.options.w))) {
+						const sizeH = Math.round(Number(action.options.w))
+						if (sizeH !== laydata.sizeH) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
+						}
+					}
+					if (action.options.h !== '' && !isNaN(Number(action.options.h))) {
+						const sizeV = Math.round(Number(action.options.h))
+						if (sizeV !== laydata.sizeV) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
+						}
+					}
+				}
+
+				this.instance.sendXupdate()
+			},
+		}
+
+		return devicePositionSizeV3
+
+	}
+
+	/**
+	 * MARK: Layer position and size (deprecated V2)
+	 * Fully independent copy of devicePositionSizeV3 under the old action id, so existing shows using it keep
+	 * working untouched and this code can be left frozen while V3 gets rebuilt with a different coordinate model.
+	 * Every option field here has disableAutoExpression: true (the new "switch to expression" toggle was never
+	 * available on this action before, so this can't regress anyone), to keep that capability exclusive to V3.
 	 */
 	get devicePositionSize() {
 		type DevicePositionSize = {screen: string, preset: string, layersel: string, parameters: string[], x: string, xAnchor: string, y: string, yAnchor: string, w: string, h: string, ar: string} & Record<string, string>
 		type Layer = {screenAuxKey: string, layerKey: string, x: number, y: number, w: number, h: number, isPositionable: boolean, [name: string]: number | string | boolean}
-				
+
 
 		const calculateAr = (widthOrAr: number, height?: number) => {
 			let ar: number
@@ -894,7 +1100,7 @@ export default class Actions {
 				ar = widthOrAr / height
 				if (height < widthOrAr) {
 					lowerAr = widthOrAr / (height+0.5)
-					upperAr = widthOrAr / (height-0.5)  
+					upperAr = widthOrAr / (height-0.5)
 				} else {
 					lowerAr = (widthOrAr-0.5) / height
 					upperAr = (widthOrAr+0.5) / height
@@ -903,15 +1109,12 @@ export default class Actions {
 			for (const knownAr of knownArs) {
 				if (knownAr.value >= lowerAr && knownAr.value <= upperAr) {
 					return knownAr
-				}	
+				}
 			}
 			return {value: ar, string: (Math.round(ar*100000000)/100000000).toString(10)}
-		
+
 		}
 
-		//const regexNumber = `[+-]?\\d+(?:\\.\\d+)?`
-		//const regexFraction = `${regexNumber}(%|[\\/:]${regexNumber})?`
-		//const regexInput = `/([+-]\\s+)?${regexFraction}[psl]?(\\s+[+-]\\s+${regexFraction}[psl]?)*/g`
 		const tooltip =
 			`start with "inc" to increase by amount,
 start with "dec" to decrease by amount,
@@ -923,7 +1126,7 @@ bw: box width, bh: box height, bx: box left edge, by: box top edge, ba: box aspe
 iw: layer source width, ih: layer source height, ia: layer source aspect ratio,
 l1w, l1h, l1x, l1y, l1a: values of the first layer in the selection (leader), you can access all layers' properties with their number
 sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name, screen: screen name, amount: count of selected layers`
-		
+
 		const parseExpressionString = (expression: string, context: {[name: string]: number | string | boolean}, initialValue = 0) => {
 			let relate: (n: number) => number
 			if (expression.toLowerCase().startsWith('inc')) {
@@ -999,7 +1202,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				} else {
 					layers[layerIndex].isPositionable = true
 				}
-					
+
 				Object.keys(laydim).forEach((key) => {layer[key] = laydim[key]})
 
 				if (boundingBoxes[layer.screenAuxKey] === undefined ) boundingBoxes[layer.screenAuxKey] = {}
@@ -1046,7 +1249,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			]
 			const screenWidth = this.state.get(['DEVICE', ...path, 'sizeH'])
 			const screenHeight = this.state.get(['DEVICE', ...path, 'sizeV'])
-			
+
 			layer.input = this.state.get(['DEVICE', ...layer.path,'source','pp','inputNum']) ?? 'NONE'
 
 			if (layer.input?.match(/^IN/)) {
@@ -1057,7 +1260,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				layer.inWidth = 0
 				layer.inHeight = 0
 			}
-			
+
 			const boxWidth = boundingBoxes[layer.screenAuxKey]?.right - boundingBoxes[layer.screenAuxKey]?.x
 			const boxHeight = boundingBoxes[layer.screenAuxKey]?.bottom - boundingBoxes[layer.screenAuxKey]?.y
 
@@ -1087,7 +1290,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		}
 
 		const devicePositionSize: AWJaction<DevicePositionSize> = {
-			name: 'Set Position and Size',
+			name: 'Set Position and Size (V2, deprecated, please upgrade to new action V3)',
 			options: [
 				{
 					id: 'screen',
@@ -1104,6 +1307,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					label: 'Preset',
 					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
 					default: 'sel',
+					disableAutoExpression: true,
 				},
 				{
 					id: `layersel`,
@@ -1113,6 +1317,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...Array.from({length: this.constants.maxLayers}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
 					default: 'sel',
 					isVisibleExpression: "$(options:screen) == 'sel'",
+					disableAutoExpression: true,
 				},
 				...this.screens.map((screen) => {
 					return{
@@ -1123,6 +1328,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...this.choices.getLayerChoices(screen.id, false)],
 						default: 'sel',
 						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
+						disableAutoExpression: true,
 					}
 				}),
 				{
@@ -1146,6 +1352,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: '',
 					useVariables: true,
 					isVisibleExpression: "arrayIncludes($(options:parameters), 'x')",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'y',
@@ -1155,6 +1362,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: '',
 					useVariables: true,
 					isVisibleExpression: "arrayIncludes($(options:parameters), 'y')",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'w',
@@ -1164,6 +1372,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: '',
 					useVariables: true,
 					isVisibleExpression: "arrayIncludes($(options:parameters), 'w')",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'h',
@@ -1173,6 +1382,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: '',
 					useVariables: true,
 					isVisibleExpression: "arrayIncludes($(options:parameters), 'h')",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'xAnchor',
@@ -1182,6 +1392,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: 'lx + 0.5 * lw',
 					useVariables: true,
 					isVisibleExpression: "arrayIncludes($(options:parameters), 'x') || arrayIncludes($(options:parameters), 'w') || arrayIncludes($(options:parameters), 'h')",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'yAnchor',
@@ -1191,6 +1402,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: 'ly + 0.5 * lh',
 					useVariables: true,
 					isVisibleExpression: "arrayIncludes($(options:parameters), 'y') || arrayIncludes($(options:parameters), 'w') || arrayIncludes($(options:parameters), 'h')",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'ar',
@@ -1200,6 +1412,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					default: '',
 					useVariables: true,
 					isVisibleExpression: "(arrayIncludes($(options:parameters), 'h') && !arrayIncludes($(options:parameters), 'w')) || (!arrayIncludes($(options:parameters), 'h') && arrayIncludes($(options:parameters), 'w'))",
+					disableAutoExpression: true,
 				},
 			],
 			learn: async (action) => {
@@ -1236,7 +1449,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				const context = getLayerContext(layers[0], 1, preset, boundingBoxes, allLayerValues )
 
 				if (context === undefined) return options
-				
+
 				newoptions.screen = screeninfo.id
 				newoptions[`layer${screeninfo.id}`] = layer.replace(/^\w+_/, '')
 				newoptions.preset = preset
@@ -1245,13 +1458,13 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 				let   xAnchor     = parseExpressionString(action.options.xAnchor, context, 0)
 				let   yAnchor     = parseExpressionString(action.options.yAnchor, context, 0)
-				
-				
+
+
 				newoptions.w = context.lw.toString()
 				newoptions.h = context.lh.toString()
 				newoptions.x = (xAnchor).toString()
 				newoptions.y = (yAnchor).toString()
-				
+
 				newoptions.ar = context.lh !== 0 ? calculateAr(context.lw, context.lh)?.string ?? '' : ''
 
 				return newoptions
@@ -1282,7 +1495,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				layers = layers.filter(layer => layer.isPositionable)
 
 				const allLayerValues = getAllLayerValues(layers)
-				
+
 				for  (var i = 0; i<layers.length; i += 1) {  // (const layerIndex in layers) {
 					const layer: any = layers[i]
 					const context = getLayerContext(layer, i+1 , preset, boundingBoxes, allLayerValues )
@@ -1315,7 +1528,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						layer.y = layer.yOriginal + yDif
 						yAnchor = yPos // after movement the destination is new anchor position
 					}
-					
+
 					// do resizing
 					// first calculate factors
 					let xScale = 1, yScale = 1
@@ -1389,7 +1602,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		}
 
 		return devicePositionSize
-		
+
 	}
 
 	/**
@@ -1435,7 +1648,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		type DevicePresetToggle = {action: string}
 		
 		const devicePresetToggle: AWJaction<DevicePresetToggle> = {
-			name: 'Set Preset Toggle',
+			name: 'Set Preset Toggle (Program/Preview)',
 			options: [
 				{
 					type: 'dropdown',
@@ -1797,7 +2010,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		type SelectPreset = {mode: string}
 		
 		const selectPreset: AWJaction<SelectPreset> = {
-			name: 'Select Preset',
+			name: 'Select Preset (Program/Preview)',
 			options: [
 				{
 					id: 'mode',
