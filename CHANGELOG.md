@@ -1,5 +1,48 @@
 # Changelog
 
+## v3.0.0-beta.2
+
+### Added
+
+- **New action: "Assign Image from Library to Image Store"** — assigns an image from the Image Library (or one of the 4 device timers) to an Image Store slot, with an "Allow Downscale" option.
+- **New action: "Set Anchor Point"** — sets the globally shared Anchor Point on its own (see below), e.g. for a dedicated row of anchor-point buttons.
+- **New action: "Reset Layer Size or Ratio"** — mirrors WebRCS's layer toolbar buttons:
+  - *Source Ratio* — keeps the current height, derives the width from the source's aspect ratio.
+  - *Content Size* — sets the layer to the source's pixel-exact resolution.
+  - *Fullscreen* — fills the screen/aux exactly, ignoring aspect ratio.
+- **"Set Layer Position and Size V3" rebuilt around WebRCS's 9-point Anchor Point model**:
+  - New **Anchor Point** option (Center + 8 directional points), matching WebRCS's own Position & Size panel exactly, including its pixel-rounding behavior.
+  - The Anchor Point is now a **globally shared, WebRCS-synced setting** — changing it here updates WebRCS's own display and vice versa (confirmed live).
+  - Resizing now keeps the chosen anchor point visually fixed in place for all 8 non-Center anchors (previously the box only ever grew/shrank symmetrically around center).
+  - New **Keep Aspect Ratio** option: if only Width or only Height is given, the other is derived from the aspect ratio and rounded correctly.
+  - New optional **Reference Width / Reference Height** fields: pins the aspect-ratio calculation to a fixed value instead of the layer's ever-changing current size, avoiding rounding drift over many repeated small steps (e.g. an encoder wheel).
+- **New feedback: "Global Anchor Point"** — reflects the currently selected global Anchor Point.
+- **New status variables**, all scoped to the current selection (not a per-layer/per-screen set):
+  - `SelectedLayer.x` / `.y` / `.width` / `.height` / `.number` / `.count`
+  - `SelectedLayer.Input.Number` / `.Name` / `.width` / `.height` — the source (input or still image) assigned to the selected layer, including its native resolution.
+  - `SelectedScreen.number` / `.numberOfLayers`
+  - All `SelectedLayer.*` variables describe the **first** (Ctrl-clicked first in WebRCS) layer of a multi-selection — same layer WebRCS itself highlights differently from the rest.
+
+### Changed
+
+- **Layer-selection dropdowns** in "Set Layer Position and Size V3" and "Reset Layer Size or Ratio" now distinguish **"All Selected Layers"** from **"First/Only Selected Layer"** (now the default), to avoid accidentally re-applying a value read from `SelectedLayer.*` (which only ever reflects the first layer) to an entire multi-selection.
+- Generic (screen-unspecified) Layer dropdowns now size themselves to the layer count actually configured on the connected device, instead of the platform's theoretical maximum (e.g. no more scrolling through 128 entries on LivePremier4 when only 4 layers exist).
+- Checkbox-type options are now interpreted consistently everywhere in the module (`parseBoolean` helper) — fixes cases where a checkbox driven by an expression or page/local variable wasn't recognized correctly.
+
+### Fixed
+
+- WebSocket resource leak: a previous connection attempt's socket could remain open during a rapid reconnect storm, eventually exhausting OS socket buffers ("no buffer space available").
+- Selection-derived variables (`SelectedLayer.*`, `SelectedScreen.*`, global Anchor Point) could stay blank after a reconnect until the user made a new selection, since that part of the protocol only streams changes, not an initial snapshot.
+- A crash risk in the sync-on-connect logic when switching sync mode before the device's client list was fully populated.
+- Several dead/duplicate action registrations left over from the base migration.
+- A copy-paste bug in the input-selection presets (LivePremier/LivePremier4) referencing a field that only exists on Midra.
+- Audio input routing numbering on multi-device linked systems (continuous video numbering vs. per-device audio address padding).
+
+### Known limitations
+
+- Companion itself has a pre-existing coercion quirk where a checkbox driven by an expression evaluating to the number/string `0` is treated as `true` (only the literal string `"false"` is recognized correctly) — not fixable from this module's side; use a real boolean expression (e.g. `$(var) == 1`) rather than plain `0`/`1` text if this affects you.
+
+
 ## v3.0Beta1 (work in progress, 2026-08-20)
 
 ### Major: migrated to `@companion-module/base` v2.1.3
