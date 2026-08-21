@@ -1,6 +1,6 @@
 # Changelog
 
-## v3.0.0-beta.2
+## v3.0.0-beta.2  (work in progress, 2026-08-20)
 
 ### Added
 
@@ -43,7 +43,7 @@
 - Companion itself has a pre-existing coercion quirk where a checkbox driven by an expression evaluating to the number/string `0` is treated as `true` (only the literal string `"false"` is recognized correctly) — not fixable from this module's side; use a real boolean expression (e.g. `$(var) == 1`) rather than plain `0`/`1` text if this affects you.
 
 
-## v3.0Beta1 (work in progress, 2026-08-20)
+## v3.0.0Beta1 (work in progress, 2026-08-19)
 
 ### Major: migrated to `@companion-module/base` v2.1.3
 
