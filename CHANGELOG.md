@@ -1,5 +1,39 @@
 # Changelog
 
+# v3.0.0 Beta 3 – Changes (2026-08-21)
+
+## New
+
+- **"Show Thumbnail" feedback**: live preview image of an Input, Output, Image Store slot, or Timer directly on the button, with an adjustable Refresh Rate (1–120 sec).
+  - New config option **"Allow Live Thumbnails"** (default: on) – instantly disables all thumbnail polling instance-wide.
+  - Protects the device automatically: shared polling per source/item, adaptive throttling when many thumbnails are active at once, device-wide request queue.
+  - **Important**: only images currently loaded into an Image Store slot can be shown as a live preview – the device does not provide live previews of the Image Library itself this way.
+  - Looks really good on the wide touch buttons of the Streamdeck XL Plus ;-)
+- **New "Live - Thumbnails" preset group**: automatically generates one preset per currently-available Input, Output, Image Store image, and Timer.
+
+## Changed
+
+- **"Disable all active Testpatterns"** (in the testpattern action) now also turns off all Raster Boxes (Format/AOI) on LivePremier/LivePremier4 – previously these stayed on independently.
+- **"Set Testpattern" fields** now reliably show/hide correctly, without the Output/Screen/Input/Pattern dropdowns losing their expression/variable capability.
+- **Preset categories** renamed consistently to an "Area - Description" scheme (e.g. "Multiviewer - Select Widgets", "Screens - Lock Screens") and sorted alphabetically.
+
+## New Actions
+
+- **Assign Image from Library to Foreground/Background Frame** (Midra only) – assigns a Still Image Library item to a screen's Foreground/Background Frame slot.
+- **Set LivePremier(≤V3)/LivePremier Testpattern Raster Box** (LivePremier/LivePremier4) – enables, disables, or toggles the Format/AOI Raster Box overlay on an output, independent of the testpattern enable state.
+
+## New Feedbacks
+
+- **Show Thumbnail** (all platforms) – see above.
+- **Midra 4K/LivePremier(≤V3)/LivePremier Testpattern Active** (all platforms) – shows whether the selected testpattern is currently active on the selected screen/output/input.
+- **LivePremier(≤V3)/LivePremier Testpattern Raster Box Active** (LivePremier/LivePremier4) – shows whether the selected Raster Box (Format/AOI) is currently enabled on an output.
+
+In addition, we checked the compliance to Midra Systems by using the Midra Simulator. Fixed a lot of new and old bugs and special behaviours of Midra. 
+
+
+ 
+
+
 ## v3.0.0-beta.2  (work in progress, 2026-08-20)
 
 ### Added
