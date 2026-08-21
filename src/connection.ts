@@ -139,12 +139,14 @@ class AWJconnection {
 
 
 						let newPlatform = ''
+						let modelName = ''
 						if (device.substring(0, 3) === 'NLC') {
+							modelName = device.replace('NLC_', 'Aquilon ')
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
 								'Connected to ' +
-								device.replace('NLC_', 'Aquilon ') + serialAndFirmware()
+								modelName + serialAndFirmware()
 							)
 							const major = parseInt(fwVersion.split('.')[0])
 							if (!isNaN(major) && major >= 4) {
@@ -153,52 +155,59 @@ class AWJconnection {
 								newPlatform = 'livepremier'
 							}
 						} else if (device.match(/^EIKOS/)) {
+							modelName = 'Eikos 4k'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to Eikos 4k' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else if (device.match(/^PULSE/)) {
+							modelName = 'Pulse 4k'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to Pulse 4k' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else if (device.match(/^QMX/)) {
+							modelName = 'QuikMatrix 4k'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to QuikMatrix 4k' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else if (device.match(/^QVU/)) {
+							modelName = 'QuickVu 4k'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to QuickVu 4k' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else if (device.match(/^ZEN100/)) {
+							modelName = 'Zenith 100'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to Zenith 100' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else if (device.match(/^ZEN200/)) {
+							modelName = 'Zenith 200'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to Zenith 200' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else if (device.match(/^DBG/)) {
+							modelName = 'MNG_DEBUG'
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
-								'Connected to MNG_DEBUG' + serialAndFirmware()
+								'Connected to ' + modelName + serialAndFirmware()
 							)
 							newPlatform = 'midra'
 						} else {
@@ -206,6 +215,12 @@ class AWJconnection {
 							this.instance.log('error', `Connected to an AWJ device of type '${device}', firmware '${fwVersion}'. Device type or firmware can not be determined or is not compatible with this module`)
 							return
 						}
+
+						this.instance.state.set('LOCAL/deviceModel', modelName)
+						this.instance.state.set('LOCAL/deviceSeries', newPlatform === 'midra' ? 'Midra 4K' : newPlatform === 'livepremier4' ? 'LivePremier' : 'LivePremier ≤ V3')
+						this.instance.state.set('LOCAL/deviceFirmwareVersion', fwVersion)
+						const fwMajor = parseInt(fwVersion.split('.')[0])
+						this.instance.state.set('LOCAL/deviceFirmwareGeneration', isNaN(fwMajor) ? '' : `V${fwMajor}`)
 
 						try {
 							this.instance.setDevice(newPlatform)
@@ -540,7 +555,75 @@ class AWJconnection {
 				this.instance.log('debug', 'http POST failed ' + err)
 			})
 		}
-	} 
+	}
+
+	/** Serializes every getSnapshot() call device-wide to at most 1/second (see getSnapshot). Necessary because
+	 *  our own per-item polling throttle (deviceThumbnail feedback) is not the only caller: Companion has been
+	 *  observed to invoke an 'advanced' feedback's callback once to render a preview thumbnail in the preset
+	 *  browser panel too - unlike 'boolean' feedbacks (which have a static defaultStyle to fall back on for a
+	 *  preview, no callback needed), 'advanced' feedbacks have no such fallback, so Companion has no way to know
+	 *  what to show without actually running the callback. With e.g. ~190 Still Image Library presets, that
+	 *  meant ~190 requests firing at once the first time the preset panel was opened, overwhelming the device
+	 *  and causing some thumbnails to silently fail to load. This queue makes that impossible structurally,
+	 *  regardless of how many places in Companion end up calling getSnapshot concurrently. */
+	private snapshotQueue: Array<() => Promise<void>> = []
+	private snapshotQueueRunning = false
+	// TEST value (2026-08-21, was 1000/1-per-second): a burst of ~190 preset-preview-triggered requests (see
+	// comment above) backed up behind the 1-per-second pace badly enough that real, already-placed buttons'
+	// own thumbnails stalled for minutes waiting their turn in the same queue. 10/second is still each request
+	// fully finishing before the next one starts (see the `await job()` below - never actually concurrent, just
+	// paced), so it does not reintroduce the original "everything fires at once" overload; only needs to prove
+	// out this rate doesn't overwhelm the device the way truly-simultaneous requests did.
+	private readonly snapshotMinIntervalMs = 100
+
+	private runSnapshotQueue(): void {
+		if (this.snapshotQueueRunning) return
+		this.snapshotQueueRunning = true
+		const step = async () => {
+			const job = this.snapshotQueue.shift()
+			if (!job) {
+				this.snapshotQueueRunning = false
+				return
+			}
+			await job()
+			setTimeout(step, this.snapshotMinIntervalMs)
+		}
+		step()
+	}
+
+	/**
+	 * Fetches one live snapshot (thumbnail) from the device's REST API, documented as
+	 * `http://<address>/api/device/snapshots/{category}/{n}` (n is 1-based, PNG, up to 256x256, category is
+	 * one of inputs/outputs/images/timers/multiviewers). The device limits snapshot requests to 1/second per
+	 * item - queued (see snapshotQueue above) to guarantee that device-wide, not just per item.
+	 * @returns base64-encoded PNG data, or null if unreachable/not connected/request failed
+	 */
+	async getSnapshot(category: 'inputs' | 'outputs' | 'images' | 'timers' | 'multiviewers', id: number | string): Promise<string | null> {
+		return new Promise<string | null>((resolve) => {
+			this.snapshotQueue.push(async () => {
+				if (!this.addr || this.websocket?.readyState !== 1) {
+					resolve(null)
+					return
+				}
+				const urlObj = this.getURLobj(this.addr)
+				if (urlObj === null) {
+					resolve(null)
+					return
+				}
+				try {
+					const buffer = await ky.get(`${urlObj.protocol()}://${urlObj.host()}/api/device/snapshots/${category}/${id}`, {
+						headers: this.authcookie ? { cookie: this.authcookie } : {},
+						retry: 0,
+						timeout: 5000,
+					}).arrayBuffer()
+					resolve(Buffer.from(buffer).toString('base64'))
+				} catch {
+					resolve(null)
+				}
+			})
+			this.runSnapshotQueue()
+		})
+	}
 
 	disconnect(): void {
 		clearTimeout(this.wsTimeout)

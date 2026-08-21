@@ -181,6 +181,22 @@ export default class Subscriptions {
 		}
 	}
 
+	/** A screen's/output's/input's testpattern (type or enable state) changes */
+	get testpatternActive():Subscription {
+		return {
+			pat: 'device/(?:screenList|outputList|inputList)/items/\\w+/pattern/control/pp/(?:type|inhibit)',
+			fbk: 'deviceTestpatternActive',
+		}
+	}
+
+	/** An output's Raster Box (Format/AOI centering overlay) changes */
+	get testpatternRasterBoxActive():Subscription {
+		return {
+			pat: 'device/outputList/items/\\w+/pattern/control/pp/centering',
+			fbk: 'deviceTestpatternRasterBoxActive',
+		}
+	}
+
 	/**
 	 * Refreshes SelectedLayer.count plus the SelectedLayer.x/.y/.width/.height/.number and
 	 * SelectedLayer.Input.Number/.Name/.width/.height variables for whichever layer was selected first
@@ -706,8 +722,10 @@ export default class Subscriptions {
 
 	/**
 	 * A physical output's resolution, refresh rate, or format changes. Registers out{n}.width/height/refreshrate/
-	 * format/formatkind/totalwidth/totalheight/aspectratio module variables (for the outputs that actually exist /
-	 * are available) and keeps their values live.
+	 * format/formatkind/aspectratio module variables (for the outputs that actually exist / are available) and
+	 * keeps their values live. Deliberately excludes the raw AWJ totalH/totalV fields (full video timing
+	 * including blanking, e.g. 2200x1125 for a 1920x1080@60Hz signal per the CEA-861 standard) - a real but
+	 * broadcast-engineering-only value with no use case in Companion button/feedback logic.
 	 */
 	get outputStatus():Subscription {
 		const pathFor = (item: string, prop: string) => `DEVICE/device/outputList/items/${item}/status/pp/${prop}`
@@ -717,8 +735,6 @@ export default class Subscriptions {
 			['rate', 'refreshrate'],
 			['format', 'format'],
 			['formatKind', 'formatkind'],
-			['totalH', 'totalwidth'],
-			['totalV', 'totalheight'],
 			['aspectRatio', 'aspectratio'],
 		]
 
@@ -729,9 +745,10 @@ export default class Subscriptions {
 				const items: string[] = this.instance.state.get('DEVICE/device/outputList/itemKeys') ?? []
 				const paths: string[] = []
 				for (const item of items) {
+					if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) continue // multiviewer outputs get their own MV{n}.* variables, see multiviewerOutputStatus
 					if (!this.instance.state.get(pathFor(item, 'isAvailable'))) continue
 					for (const [, varProp] of props) {
-						this.instance.addVariable({ id: 'outputStatus', variableId: `out${item}.${varProp}`, name: `${varProp} of Output ${item}` })
+						this.instance.addVariable({ id: 'outputStatus', variableId: `OUT${item}.${varProp}`, name: `${varProp} of Output ${item}` })
 					}
 					paths.push(...props.map(([awjProp]) => pathFor(item, awjProp)))
 				}
@@ -742,15 +759,50 @@ export default class Subscriptions {
 				const match = path.match(new RegExp(`outputList/items/(\\w+)/status/pp/(${props.map(([p]) => p).join('|')})`))
 				if (!match) return false
 				const [, item, awjProp] = match
+				if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) return false
 				if (!this.instance.state.get(pathFor(item, 'isAvailable'))) return false
 				const varProp = props.find(([p]) => p === awjProp)?.[1]
 				if (!varProp) return false
 				if (awjProp === 'rate') {
 					const rate = this.instance.state.get(path)
-					this.instance.setVariableValues({ [`out${item}.refreshrate`]: Math.round((rate / 1000) * 100) / 100 })
+					const hz = this.constants.outputRateInMilliHertz ? rate / 1000 : rate
+					this.instance.setVariableValues({ [`OUT${item}.refreshrate`]: Math.round(hz * 100) / 100 })
 				} else {
-					this.instance.setVariableValues({ [`out${item}.${varProp}`]: this.instance.state.get(path) })
+					this.instance.setVariableValues({ [`OUT${item}.${varProp}`]: this.instance.state.get(path) })
 				}
+				return false
+			},
+		}
+	}
+
+	/** A physical output's label (name) changes. Registers out{n}.label, mirroring screenLabel/auxscreenLabel -
+	 *  separate from outputStatus since the label lives under control/pp, not status/pp like the other out{n}.* props. */
+	get outputLabel():Subscription {
+		const pathFor = (item: string) => `DEVICE/device/outputList/items/${item}/control/pp/label`
+		const availablePath = (item: string) => `DEVICE/device/outputList/items/${item}/status/pp/isAvailable`
+
+		return {
+			pat: 'device/outputList/items/(\\w+)/control/pp/label',
+			ini: () => {
+				this.instance.removeVariable('outputLabel')
+				const items: string[] = this.instance.state.get('DEVICE/device/outputList/itemKeys') ?? []
+				const paths: string[] = []
+				for (const item of items) {
+					if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) continue
+					if (!this.instance.state.get(availablePath(item))) continue
+					this.instance.addVariable({ id: 'outputLabel', variableId: `OUT${item}.label`, name: `Label of Output ${item}` })
+					paths.push(pathFor(item))
+				}
+				return paths
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				const match = path.match(/outputList\/items\/(\w+)\/control\/pp\/label/)
+				if (!match) return false
+				const item = match[1]
+				if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) return false
+				if (!this.instance.state.get(availablePath(item))) return false
+				this.instance.setVariableValues({ [`OUT${item}.label`]: this.instance.state.get(path) })
 				return false
 			},
 		}
@@ -778,9 +830,10 @@ export default class Subscriptions {
 				const items: string[] = this.instance.state.get('DEVICE/device/outputList/itemKeys') ?? []
 				const paths: string[] = []
 				for (const item of items) {
+					if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) continue // multiviewer outputs are not "physical outputs", see multiviewerOutputStatus
 					if (!this.instance.state.get(outputAvailablePath(item))) continue
 					for (const [, varProp] of props) {
-						this.instance.addVariable({ id: 'outputPlugStatus', variableId: `out${item}.${varProp}`, name: `${varProp} of Output ${item}` })
+						this.instance.addVariable({ id: 'outputPlugStatus', variableId: `OUT${item}.${varProp}`, name: `${varProp} of Output ${item}` })
 					}
 					paths.push(...props.map(([awjProp]) => pathFor(item, awjProp)))
 				}
@@ -791,10 +844,173 @@ export default class Subscriptions {
 				const match = path.match(new RegExp(`outputList/items/(\\w+)/plugList/items/1/status/pp/(${props.map(([p]) => p).join('|')})`))
 				if (!match) return false
 				const [, item, awjProp] = match
+				if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) return false
 				if (!this.instance.state.get(outputAvailablePath(item))) return false
 				const varProp = props.find(([p]) => p === awjProp)?.[1]
 				if (!varProp) return false
-				this.instance.setVariableValues({ [`out${item}.${varProp}`]: this.instance.state.get(path) })
+				this.instance.setVariableValues({ [`OUT${item}.${varProp}`]: this.instance.state.get(path) })
+				return false
+			},
+		}
+	}
+
+	/**
+	 * A multiviewer's own output signal (resolution, format, refresh rate, ...). Registers MV{n}.width/height/
+	 * refreshrate/format/formatkind/aspectratio variables (one set per multiviewer that
+	 * actually exists, via the existing cross-platform getMultiviewerArray()/getMultiviewerOutputPath()
+	 * abstraction) and keeps them live. Named "MV{n}.*" - same property names as the physical out{n}.* variables,
+	 * "MV" matching the abbreviation Analog Way's own naming already uses elsewhere (see the "VM"->"MV" preset
+	 * rename). Aquilon (base) sources this from its own device/monitoringList; Midra's override of
+	 * getMultiviewerOutputPath() points this at the same device/outputList "MTVW" entry that outputStatus/
+	 * outputPlugStatus now deliberately exclude, so a given multiviewer's data always ends up under MV{n}.*
+	 * only, consistently across platforms, instead of sometimes also under an out{n}.* alias.
+	 */
+	get multiviewerOutputStatus():Subscription {
+		const props: [string, string][] = [
+			['sizeH', 'width'],
+			['sizeV', 'height'],
+			['rate', 'refreshrate'],
+			['format', 'format'],
+			['formatKind', 'formatkind'],
+			['aspectRatio', 'aspectratio'],
+		]
+		const pathFor = (id: string, prop: string) => ['DEVICE', ...this.instance.choices.getMultiviewerOutputPath(id), 'status', 'pp', prop].join('/')
+
+		return {
+			pat: `(?:monitoringList|outputList)/items/\\w+/status/pp/(?:${props.map(([p]) => p).join('|')})`,
+			ini: () => {
+				this.instance.removeVariable('multiviewerOutputStatus')
+				const paths: string[] = []
+				for (const id of this.instance.choices.getMultiviewerArray()) {
+					for (const [, varProp] of props) {
+						this.instance.addVariable({ id: 'multiviewerOutputStatus', variableId: `MV${id}.${varProp}`, name: `${varProp} of Multiviewer ${id}` })
+					}
+					paths.push(...props.map(([awjProp]) => pathFor(id, awjProp)))
+				}
+				return paths
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				for (const id of this.instance.choices.getMultiviewerArray()) {
+					for (const [awjProp, varProp] of props) {
+						if (path !== pathFor(id, awjProp)) continue
+						if (awjProp === 'rate') {
+							const rate = this.instance.state.get(path)
+							const hz = this.constants.outputRateInMilliHertz ? rate / 1000 : rate
+							this.instance.setVariableValues({ [`MV${id}.refreshrate`]: Math.round(hz * 100) / 100 })
+						} else {
+							this.instance.setVariableValues({ [`MV${id}.${varProp}`]: this.instance.state.get(path) })
+						}
+						return false
+					}
+				}
+				return false
+			},
+		}
+	}
+
+	/**
+	 * Generic device identity: model series (product family, e.g. "Midra 4K"), model (specific product, e.g.
+	 * "Eikos 4k"), and device name (the user-configurable device label). Series/model are static per connection
+	 * (set once by connection.ts on connect - they can't change without a reconnect, which re-runs this anyway);
+	 * name is live, since a device can be relabeled without reconnecting.
+	 */
+	get deviceIdentity():Subscription {
+		const labelPathFor = (deviceListPrefix: string) => `DEVICE/device/system/${deviceListPrefix}pp/label`
+
+		return {
+			pat: 'device/system/(?:deviceList/items/\\d+/)?pp/label',
+			ini: () => {
+				this.instance.removeVariable('deviceIdentity')
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.Series', name: 'Device model series' })
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.Model', name: 'Device model' })
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.Name', name: 'Device name (label)' })
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.FirmwareVersion', name: 'Device firmware version' })
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.FirmwareGeneration', name: 'Device firmware generation (e.g. V4)' })
+
+				const labelPath = this.instance.state.get(labelPathFor('')) !== undefined ? labelPathFor('') : labelPathFor('deviceList/items/1/')
+				return ['LOCAL/deviceModel', 'LOCAL/deviceSeries', 'LOCAL/deviceFirmwareVersion', 'LOCAL/deviceFirmwareGeneration', labelPath]
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				if (path === 'LOCAL/deviceModel') {
+					this.instance.setVariableValues({ 'Device.Model': this.instance.state.get(path) ?? '' })
+				} else if (path === 'LOCAL/deviceSeries') {
+					this.instance.setVariableValues({ 'Device.Series': this.instance.state.get(path) ?? '' })
+				} else if (path === 'LOCAL/deviceFirmwareVersion') {
+					this.instance.setVariableValues({ 'Device.FirmwareVersion': this.instance.state.get(path) ?? '' })
+				} else if (path === 'LOCAL/deviceFirmwareGeneration') {
+					this.instance.setVariableValues({ 'Device.FirmwareGeneration': this.instance.state.get(path) ?? '' })
+				} else {
+					this.instance.setVariableValues({ 'Device.Name': this.instance.state.get(path) ?? '' })
+				}
+				return false
+			},
+		}
+	}
+
+	/** Real installed input/output counts (Device.NumberOfInputs/.NumberOfOutputs), useful for Companion project
+	 *  logic that needs to know how much I/O a connected device actually has. Recomputed (not just re-read) on
+	 *  every relevant isAvailable change, since it's a live count, not a fixed per-platform maximum. */
+	get deviceIOCount():Subscription {
+		const countInputs = () => this.instance.choices.getLiveInputArray().length
+		const countOutputs = () => this.instance.choices.getOutputArray().filter((o) => !this.instance.choices.getMultiviewerOutputListKeys().includes(o.id)).length
+
+		return {
+			pat: 'device/(?:inputList|outputList)/items/\\w+/status/pp/isAvailable',
+			ini: () => {
+				this.instance.removeVariable('deviceIOCount')
+				this.instance.addVariable({ id: 'deviceIOCount', variableId: 'Device.NumberOfInputs', name: 'Number of real installed inputs' })
+				this.instance.addVariable({ id: 'deviceIOCount', variableId: 'Device.NumberOfOutputs', name: 'Number of real installed outputs' })
+				this.instance.setVariableValues({ 'Device.NumberOfInputs': countInputs(), 'Device.NumberOfOutputs': countOutputs() })
+				return []
+			},
+			fun: () => {
+				this.instance.setVariableValues({ 'Device.NumberOfInputs': countInputs(), 'Device.NumberOfOutputs': countOutputs() })
+				return false
+			},
+		}
+	}
+
+	/**
+	 * Aggregated device health for IF/THEN-style feedback use. Temperature uses the single aggregate alarm the
+	 * AWJ protocol already provides (device/system/temperature/device/pp/alarm, e.g. "NONE"/"WARNING"/"ALARM").
+	 * There is no equivalent single aggregate for fans - Device.Status.Fans is computed by scanning every "alarm"
+	 * boolean anywhere under device/system/fan for a true value, so it adapts to whatever fan sub-lists (case
+	 * fans, FPGA fans, ...) a given platform actually has instead of assuming a specific fan layout.
+	 */
+	get deviceHealth():Subscription {
+		const temperaturePathFor = (deviceListPrefix: string) => `DEVICE/device/system/${deviceListPrefix}temperature/device/pp/alarm`
+		const fanPathFor = (deviceListPrefix: string) => `DEVICE/device/system/${deviceListPrefix}fan`
+
+		const anyAlarm = (obj: any): boolean => {
+			if (obj === null || typeof obj !== 'object') return false
+			for (const key in obj) {
+				if (key === 'alarm' && obj[key] === true) return true
+				if (anyAlarm(obj[key])) return true
+			}
+			return false
+		}
+
+		let deviceListPrefix = ''
+
+		return {
+			pat: 'device/system/(?:deviceList/items/\\d+/)?(?:temperature/device/pp/alarm|fan/.*alarm)',
+			ini: () => {
+				this.instance.removeVariable('deviceHealth')
+				this.instance.addVariable({ id: 'deviceHealth', variableId: 'Device.Status.Temperature', name: 'Device temperature alarm status' })
+				this.instance.addVariable({ id: 'deviceHealth', variableId: 'Device.Status.Fans', name: 'Device fan alarm status' })
+
+				deviceListPrefix = this.instance.state.get(temperaturePathFor('')) !== undefined ? '' : 'deviceList/items/1/'
+				return [temperaturePathFor(deviceListPrefix), fanPathFor(deviceListPrefix)]
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				if (path.includes('/temperature/')) {
+					this.instance.setVariableValues({ 'Device.Status.Temperature': this.instance.state.get(temperaturePathFor(deviceListPrefix)) ?? '' })
+				} else {
+					this.instance.setVariableValues({ 'Device.Status.Fans': anyAlarm(this.instance.state.get(fanPathFor(deviceListPrefix))) ? 'ALARM' : 'OK' })
+				}
 				return false
 			},
 		}

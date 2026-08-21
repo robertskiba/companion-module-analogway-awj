@@ -1,4 +1,4 @@
-import {AWJinstance} from '../index.js'
+﻿import {AWJinstance} from '../index.js'
 import Presets, { CategorizedPresetDefinitions, PresetDefWithCategory } from '../awjdevice/presets.js'
 
 type Dropdown<t> = { id: t, label: string }
@@ -37,6 +37,7 @@ export default class PresetsLivepremier extends Presets {
 		'selectWidgetSource',
 		'timers',
 		// 'stream',
+		'liveThumbnails',
 	]
 
 	constructor(instance: AWJinstance) {
@@ -63,7 +64,7 @@ export default class PresetsLivepremier extends Presets {
 			const preparedPreset: PresetDefWithCategory = {
 				type: 'simple',
 				name: 'Choose Input ' + input.label + ' for selected '+ layerdescription +' Layer(s)',
-				category: 'Layer Source',
+				category: 'Layers - Assign Source to selected Layer',
 				style: {
 					text: input.label.replace(/^(\D+\d+)\s.+$/, '$1') + sourceLabelVariable,
 					size: 'auto',

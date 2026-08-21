@@ -55,6 +55,9 @@ export default class Constants {
 
     static readonly stillLibraryPath: string = 'DEVICE/device/stillList/library/bankList'
 
+    /** Whether device/outputList/items/{n}/status/pp/rate is reported in milliHertz (divide by 1000 for Hz) or already in plain Hz. */
+    static readonly outputRateInMilliHertz: boolean = true
+
     
     
     

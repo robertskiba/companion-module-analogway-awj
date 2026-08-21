@@ -1,4 +1,4 @@
-import {AWJinstance} from '../index.js'
+﻿import {AWJinstance} from '../index.js'
 
 import {
 	CompanionActionContext,
@@ -77,6 +77,7 @@ export default class ActionsLivepremier4 extends Actions {
 		'deviceTimerAdjust',
 		'deviceTimerTransport',
 		'deviceTestpatterns',
+		'deviceTestpatternRasterBox',
 		'cstawjcmd',
 		'cstawjgetcmd',
 		'deviceGPO',
@@ -119,7 +120,7 @@ export default class ActionsLivepremier4 extends Actions {
 		
 		const returnAction  = super.deviceScreenMemory
 
-		returnAction.options[0]['choices'] = [{ id: 'sel', label: 'Selected' }, ...this.choices.getScreenAuxChoices()]
+		returnAction.options[0]['choices'] = [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()]
 		returnAction.callback = (action) => {
 			const screens = this.choices.getChosenScreenAuxes(action.options.screens)
 			const preset = this.choices.getPresetSelection(action.options.preset, true)
@@ -838,9 +839,9 @@ export default class ActionsLivepremier4 extends Actions {
 				type: 'dropdown',
 				label: 'Group',
 				choices: [
-					{ id: 'all', label: 'All' },
+					{ id: 'all', label: 'All active Testpatterns' },
 					{ id: 'screenList', label: 'Screen Canvas' },
-					{ id: 'outputList', label: 'Output Group' },
+					{ id: 'outputList', label: 'Output or Output Group' },
 					{ id: 'inputList', label: 'Input Group' },
 				],
 				default: 'outputList',
@@ -850,6 +851,8 @@ export default class ActionsLivepremier4 extends Actions {
 				id: 'screenList',
 				type: 'dropdown',
 				label: 'Screen',
+				// Live-confirmed on the LivePremier4 simulator: screenList item keys ARE "S1"-style (unlike
+				// Midra, which uses plain numeric keys) - getScreenChoices() is correct here.
 				choices: this.choices.getScreenChoices(),
 				default: this.choices.getScreenChoices()[0]?.id,
 				isVisibleExpression: "$(options:group) == 'screenList'",
@@ -874,7 +877,7 @@ export default class ActionsLivepremier4 extends Actions {
 				id: 'patall',
 				type: 'dropdown',
 				label: 'Pattern',
-				choices: [{ id: '0', label: 'Off' }],
+				choices: [{ id: '0', label: 'Disable all active Testpatterns' }],
 				default: '0',
 				isVisibleExpression: "$(options:group) == 'all'",
 			},
@@ -954,14 +957,23 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'MOVING', label: 'Moving Lines' },
 					{ id: 'ID', label: 'ID' },
 					{ id: 'SOFTEDGE', label: 'Softedge' },
+					{ id: 'STEREOSCOPY', label: '3D' },
 				],
 				default: 'NO_PATTERN',
 				isVisibleExpression: "$(options:group) == 'outputList'",
+				disableAutoExpression: true,
 			},
 		]
 
-		return this.deviceTestpatterns_common(deviceTestpatternsOptions)
+		return this.deviceTestpatterns_common(deviceTestpatternsOptions, 'Set LivePremier Testpattern')
 
+	}
+
+	/**
+	 * MARK: Testpattern Raster Box - LivePremier4
+	 */
+	get deviceTestpatternRasterBox() {
+		return this.deviceTestpatternRasterBox_common('Set LivePremier Testpattern Raster Box')
 	}
 
 	/**

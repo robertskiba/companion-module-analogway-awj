@@ -1,13 +1,16 @@
-import { Config } from '../config.js'
+﻿import { Config } from '../config.js'
 import {AWJinstance, regexAWJpath} from '../index.js'
 import { StateMachine } from '../state.js'
 import Choices, {Choicemeta} from './choices.js'
 import {
-	combineRgb, 
-	CompanionBooleanFeedbackDefinition, 
-	CompanionFeedbackBooleanEvent, 
-	CompanionFeedbackDefinition, 
-	CompanionFeedbackDefinitions, 
+	combineRgb,
+	CompanionAdvancedFeedbackDefinition,
+	CompanionAdvancedFeedbackResult,
+	CompanionBooleanFeedbackDefinition,
+	CompanionFeedbackBooleanEvent,
+	CompanionFeedbackDefinition,
+	CompanionFeedbackDefinitions,
+	CompanionInputFieldDropdown,
 } from '@companion-module/base'
 import Constants from './constants.js'
 import { parseBoolean } from '../util.js'
@@ -38,7 +41,41 @@ export default class Feedbacks {
 	protected config: Config
 	protected constants: typeof Constants
 
-	readonly feedbacksToUse = [		
+	/** Shared thumbnail snapshot pollers, keyed by `${source}:${item}` so multiple buttons watching the same
+	 *  source share one HTTP poll (the device caps snapshot requests at 1/second per item, see deviceThumbnail).
+	 *  Deliberately instance fields, not locals inside the deviceThumbnail getter - that getter re-runs on every
+	 *  updateInstance() (e.g. a config color change), which would otherwise orphan any already-running timers.
+	 *  `activeRate` is what the timer actually runs at once the global throttle (recalculateThumbnailThrottle)
+	 *  has been applied - it can be slower than every subscriber's own requested rate, never faster.
+	 *  Each subscriber's `lastSeen` exists to detect and self-clean up subscribers that came from Companion
+	 *  rendering an 'advanced' feedback's preset-browser preview rather than a real placed button (confirmed
+	 *  live: Companion runs the callback once to render a preset preview, since 'advanced' feedbacks have no
+	 *  static defaultStyle fallback the way 'boolean' ones do to preview without executing anything) - a real
+	 *  placed button keeps renewing its own `lastSeen` forever via its own poll -> checkFeedbacksById -> callback
+	 *  cycle, while a one-off preview never gets called again and ages out, see pollThumbnail. */
+	private thumbnailPollers = new Map<string, {
+		timer: ReturnType<typeof setInterval> | null
+		activeRate: number
+		busy: boolean
+		subscribers: Map<string, { rate: number, lastSeen: number }>
+		source: 'inputs' | 'outputs' | 'imagesStore' | 'timers'
+		itemId: string
+	}>()
+	private thumbnailFeedbackKey = new Map<string, string>()
+	private thumbnailCache = new Map<string, string>()
+	/** How long a subscriber may go without renewing itself (see comment above) before being treated as a
+	 *  stale/one-off preview and dropped - always at least this floor, or 3x its own requested rate, whichever
+	 *  is larger, so a real button with a long Refresh Rate never gets mistakenly reaped. */
+	private readonly thumbnailSubscriberTtlMs = 60_000
+	/** Above this many distinct polls running at once, the global throttle in recalculateThumbnailThrottle
+	 *  starts stretching every poller's interval so the combined request rate stays near this same number
+	 *  (e.g. 32 distinct thumbnails end up polling every ~2s each instead of every 1s) - keeps a "thumbnail
+	 *  wall" page from silently turning into dozens of requests/second to the device and dozens of button
+	 *  re-renders/second in Companion. A single button's own Refresh Rate is always honored as a minimum
+	 *  (never polled faster than requested), only ever slowed down further. */
+	private readonly thumbnailThrottleThreshold = 16
+
+	readonly feedbacksToUse = [
 		'syncselection',
 		'presetToggle',
 		'globalAnchorPoint',
@@ -60,6 +97,7 @@ export default class Feedbacks {
 		'deviceGpioIn',
 		// 'deviceStreaming',
 		'deviceCustom',
+		'deviceThumbnail',
 	]
 
 	constructor (instance: AWJinstance) {
@@ -186,8 +224,8 @@ export default class Feedbacks {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.choicesPreset],
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'all', label: 'Any (Program/Preview)' }, ...this.choices.choicesPreset],
 					default: 'all',
 				},
 			],
@@ -224,15 +262,15 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'Any' }],
+					choices: [{ id: 'all', label: 'Any Screen' }],
 					multiple: true,
 					default: ['all'],
 				} as any, // TODO: fix type of dropdown with multiple: true property
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.choicesPreset],
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'all', label: 'Any (Program/Preview)' }, ...this.choices.choicesPreset],
 					default: 'all',
 				},
 				{
@@ -320,7 +358,7 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Aux Screens',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getAuxChoices()],
+					choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getAuxChoices()],
 					multiple: true,
 					tags: true,
 					regex: '/^S([1-9]|[1-3][0-9]|4[0-8])$/',
@@ -329,8 +367,8 @@ export default class Feedbacks {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.choicesPreset],
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'all', label: 'Any (Program/Preview)' }, ...this.choices.choicesPreset],
 					default: 'all',
 				},
 				{
@@ -407,7 +445,7 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getScreenAuxChoices()],
 					multiple: true,
 					tags: true,
 					regex: '/^(S|A)([1-9]|[1-3][0-9]|4[0-8])$/',
@@ -416,7 +454,7 @@ export default class Feedbacks {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: this.choices.choicesPreset,
 					default: 'pgm',
 				},
@@ -529,7 +567,7 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getScreenAuxChoices()],
 					multiple: true,
 					tags: true,
 					regex: '/^(S|A)([1-9]|[1-3][0-9]|4[0-8])$/',
@@ -590,13 +628,13 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen',
-					choices: [{ id: 'all', label: 'ALL' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'All Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: 'all',
 					tooltip: '"All" resembels the state of the lock-all button in WebRCS.',
 				},
 				{
 					id: 'preset',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					type: 'dropdown',
 					choices: [
 						{ id: 'PROGRAM', label: 'Program' },
@@ -628,7 +666,7 @@ export default class Feedbacks {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [
 						{ id: 'PROGRAM', label: 'Program' },
 						{ id: 'PREVIEW', label: 'Preview' },
@@ -672,22 +710,22 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Auxscreen',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getScreenAuxChoices()],
 					default: 'all',
 				},
 				{
 					id: 'layer',
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'all', label: 'Any' }, ...this.choices.getLayerChoices(48, true)],
+					choices: [{ id: 'all', label: 'Any Layer' }, ...this.choices.getLayerChoices(48, true)],
 					default: 'all',
 				},
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Selected Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [
-						{ id: 'all', label: 'Any' },
+						{ id: 'all', label: 'Any (Program/Preview)' },
 						{ id: 'PROGRAM', label: 'Program' },
 						{ id: 'PREVIEW', label: 'Preview' },
 					],
@@ -827,7 +865,7 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen',
-					choices: [{id: 'any', label:'Any'}, ...this.choices.getScreenChoices()],
+					choices: [{id: 'any', label:'Any Screen'}, ...this.choices.getScreenChoices()],
 					default: this.choices.getScreenChoices()[0]?.id,
 					disableAutoExpression: true,
 				},
@@ -841,7 +879,7 @@ export default class Feedbacks {
 							type: 'dropdown' as const,
 							label: 'Layer',
 							choices: [
-								{id:'any', label: 'Any'},
+								{id:'any', label: 'Any Layer'},
 								{id:'NATIVE', label: 'Background Layer'}
 							],
 							default: '1',
@@ -911,7 +949,7 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen',
-					choices: [{id: 'any', label:'Any'}, ...this.choices.getScreenAuxChoices()],
+					choices: [{id: 'any', label:'Any Screen'}, ...this.choices.getScreenAuxChoices()],
 					default: this.choices.getScreenAuxChoices()[0]?.id,
 				}
 			],
@@ -1342,5 +1380,336 @@ export default class Feedbacks {
 		}
 
 		return deviceCustom
+	}
+
+	/**
+	 * MARK: Testpattern Active (shared)
+	 * Shared implementation for the platform-specific "Testpattern Active" feedbacks (mirrors the structure of
+	 * deviceTestpatterns_common in actions.ts, one options field set per platform since the pattern choices and
+	 * Input Group availability differ). True when the selected screen/output/input's testpattern currently
+	 * equals the selected pattern AND patterns are actually enabled there (inhibit false) - a bare "type" match
+	 * isn't enough on its own, since the device keeps the last-selected type value even after the pattern gets
+	 * disabled, so without the inhibit check the feedback would stay stuck "on" after switching patterns off.
+	 * "Off"/NONE/NO_PATTERN is the one exception: that's true exactly when inhibit is true, regardless of type.
+	 * Needs the matching testpatternActive subscription (subscriptions.ts) to actually react to live changes -
+	 * a feedback's callback alone is only re-run once, not on every device update.
+	 */
+	deviceTestpatternActive_common(options: CompanionInputFieldDropdown[], name = 'Testpattern Active') {
+		type DeviceTestpatternActive = {group: string, screenList: string, outputList: string, screenListPat: string, outputListPat: string, inputList?: string, inputListPat?: string}
+
+		const deviceTestpatternActive: AWJfeedback<DeviceTestpatternActive> = {
+			type: 'boolean',
+			name,
+			description: 'Shows whether the selected Testpattern is currently active on the selected screen/output/input',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options,
+			callback: (feedback) => {
+				const group = feedback.options.group
+				const item = feedback.options[group as 'screenList' | 'outputList' | 'inputList']
+				const pattern = feedback.options[`${group}Pat` as 'screenListPat' | 'outputListPat' | 'inputListPat']
+				if (!item || !pattern) return false
+				const path = ['DEVICE', 'device', group, 'items', item, 'pattern', 'control', 'pp']
+				const inhibit = this.state.get([...path, 'inhibit'])
+				if (pattern === 'NONE' || pattern === 'NO_PATTERN') return inhibit === true
+				return inhibit === false && this.state.get([...path, 'type']) === pattern
+			},
+		}
+
+		return deviceTestpatternActive
+	}
+
+	/**
+	 * MARK: Testpattern Raster Box Active (shared)
+	 * Shows whether a specific Raster Box (Format or AOI) is currently enabled on an output - reads the same
+	 * pattern/control/pp/centering array the "Set Testpattern Raster Box" action writes to.
+	 */
+	deviceTestpatternRasterBoxActive_common(name: string) {
+		type DeviceTestpatternRasterBoxActive = {output: string, box: string}
+
+		const deviceTestpatternRasterBoxActive: AWJfeedback<DeviceTestpatternRasterBoxActive> = {
+			type: 'boolean',
+			name,
+			description: 'Shows whether the selected Raster Box (Format/AOI) is currently enabled on the selected output',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'output',
+					type: 'dropdown',
+					label: 'Output or Output Group',
+					choices: this.choices.getOutputChoices(),
+					default: this.choices.getOutputChoices()[0]?.id,
+				},
+				{
+					id: 'box',
+					type: 'dropdown',
+					label: 'Raster Box',
+					choices: [
+						{ id: 'FORMAT', label: 'Format' },
+						{ id: 'AOI', label: 'AOI' },
+					],
+					default: 'FORMAT',
+				},
+			],
+			callback: (feedback) => {
+				const current: string[] = this.state.get(['DEVICE', 'device', 'outputList', 'items', feedback.options.output, 'pattern', 'control', 'pp', 'centering']) ?? []
+				return Array.isArray(current) && current.includes(feedback.options.box)
+			},
+		}
+
+		return deviceTestpatternRasterBoxActive
+	}
+
+	/**
+	 * MARK: Thumbnail
+	 * Shows a periodically-refreshed live preview image (Input/Output/Still Image Store/Timer) on the button,
+	 * fetched from the device's REST snapshot API (`/api/device/snapshots/{category}/{n}`, PNG up to 256x256,
+	 * see AWJconnection.getSnapshot). The device limits snapshot requests to 1/second per item, so polling is
+	 * done via a shared interval per `${source}:${item}` (thumbnailPollers) - multiple buttons watching the
+	 * same source/item share one poll instead of each hammering the device on their own; if their configured
+	 * Refresh Rates differ, the fastest one wins for that shared poller.
+	 *
+	 * Must be an 'advanced' feedback, not 'boolean': a boolean feedback's style comes from a single fixed
+	 * `defaultStyle` set once at registration, so it cannot return a different (freshly-fetched) png64 per
+	 * button/per poll tick - only 'advanced' feedbacks return their style live from the callback. (Companion's
+	 * own types flag 'advanced' as discouraged/likely-to-be-removed in a future major version, but it is
+	 * currently the only mechanism in the v2 module API that supports a feedback-driven dynamic image.)
+	 *
+	 * There is no `subscribe` hook in Companion's feedback API (v2.1.3) to start the poller when the feedback
+	 * is added - so, like deviceCustom above, registration happens lazily and idempotently on the feedback's
+	 * own callback (every invocation just confirms the shared poller still matches this feedback's current
+	 * options), and is torn down in `unsubscribe`.
+	 */
+	get deviceThumbnail(): CompanionAdvancedFeedbackDefinition {
+		// Built fresh every time this getter runs (updateInstance(), e.g. on connect and on relevant live
+		// isAvailable changes - same refresh mechanism every other live-state-driven choice list in this module
+		// already relies on, see e.g. deviceTestpatterns_common's screenList/outputList/inputList).
+		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({
+			id: inp.index ?? inp.id.replace(/^\D+/, ''),
+			label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}`,
+		}))
+		const outputChoices = this.choices.getOutputArray()
+			.filter((o) => !this.choices.getMultiviewerOutputListKeys().includes(o.id))
+			.map((o) => ({ id: o.id, label: `Output ${o.id}${o.label ? ' - ' + o.label : ''}` }))
+		// Live-confirmed on a real Aquilon (192.168.20.112): despite the protocol doc's "images" range reading
+		// 1-192 (matching the Library's own capacity), the snapshot endpoint actually only ever returns real
+		// content for indices within the Image *Store*'s range (~24, whatever is actually loaded/usable as a
+		// layer source right now) - a Library-only index (valid, uploaded, but not currently loaded into a
+		// Store slot) returns a fixed ~875 byte placeholder (solid black) every time, confirmed by fetching
+		// several such indices and getting byte-for-byte identical tiny responses. There is no way to snapshot
+		// an arbitrary Library image this way, only what's actually live in a Store slot - so "Still Image
+		// (Library)" was removed entirely rather than silently showing black for most of its own choice list.
+		const storeChoices = this.choices.getStillsArray().map((s) => ({
+			id: s.id,
+			label: `Store ${s.id}${s.label ? ' - ' + s.label : ''}`,
+		}))
+		const timerChoices = this.choices.getTimerArray().map((t) => ({
+			id: t.index ?? t.id.replace(/^\w+_/, ''),
+			label: `Timer ${t.index}${t.label ? ' - ' + t.label : ''}`,
+		}))
+
+		const deviceThumbnail: CompanionAdvancedFeedbackDefinition = {
+			type: 'advanced',
+			name: 'Show Thumbnail',
+			description: 'Shows a live preview image of an input, output, still image (Store) or timer. Only images actually loaded into an Image Store slot can be shown - the device does not provide live previews of Library images that are not currently loaded into a Store slot. Warning: using this feedback extensively (many buttons/short Refresh Rates) can significantly increase CPU load, depending on the Companion device it runs on.',
+			affectedProperties: ['png64'],
+			options: [
+				{
+					id: 'source',
+					type: 'dropdown',
+					label: 'Source',
+					choices: [
+						{ id: 'inputs', label: 'Input' },
+						{ id: 'outputs', label: 'Output' },
+						{ id: 'imagesStore', label: 'Still Image (Store)' },
+						{ id: 'timers', label: 'Timer' },
+					],
+					default: 'inputs',
+					// referenced by the four item dropdowns' isVisibleExpression below - Companion requires this
+					// on any field referenced that way, see the "Set Testpattern" fix earlier for why this must
+					// NOT also be added to the dependent (item) fields themselves, which need to stay expression-
+					// capable for per-button templating.
+					disableAutoExpression: true,
+				},
+				{
+					id: 'inputItem',
+					type: 'dropdown',
+					label: 'Input',
+					choices: inputChoices,
+					default: inputChoices[0]?.id,
+					allowInvalidValues: true,
+					isVisibleExpression: "$(options:source) == 'inputs'",
+				},
+				{
+					id: 'outputItem',
+					type: 'dropdown',
+					label: 'Output',
+					choices: outputChoices,
+					default: outputChoices[0]?.id,
+					allowInvalidValues: true,
+					isVisibleExpression: "$(options:source) == 'outputs'",
+				},
+				{
+					id: 'storeItem',
+					type: 'dropdown',
+					label: 'Still Image (Store)',
+					choices: storeChoices,
+					default: storeChoices[0]?.id,
+					allowInvalidValues: true,
+					isVisibleExpression: "$(options:source) == 'imagesStore'",
+				},
+				{
+					id: 'timerItem',
+					type: 'dropdown',
+					label: 'Timer',
+					choices: timerChoices,
+					default: timerChoices[0]?.id,
+					allowInvalidValues: true,
+					isVisibleExpression: "$(options:source) == 'timers'",
+				},
+				{
+					id: 'refreshRate',
+					type: 'number',
+					label: 'Refresh Rate (seconds)',
+					min: 1,
+					max: 120,
+					default: 5,
+				},
+			],
+			callback: (feedback): CompanionAdvancedFeedbackResult => {
+				if (!parseBoolean(this.config.allowLiveThumbnails)) return {}
+
+				const source = String(feedback.options.source) as 'inputs' | 'outputs' | 'imagesStore' | 'timers'
+				const itemFieldId = { inputs: 'inputItem', outputs: 'outputItem', imagesStore: 'storeItem', timers: 'timerItem' }[source] ?? 'inputItem'
+				const item = feedback.options[itemFieldId]
+				const requestedRate = Math.min(120, Math.max(1, Math.round(Number(feedback.options.refreshRate)) || 5))
+				if (item === undefined || item === null || item === '') return {}
+				const itemId = String(item)
+				const key = `${source}:${itemId}`
+
+				const prevKey = this.thumbnailFeedbackKey.get(feedback.id)
+				if (prevKey !== key) {
+					if (prevKey) this.releaseThumbnailPoller(prevKey, feedback.id)
+					this.thumbnailFeedbackKey.set(feedback.id, key)
+				}
+
+				let poller = this.thumbnailPollers.get(key)
+				if (!poller) {
+					poller = { timer: null, activeRate: 1, busy: false, subscribers: new Map(), source, itemId }
+					this.thumbnailPollers.set(key, poller)
+				} else {
+					poller.source = source
+					poller.itemId = itemId
+				}
+				poller.subscribers.set(feedback.id, { rate: requestedRate, lastSeen: Date.now() })
+
+				this.recalculateThumbnailThrottle()
+				if (!this.thumbnailCache.has(key)) this.pollThumbnail(key)
+
+				const cached = this.thumbnailCache.get(key)
+				return cached ? { png64: cached } : {}
+			},
+			unsubscribe: (feedback) => {
+				const key = this.thumbnailFeedbackKey.get(feedback.id)
+				if (key) {
+					this.releaseThumbnailPoller(key, feedback.id)
+					this.recalculateThumbnailThrottle()
+				}
+				this.thumbnailFeedbackKey.delete(feedback.id)
+			},
+		}
+
+		return deviceThumbnail
+	}
+
+	/** What to actually request for one poller. Live-confirmed on a real Aquilon: the snapshot API's "images"
+	 *  category addresses the Image Store's own slot numbers directly - despite what the protocol doc's stated
+	 *  range suggests, it does NOT address the Library, so no resolution/indirection is needed or possible here
+	 *  (see the "Still Image (Library)" removal note on deviceThumbnail above). */
+	private resolveThumbnailFetchTarget(source: 'inputs' | 'outputs' | 'imagesStore' | 'timers', itemId: string): { category: 'inputs' | 'outputs' | 'images' | 'timers', id: string } {
+		return { category: source === 'imagesStore' ? 'images' : source, id: itemId }
+	}
+
+	private pollThumbnail(key: string): void {
+		const poller = this.thumbnailPollers.get(key)
+		if (!poller || poller.busy) return
+
+		// Drop any subscriber that hasn't renewed itself in a while - most likely a one-off preset-browser
+		// preview render (see the class-field comment above), never a real placed button, which keeps renewing
+		// itself forever via its own poll -> checkFeedbacksById -> callback cycle. If that empties the poller
+		// out entirely, self-terminate instead of polling for nobody.
+		const now = Date.now()
+		for (const [fid, sub] of poller.subscribers) {
+			if (now - sub.lastSeen > Math.max(this.thumbnailSubscriberTtlMs, sub.rate * 1000 * 3)) {
+				poller.subscribers.delete(fid)
+			}
+		}
+		if (poller.subscribers.size === 0) {
+			if (poller.timer !== null) clearInterval(poller.timer)
+			this.thumbnailPollers.delete(key)
+			this.thumbnailCache.delete(key)
+			return
+		}
+
+		const target = this.resolveThumbnailFetchTarget(poller.source, poller.itemId)
+		poller.busy = true
+		this.instance.connection.getSnapshot(target.category, target.id).then((base64) => {
+			poller.busy = false
+			if (base64) {
+				this.thumbnailCache.set(key, base64)
+				for (const fid of poller.subscribers.keys()) this.instance.checkFeedbacksById(fid)
+			}
+		}).catch(() => {
+			poller.busy = false
+		})
+	}
+
+	/** Global throttle across all active thumbnail pollers: above thumbnailThrottleThreshold distinct polls,
+	 *  stretches every poller's interval so the combined poll rate stays near that same number instead of
+	 *  growing unbounded with every extra thumbnail on a page. A poller's own requested rate (the slowest of
+	 *  its subscribing buttons' Refresh Rate options) is always honored as a floor - this can only slow pollers
+	 *  down further, never speed them up beyond what was asked for. Called whenever the poller count changes
+	 *  (a feedback (re-)registers or unsubscribes) so the throttle adapts up and back down again live. */
+	private recalculateThumbnailThrottle(): void {
+		const count = this.thumbnailPollers.size
+		const globalMinInterval = count > this.thumbnailThrottleThreshold ? Math.ceil(count / this.thumbnailThrottleThreshold) : 1
+		for (const [key, poller] of this.thumbnailPollers) {
+			const requestedRate = poller.subscribers.size > 0 ? Math.min(...Array.from(poller.subscribers.values()).map((s) => s.rate)) : 1
+			const actualRate = Math.max(requestedRate, globalMinInterval)
+			if (poller.timer === null || poller.activeRate !== actualRate) {
+				if (poller.timer !== null) clearInterval(poller.timer)
+				poller.activeRate = actualRate
+				poller.timer = setInterval(() => this.pollThumbnail(key), actualRate * 1000)
+			}
+		}
+	}
+
+	/** Immediately stops all thumbnail polling, e.g. when the "Allow Live Thumbnails" config checkbox is turned
+	 *  off - called from index.ts's configUpdated(). A feedback's own callback re-registers its poller from
+	 *  scratch the next time it runs (e.g. via checkFeedbacks('deviceThumbnail') when the checkbox is turned
+	 *  back on), so clearing everything here is safe and does not need any other bookkeeping to stay in sync. */
+	public stopAllThumbnailPollers(): void {
+		for (const poller of this.thumbnailPollers.values()) {
+			if (poller.timer !== null) clearInterval(poller.timer)
+		}
+		this.thumbnailPollers.clear()
+		this.thumbnailCache.clear()
+		this.thumbnailFeedbackKey.clear()
+	}
+
+	private releaseThumbnailPoller(key: string, feedbackId: string): void {
+		const poller = this.thumbnailPollers.get(key)
+		if (!poller) return
+		poller.subscribers.delete(feedbackId)
+		if (poller.subscribers.size === 0) {
+			if (poller.timer !== null) clearInterval(poller.timer)
+			this.thumbnailPollers.delete(key)
+			this.thumbnailCache.delete(key)
+		}
 	}
 }

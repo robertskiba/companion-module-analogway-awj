@@ -55,6 +55,8 @@ export default class ConstantsMidra extends Constants {
     static override readonly multiviewerWidgetSelectionPath = 'REMOTE/live/multiviewer/widgetSelection/widgetKeys' as const
     static override readonly multiviewerWidgetSelectionMap = (key: string) => {return {mocOutputLogicKey: '1', widgetKey: key}}
     static override readonly multiviewerMemoryPath = 'DEVICE/device/multiviewer/bankList'
-    
-    
+
+    static override readonly stillLibraryPath = 'DEVICE/device/stillLibrary/bankList'
+
+    static override readonly outputRateInMilliHertz = false
 }

@@ -45,11 +45,11 @@ export function initVariables(_instance: AWJinstance): TrackedVariable[] {
 		},
 		{
 			variableId: 'SelectedScreen.number',
-			name: 'Screen/Aux id of the currently selected screen (e.g. S1, A2)',
+			name: 'Screen/Aux id of the first selected screen (e.g. S1, A2) - blank if none selected. If several screens are selected (common in daily use), this and SelectedScreen.numberOfLayers only ever describe that first one',
 		},
 		{
 			variableId: 'SelectedScreen.numberOfLayers',
-			name: 'Number of (non-background) layers on the currently selected screen',
+			name: 'Number of (non-background) layers on the first selected screen',
 		},
 		{
 			variableId: 'SelectedLayer.Input.Number',

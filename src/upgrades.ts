@@ -107,6 +107,21 @@ const UpgradeScripts = [
 			updatedFeedbacks: [],
 		}
 	},
+	// "Allow Live Thumbnails" defaults to true for everyone (new feature, nothing to preserve compatibility
+	// with) - but parseBoolean(undefined) reads as false, so a config saved before this option existed would
+	// silently come up as "off" instead of the intended default. Backfill it explicitly, same as above.
+	function allowLiveThumbnailsDefaultForExistingConfigs(_context, props: LooseObj) {
+		let updatedConfig: LooseObj | null = null
+		if (props.config && props.config.allowLiveThumbnails === undefined) {
+			updatedConfig = { ...props.config, allowLiveThumbnails: true }
+		}
+
+		return {
+			updatedConfig,
+			updatedActions: [],
+			updatedFeedbacks: [],
+		}
+	},
 ]
 
 export { UpgradeScripts }

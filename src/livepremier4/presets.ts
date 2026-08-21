@@ -1,4 +1,4 @@
-import {AWJinstance} from '../index.js'
+﻿import {AWJinstance} from '../index.js'
 import Presets, { CategorizedPresetDefinitions, PresetDefWithCategory } from '../awjdevice/presets.js'
 
 type Dropdown<t> = { id: t, label: string }
@@ -37,6 +37,7 @@ export default class PresetsLivepremier4 extends Presets {
 		'selectWidgetSource',
 		'timers',
 		// 'stream',
+		'liveThumbnails',
 	]
 
 	constructor(instance: AWJinstance) {
@@ -63,7 +64,7 @@ export default class PresetsLivepremier4 extends Presets {
 			const preparedPreset: PresetDefWithCategory = {
 				type: 'simple',
 				name: 'Choose Input ' + input.label + ' for selected '+ layerdescription +' Layer(s)',
-				category: 'Layer Source',
+				category: 'Layers - Assign Source to selected Layer',
 				style: {
 					text: input.label.replace(/^(\D+\d+)\s.+$/, '$1') + sourceLabelVariable,
 					size: 'auto',
@@ -144,9 +145,8 @@ export default class PresetsLivepremier4 extends Presets {
 				name: 'Time' + timer.label,
 				category: 'Timer',
 				style: {
-					text: `\`Timer ${timerNum} \\n\${msToTimestamp($(AWJdevice:timer${timerNum}), 'hh:mm:ss')}\``,
-					textExpression: true,
-					size: '14',
+					text: `Timer ${timerNum} \\n$(AWJdevice:TIMER${timerNum}.value.hms)`,
+					size: 11.9, // compensates a confirmed 2.1x rendering scale on the reference setup (25 requested -> 52.5 rendered), see project_base_v2_migration memory notes
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,
 				},

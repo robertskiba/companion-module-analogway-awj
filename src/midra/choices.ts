@@ -276,6 +276,16 @@ export default class ChoicesMidra extends Choices {
 		return ['1']
 	}
 
+	/** Midra has no device/monitoringList - its single, fixed multiviewer output is folded into the regular
+	 *  device/outputList under the "MTVW" key instead. Ignores multiviewerId since Midra never has more than one. */
+	public override getMultiviewerOutputPath(_multiviewerId: string): string[] {
+		return ['device', 'outputList', 'items', 'MTVW']
+	}
+
+	public override getMultiviewerOutputListKeys(): string[] {
+		return ['MTVW']
+	}
+
 	public getWidgetChoices(): Dropdown<string>[] {
 		const ret: Dropdown<string>[] = []
 		return this.state.get('DEVICE/device/multiviewer/status/pp/widgetValidity').map((widget: string) => {

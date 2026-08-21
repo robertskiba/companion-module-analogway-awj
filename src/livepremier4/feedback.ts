@@ -1,7 +1,8 @@
-import Feedbacks from '../awjdevice/feedback.js'
+﻿import Feedbacks from '../awjdevice/feedback.js'
 import {AWJinstance} from '../index.js'
 import {
-	CompanionFeedbackDefinition, 
+	CompanionFeedbackDefinition,
+	CompanionInputFieldDropdown,
 } from '@companion-module/base'
 
 
@@ -46,7 +47,10 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'deviceGpioOut',
 		'deviceGpioIn',
 		// 'deviceStreaming',
+		'deviceTestpatternActive',
+		'deviceTestpatternRasterBoxActive',
 		'deviceCustom',
+		'deviceThumbnail',
 	]
 
 	constructor (instance: AWJinstance) {
@@ -67,7 +71,7 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 				id: 'screens',
 				type: 'dropdown',
 				label: 'Screens / Auxscreens',
-				choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenAuxChoices()],
+				choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getScreenAuxChoices()],
 				multiple: true,
 				default: ['all'],
 				allowInvalidValues: true,
@@ -245,5 +249,141 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 
 		return deviceGpioIn
 	}
-	
+
+	/**
+	 * MARK: Testpattern Active - LivePremier4
+	 */
+	get deviceTestpatternActive() {
+		const options: CompanionInputFieldDropdown[] = [
+			{
+				id: 'group',
+				type: 'dropdown',
+				label: 'Group',
+				choices: [
+					{ id: 'screenList', label: 'Screen Canvas' },
+					{ id: 'outputList', label: 'Output or Output Group' },
+					{ id: 'inputList', label: 'Input Group' },
+				],
+				default: 'outputList',
+				disableAutoExpression: true,
+			},
+			{
+				id: 'screenList',
+				type: 'dropdown',
+				label: 'Screen',
+				// Live-confirmed on the LivePremier4 simulator: screenList item keys ARE "S1"-style (unlike
+				// Midra, which uses plain numeric keys) - getScreenChoices() is correct here.
+				choices: this.choices.getScreenChoices(),
+				default: this.choices.getScreenChoices()[0]?.id,
+				isVisibleExpression: "$(options:group) == 'screenList'",
+			},
+			{
+				id: 'outputList',
+				type: 'dropdown',
+				label: 'Output',
+				choices: this.choices.getOutputChoices(),
+				default: this.choices.getOutputChoices()[0]?.id,
+				isVisibleExpression: "$(options:group) == 'outputList'",
+			},
+			{
+				id: 'inputList',
+				type: 'dropdown',
+				label: 'Input',
+				choices: this.choices.getLiveInputChoices(),
+				default: this.choices.getLiveInputChoices()[0]?.id,
+				isVisibleExpression: "$(options:group) == 'inputList'",
+			},
+			{
+				id: 'screenListPat',
+				type: 'dropdown',
+				label: 'Pattern',
+				choices: [
+					{ id: 'NONE', label: 'Off' },
+					{ id: 'GEOMETRIC', label: 'Geometric' },
+					{ id: 'VERTICAL_GREY_SCALE', label: 'Vertical Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE', label: 'Horizontal Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE_2', label: 'Horizontal Greysteps' },
+					{ id: 'VERTICAL_COLOR_BAR', label: 'Vertical Colorbars' },
+					{ id: 'HORIZONTAL_COLOR_BAR', label: 'Horizontal Colorbars' },
+					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
+					{ id: 'SMPTE', label: 'SMPTE' },
+					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'CROSSHATCH', label: 'Crosshatch' },
+					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
+					{ id: 'THIRTY_BPP_1', label: '30 Bit per Pixel 1' },
+					{ id: 'THIRTY_BPP_2', label: '30 Bit per Pixel 2' },
+				],
+				default: 'NONE',
+				isVisibleExpression: "$(options:group) == 'screenList'",
+			},
+			{
+				id: 'inputListPat',
+				type: 'dropdown',
+				label: 'Pattern',
+				choices: [
+					{ id: 'NO_PATTERN', label: 'Off' },
+					{ id: 'COLOR', label: 'Solid Color' },
+					{ id: 'VERTICAL_GREY_SCALE', label: 'Vertical Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE', label: 'Horizontal Greyscale' },
+					{ id: 'VERTICAL_COLOR_BAR', label: 'Vertical Colorbars' },
+					{ id: 'HORIZONTAL_COLOR_BAR', label: 'Horizontal Colorbars' },
+					{ id: 'GRID_16_16', label: 'Grid 16x16' },
+					{ id: 'GRID_32_32', label: 'Grid 32x32' },
+					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
+					{ id: 'SMPTE', label: 'SMPTE' },
+					{ id: 'BURST_H', label: 'Horizontal Burst' },
+					{ id: 'BURST_V', label: 'Vertical Burst' },
+					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'CROSSHATCH', label: 'Crosshatch' },
+					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
+					{ id: 'MOVING', label: 'Moving Lines' },
+					{ id: 'ID', label: 'ID' },
+				],
+				default: 'NO_PATTERN',
+				isVisibleExpression: "$(options:group) == 'inputList'",
+			},
+			{
+				id: 'outputListPat',
+				type: 'dropdown',
+				label: 'Pattern',
+				choices: [
+					{ id: 'NO_PATTERN', label: 'Off' },
+					{ id: 'COLOR', label: 'Solid Color' },
+					{ id: 'VERTICAL_GREY_SCALE', label: 'Vertical Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE_1', label: 'Horizontal Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE_2', label: 'Horizontal Greysteps' },
+					{ id: 'VERTICAL_COLOR_BAR', label: 'Vertical Colorbars' },
+					{ id: 'HORIZONTAL_COLOR_BAR', label: 'Horizontal Colorbars' },
+					{ id: 'GRID_16_16', label: 'Grid 16x16' },
+					{ id: 'GRID_32_32', label: 'Grid 32x32' },
+					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
+					{ id: 'SMPTE', label: 'SMPTE' },
+					{ id: 'BURST_H', label: 'Horizontal Burst' },
+					{ id: 'BURST_V', label: 'Vertical Burst' },
+					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'CROSSHATCH', label: 'Crosshatch' },
+					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
+					{ id: 'MOVING', label: 'Moving Lines' },
+					{ id: 'ID', label: 'ID' },
+					{ id: 'SOFTEDGE', label: 'Softedge' },
+					{ id: 'STEREOSCOPY', label: '3D' },
+				],
+				default: 'NO_PATTERN',
+				isVisibleExpression: "$(options:group) == 'outputList'",
+			},
+		]
+
+		return this.deviceTestpatternActive_common(options, 'LivePremier Testpattern Active')
+	}
+
+	/**
+	 * MARK: Testpattern Raster Box Active - LivePremier4
+	 */
+	get deviceTestpatternRasterBoxActive() {
+		return this.deviceTestpatternRasterBoxActive_common('LivePremier Testpattern Raster Box Active')
+	}
+
 }

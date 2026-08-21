@@ -455,6 +455,18 @@ export default class Choices {
 		)
 	}
 
+	/** Path to a multiviewer's own physical output status/control data (resolution, format, ...). Aquilon
+	 *  (base) keeps this in its own device/monitoringList structure, separate from device/outputList. */
+	public getMultiviewerOutputPath(multiviewerId: string): string[] {
+		return ['device', 'monitoringList', 'items', multiviewerId]
+	}
+
+	/** device/outputList item keys (if any) that are actually a multiviewer's output rather than a "real"
+	 *  physical output - none on Aquilon (base), since its multiviewer output isn't part of outputList at all. */
+	public getMultiviewerOutputListKeys(): string[] {
+		return []
+	}
+
 	public getMultiviewerChoices(): Dropdown<string>[] {
 		const ret: Dropdown<string>[] = []
 		for (const multiviewer of this.getMultiviewerArray()) {

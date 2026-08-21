@@ -1,4 +1,4 @@
-import { Config } from '../config.js'
+﻿import { Config } from '../config.js'
 import {AWJinstance} from '../index.js'
 import Choices from './choices.js'
 import {
@@ -63,6 +63,7 @@ export default class Presets {
 		'selectWidgetSource',
 		'timers',
 		'stream',
+		'liveThumbnails',
 	]
 
 	constructor(instance: AWJinstance) {
@@ -119,7 +120,9 @@ export default class Presets {
 			ids.push(id)
 			sections.set(preset.category, ids)
 		}
-		return Array.from(sections.entries()).map(([category, ids]) => ({
+		return Array.from(sections.entries())
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([category, ids]) => ({
 			id: category,
 			name: category,
 			definitions: [{
@@ -142,7 +145,7 @@ export default class Presets {
 			presets[`Load Master Memory ${memory.id}`] = {
 			type: 'simple',
 				name: `Load Master Memory ${memory.id}`,
-				category: 'Master Memories',
+				category: 'Screens - Recall Master Presets',
 				style: {
 					text: `MM${memory.id}\\n$(${ilabel}:${this.varName(`masterMemory${memory.id}label`, `MM${memory.id}.label`)})`,
 					size: 'auto',
@@ -199,7 +202,7 @@ export default class Presets {
 		const presets: CategorizedPresetDefinitions = {}
 		const ilabel = this.instance.label
 
-		for (const screen of [{ id: 'sel', label: 'Selected', index: '0' }, ...this.choices.getScreensArray(), ...this.choices.getAuxArray()]) {
+		for (const screen of [{ id: 'sel', label: 'All Selected Screens', index: '0' }, ...this.choices.getScreensArray(), ...this.choices.getAuxArray()]) {
 			for (const memory of this.choices.getScreenMemoryArray()) {
 				// const label = this.state.get(['DEVICE', 'device', 'presetBank', 'bankList', 'items', memory, 'control', 'pp', 'label'])
 				const bgcolor = parseInt(this.state.get(['REMOTE', 'banks', 'screen', 'items', memory.id, 'color'])?.slice(1), 16)
@@ -207,7 +210,7 @@ export default class Presets {
 				presets[`LoadScreenMemory_${memory.id}_to_${screen.id}`] = {
 					type: 'simple',
 					name: `Load Screen Memory ${memory.id} into screen ${screen.id}${screen.label ? ' ('+screen.label+')' : ''}`,
-					category: `Screen Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
+					category: `Screens - Recall Screen Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
 					style: {
 						text: `SM${memory.id}${screen.id != 'sel' ? ' '+screen.id : ''}\\n$(${ilabel}:${this.varName(`screenMemory${memory.id}label`, `SM${memory.id}.label`)})`,
 						size: 'auto',
@@ -307,7 +310,7 @@ export default class Presets {
 			presets[`Load Layer Memory${memory.id}`] = {
 			type: 'simple',
 				name: `Load Layer Memory ${memory.id} ${memory.label}`,
-				category: 'Layer Memories',
+				category: 'Layers - Recall Layer Memories',
 				style: {
 					text: `LM${memory.id}\\n$(${ilabel}:${this.varName(`layerMemory${memory.id}label`, `LM${memory.id}.label`)})`,
 					size: 'auto',
@@ -345,7 +348,7 @@ export default class Presets {
 		presets['Take All Screens'] = {
 			type: 'simple',
 			name: 'Take All Screens',
-			category: 'Transition',
+			category: 'Live - Transition',
 			style: {
 				text: 'Take\\nAll',
 				size: 'auto',
@@ -389,7 +392,7 @@ export default class Presets {
 		presets['Take Selected Screens'] = {
 			type: 'simple',
 			name: 'Take Selected Screens',
-			category: 'Transition',
+			category: 'Live - Transition',
 			style: {
 				text: 'Take\\nSel',
 				size: 'auto',
@@ -433,7 +436,7 @@ export default class Presets {
 			presets['Take Screen ' + screen] = {
 			type: 'simple',
 				name: 'Take Screen ' + screen,
-				category: 'Transition',
+				category: 'Live - Transition',
 				style: {
 					text: 'Take\\n' + screen,
 					size: 'auto',
@@ -477,7 +480,7 @@ export default class Presets {
 		presets['Cut All Screens'] = {
 			type: 'simple',
 			name: 'Cut All Screens',
-			category: 'Transition',
+			category: 'Live - Transition',
 			style: {
 				text: 'Cut\\nAll',
 				size: 'auto',
@@ -509,7 +512,7 @@ export default class Presets {
 		presets['Cut Selected Screens'] = {
 			type: 'simple',
 			name: 'Cut Selected Screens',
-			category: 'Transition',
+			category: 'Live - Transition',
 			style: {
 				text: 'Cut\\nSel',
 				size: 'auto',
@@ -543,7 +546,7 @@ export default class Presets {
 			presets['Cut Screen ' + screen] = {
 			type: 'simple',
 				name: 'Cut Screen ' + screen,
-				category: 'Transition',
+				category: 'Live - Transition',
 				style: {
 					text: 'Cut\\n' + screen,
 					size: 'auto',
@@ -578,10 +581,10 @@ export default class Presets {
 		presets['Toggle Sync'] = {
 			type: 'simple',
 			name: 'Toggle Sync',
-			category: 'Live',
+			category: 'Live - Preset Program/Preview Settings',
 			style: {
 				text: `$(${ilabel}:connectionLabel)\\n🔗\\nLocal`,
-				size: '18',
+				size: 8.57, // was '18', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_bright,
 				bgcolor: this.config.color_dark,
 				show_topbar: false,
@@ -622,10 +625,10 @@ export default class Presets {
 		presets['Toggle Preset'] = {
 			type: 'simple',
 			name: 'Toggle Preset (Program/Preview)',
-			category: 'Live',
+			category: 'Live - Preset Program/Preview Settings',
 			style: {
 				text: 'Toggle preset\\nPGM/PVW',
-				size: '14',
+				size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_bright,
 				bgcolor: this.config.color_dark,
 			},
@@ -650,7 +653,7 @@ export default class Presets {
 					},
 					style: {
 						text: 'PVW',
-						size: '24',
+						size: 11.43, // was '24', compensated for the confirmed 2.1x rendering scale on the reference setup
 						color: this.inverseColorBW(this.config.color_green),
 						bgcolor: this.config.color_green,
 						png64: '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'
@@ -663,7 +666,7 @@ export default class Presets {
 					},
 					style: {
 						text: 'PGM',
-						size: '24',
+						size: 11.43, // was '24', compensated for the confirmed 2.1x rendering scale on the reference setup
 						color: this.inverseColorBW(this.config.color_red),
 						bgcolor: this.config.color_red,
 						png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAABlpJREFUeJzNm99PHDcQgD9DCRBCAoFwJFUfq75V/Qfah6rv7UNbVapUtX98yR0EQhMKNAe4D/bczi7rX8d5D0v3ANod2+PxfJ4Zr7HWUtqMMRvAK2AEvAFeAibx2kfgCDgG3lpr/y3s8zNgDzjwfY6A1cRrU+DE9zkBJtba26J+cxRkjHnqBzbyv73EKxb4xw/qCKeQ/wKyV4B94ND/8O9NgJPQhPx7u2pMr4H1xLhugDMlf2Kt/RR7oVdBSiGyUjuJju+A96rjo1DHxphVnPWJQg4IW8It8K4zoWlArgFe0CjsENgqHPe9hTTWWowx216oKGU7U/CRFzyODHyerRFq2jKTW7Uzr5yFhrYrGBvgN2Az8dINzT5+C7yLmP4T2qu4B6wk5H8Axl6+Ve/nTOiDf2+Ms7CPoQf9zpBxifyo7zTAnz0PTXWnOIXcBTpdw20ZsY590gr5SKPwv621FwuUfUWzLY+AMxtwtMaYdRrr6lvMOwP8iNuropBxQmg1gnnHS2QxqpLMy5e5HYKb2CZwHVFIbYLt0kx2hFvBM/V+bELVSXaPYgMQTJt0jGBafpdk4Qk5x6wV/iwh39JW2Nhaez2Th0OjOK0cNN7iTFa244m19iYw2DXaCnlF2oekmqW9IBNr7WXoYWPMcxpljYDnGX3M5Bvgr8TDJQQTpypoPaTMYR/hFkBv6Rwfd+llyJY8Dz2oSCa/3Zh8A/xB28yHINjsnBEiWKSPPdLbsoRk+ljSncPUAN/jFJVDsE0voBbBBACnmSSTST1JjKGUZBL6rEZjsSUQTCaaTZo5SdaNBMLytYIGIpgAIYdgup/aJNMLOyOZAb6iLsFEITkEu/CDTcWCFjin8ZMpkklMJmPJIdk5PhaLUUybeurQ9mCCSRw1p68rIZmWH4WLAX6n2ftTmlUZE3eW1QnW05eOzEtIdoyz9tBcntA+r8lcLg3wNW7r1CRYa1/3yBaCjfy/JiyXZJKz2ghSbOAs4gGw1nnsxk9IrDnm7wxuwXSaZSMx3iySzRRUmWBdpB9yXyGpFo2ZevrUybLPmZNkBvgOd3Z4mhDwkBhsn7TPuPByrX8nl2RaYTkkk9+LhHyA8xjFJAYThVSNwbqZwAeSTLbMaehBL18rrFe+AX7BmV+JE6uWRYxMaB6SXdP4sRTJ+uRfGNz+vGa5WcQ9mkMcNNsmFigPQbKtVNmnFsF0WrOPYNJucGcZOZudZJZ93rAgkknZZyiCLbLsEz1b+b5Ly1n3ykoG+JXlZxGFYGP/d0n2T2IyOZ3H6mTP1LiySBYq+wyaRQzVskpiJtVKSLZBW2Fd33pngJ9wFKtNsGQM5v0IEVjUJlm3rLRicAfEqyVlEbshwmucsnMXK5Z0C7XsDAXEyz41CaaTZqmQQ/u/Y+C4Esl6LzAYnGeXoHFE3sUFQe84MeCHZBFj/XfTsTGS7dAOYlNAasV8OWWfEoLNUxpuJbqAT5RZMLSdfipZtkWzYMkjTV/ZZ6kxWE8f+hQ/F8lIRwnayl/SKfv84P9YahZROWwSE5qHZBJiyDhSMdmB/yXLPjWziH0Ek3JNScxUlWShsk8Ngq3SZBFzCSZNruJJTJZLslzHHCSZAb6kPsEk5Mhx2DZjQpo0crMsRjJRmMwzJ7v4ngyKld5FFOvL9Q29pZo5LBnKSNaVH3Qd3bLPoyKY6qs2ydaVbFmQWdnnG5qyT02C5YYcZEzoIVfxZDyxxZfdsB4r+5QSLDtXkyCYtJKq7iKu4vW6j76yT60YrBTF3Za89K36WxjJDPAt9Qim06o5DluXfYpiJpyFXYUeViSTX1ZZKUaxQWOwLnUGIpmOyXZ7n6NJuS7lJkdumxMSVygLozyEuTDAF7is27JjMP21j5yYzwqyfyUky72KFyz7DHEXUZt3yGFPvTw5mw3+eVS37PNYCSZtaJKNDfAzy88iCsEmvq/imIkmJouRTC6V58aeNkSxpRJMyc6OmUplK/nawrqfR83KPts8YoL19F3r86ju3FYMzowvl0iwbhVilbKYSV9gyLmYVUIy01f2GeIuYg7BpOkqr1xgCG33hZPM4Dy7Lvuk6tVSdhH/FLsF/5AsYqz/rEvl3kJ3aC9I6ibdHXAqsnPKPkNkEWfKpv3NanbMpN5f6OdRfWWfUoItJIsYmVDtS+Wxz6Om/wN0kxXclFa4eQAAAABJRU5ErkJggg=='
@@ -682,10 +685,10 @@ export default class Presets {
 		presets['Preset Toggle'] = {
 			type: 'simple',
 			name: 'Preset Toggle (Program/Preview)',
-			category: 'Live',
+			category: 'Live - Preset Program/Preview Settings',
 			style: {
 				text: 'Preset\\nToggle\\noff',
-				size: '14',
+				size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_bright,
 				bgcolor: this.config.color_dark,
 			},
@@ -725,10 +728,10 @@ export default class Presets {
 		presets['Copy program of selected screens to preview'] = {
 			type: 'simple',
 			name: 'Copy program of selected screens to preview',
-			category: 'Live',
+			category: 'Live - Preset Program/Preview Settings',
 			style: {
 				text: 'Copy\\nPgm➔Pvw\\nSelected',
-				size: '14',
+				size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_bright,
 				bgcolor: this.config.color_dark,
 			},
@@ -760,7 +763,7 @@ export default class Presets {
 			presets['Do intelligent selection for screen ' + screen] = {
 				type: 'simple',
 				name: 'Do intelligent selection for screen ' + screen,
-				category: 'Screens',
+				category: 'Screens - Screen Selection',
 				style: {
 					text: 'Select ' + screen,
 					size: 'auto',
@@ -805,7 +808,7 @@ export default class Presets {
 			presets['Toggle Screen ' + screen + ' Selection and show some useful data of PGM'] = {
 				type: 'simple',
 				name: 'Toggle Screen ' + screen + ' Selection and show some useful data of PGM',
-				category: 'Screens',
+				category: 'Screens - Screen Selection',
 				style: {
 					text: `${screen} PGM\\n$(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)})\\n$(${ilabel}:${this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)})\\n$(${ilabel}:screen${screen}memoryPGM)$(${ilabel}:screen${screen}memoryModifiedPGM)\\n$(${ilabel}:${this.varName(`screen${screen}memoryLabelPGM`, `${screen}.pgm.memory.label`)})`,
 					size: 'auto',
@@ -842,7 +845,7 @@ export default class Presets {
 			presets['Copy PGM of ' + screen + ' to PVW and show some useful data of PVW'] = {
 			type: 'simple',
 				name: 'Copy PGM of ' + screen + ' to PVW and show some useful data of PVW',
-				category: 'Screens',
+				category: 'Screens - Screen Selection',
 				style: {
 					text: `${screen} PVW\\n$(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)})\\n$(${ilabel}:${this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)})\\n$(${ilabel}:screen${screen}memoryPVW)$(${ilabel}:screen${screen}memoryModifiedPVW)\\n$(${ilabel}:${this.varName(`screen${screen}memoryLabelPVW`, `${screen}.pvw.memory.label`)})`,
 					size: 'auto',
@@ -889,10 +892,10 @@ export default class Presets {
 		presets['Toggle Lock PGM All Screens'] = {
 			type: 'simple',
 			name: 'Toggle Lock PGM All Screens',
-			category: 'Lock Screens',
+			category: 'Screens - Lock Screens',
 			style: {
 				text: 'PGM',
-				size: '24',
+				size: 11.43, // was '24', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_dark,
 				bgcolor: this.config.color_reddark,
 				png64:
@@ -941,10 +944,10 @@ export default class Presets {
 			presets['Toggle Lock PGM Screen ' + screen] = {
 			type: 'simple',
 				name: 'Toggle Lock PGM Screen ' + screen,
-				category: 'Lock Screens',
+				category: 'Screens - Lock Screens',
 				style: {
 					text: screen + '\\nPGM',
-					size: '18',
+					size: 8.57, // was '18', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_dark,
 					bgcolor: this.config.color_reddark,
 					png64:
@@ -993,10 +996,10 @@ export default class Presets {
 		presets['Toggle Lock PVW All Screens'] = {
 			type: 'simple',
 			name: 'Toggle Lock PVW All Screens',
-			category: 'Lock Screens',
+			category: 'Screens - Lock Screens',
 			style: {
 				text: 'PVW',
-				size: '24',
+				size: 11.43, // was '24', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_dark,
 				bgcolor: this.config.color_greendark,
 				png64:
@@ -1045,10 +1048,10 @@ export default class Presets {
 			presets['Toggle Lock PVW Screen ' + screen] = {
 			type: 'simple',
 				name: 'Toggle Lock PVW Screen ' + screen,
-				category: 'Lock Screens',
+				category: 'Screens - Lock Screens',
 				style: {
 					text: screen + '\\nPVW',
-					size: '18',
+					size: 8.57, // was '18', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_dark,
 					bgcolor: this.config.color_greendark,
 					png64:
@@ -1099,10 +1102,10 @@ export default class Presets {
 				presets['Select Layer' + layer.label + ' of ' + screen.id] = {
 			type: 'simple',
 					name: 'Select Layer' + layer.label + ' of ' + screen.id,
-					category: 'Select Layers',
+					category: 'Layers - Select Layers',
 					style: {
 						text: 'Select ' + screen.id + ' ' + layer.label.replace('Layer ', 'L'),
-						size: '14',
+						size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 						color: this.config.color_bright,
 						bgcolor: this.config.color_dark,
 					},
@@ -1140,10 +1143,10 @@ export default class Presets {
 				presets['Toggle Layer' + layer.label + ' of ' + screen.id] = {
 					type: 'simple',
 					name: 'Toggle Layer' + layer.label + ' of ' + screen.id,
-					category: 'Select Layers',
+					category: 'Layers - Select Layers',
 					style: {
 						text: 'Toggle ' + screen.id + ' ' + layer.label.replace('Layer ', 'L'),
-						size: '14',
+						size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 						color: this.config.color_bright,
 						bgcolor: this.config.color_dark,
 					},
@@ -1199,7 +1202,7 @@ export default class Presets {
 			presets['Toggle Freeze ' + input.id] = {
 			type: 'simple',
 				name: 'Toggle Freeze ' + input.label,
-				category: 'Input Freeze',
+				category: 'Freeze - Input Freeze',
 				style: {
 					text: 'Freeze\\nIn ' + input.index,
 					size: 'auto',
@@ -1353,7 +1356,7 @@ export default class Presets {
 		//type DevicePositionSize = {screen: string, preset: string, layersel: string, parameters: string[], x: string, xAnchor: string, y: string, yAnchor: string, w: string, h: string, ar: string} & Record<string, string>
 
 		// these values change for each preset, comon values are 'sel' for screen, preset and layers
-		const defaultTextSize = '18'
+		const defaultTextSize = 8.57 // was '18', compensated for the confirmed 2.1x rendering scale on the reference setup
 		const values = [
 			{
 				name: 'Fullscreen',
@@ -1553,7 +1556,7 @@ export default class Presets {
 			},{
 				name: 'increase size',
 				text: '+',
-				size: '30',
+				size: 14.29, // was '30', compensated for the confirmed 2.1x rendering scale on the reference setup
 				png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAATBJREFUeJzt28FNw0AQQNGZQAG500JudOIeQgdUARWQHiylDyjBR4rgAMshIopQzGctIbLa/462VrK/ZuXLOkspoXmr/36AS2cgYCBgIGAgcD13YxzHrj5vwzDkuetdTdB6mmI9TVVrZifoy1zZJmUedkUpx3eindLVBC2BE3SUmRHx8XePcpmcIPD7CTqx277fl1w195W7e8rH2jVOEFg0Qa163e8jIuKmYk1Xgd42m+o1bjFgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIMCnOzJvI+L59NJ2d/UQcThOsuTEREucIMATVMpLRJw9ClxzEKlVThAwEMAt1ts/G985QSD9Z/VnThAwEDAQMBAwEPgECvkr3gNZTAQAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAWZJREFUeJzt20FKw0AYhuH/r4LgBYqYjblCcwT3hdzBI4hnED2B3iHQA3iDdtdlyU48gYgLGRfiRhxfbWcSk34PdNNCJrydTMuEeAjBJG7S9wn8dwoEFAgoEFAgcBj7oGmavfp5q+vav3tfMwhEZ9CnWNmxoCtFMwgoENgukPvM3EPkNUt8jr3CNeivHheL5Wvbpj5sVFmWWdfI7QKFsDIzf1qtjk+q6tnMrN1szHx863myGfRwfXYZfNLZf6fzq/a2i3G0SAMFAgoEFAgoEFAgoEBAgYACAQUCCgQUCAw60NF6bbn3nwYd6HQ+NzNb5hxj0IG6kGw/6OL+4CbVsX7lrpthdppBb9Pp6G8u7jSDiqJ4sRD622d1z/4FaQ0Cye9qdKzKPcCwA33cXclKlxhQIKBAQIGAAgEFAgoEFAgoEFAgoEBAgYACAQUCuN2xb89sfKUZBFzPrP5MMwgoEFAgoEBAgcA77iI8lXJnSIMAAAAASUVORK5CYII=',
 				parameters: ['w'],
 				x: '0.5 * sw', 
@@ -1566,7 +1569,7 @@ export default class Presets {
 			},{
 				name: 'decrease size',
 				text: '-',
-				size: '30',
+				size: 14.29, // was '30', compensated for the confirmed 2.1x rendering scale on the reference setup
 				png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAATBJREFUeJzt28FNw0AQQNGZQAG500JudOIeQgdUARWQHiylDyjBR4rgAMshIopQzGctIbLa/462VrK/ZuXLOkspoXmr/36AS2cgYCBgIGAgcD13YxzHrj5vwzDkuetdTdB6mmI9TVVrZifoy1zZJmUedkUpx3eindLVBC2BE3SUmRHx8XePcpmcIPD7CTqx277fl1w195W7e8rH2jVOEFg0Qa163e8jIuKmYk1Xgd42m+o1bjFgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIMCnOzJvI+L59NJ2d/UQcThOsuTEREucIMATVMpLRJw9ClxzEKlVThAwEMAt1ts/G985QSD9Z/VnThAwEDAQMBAwEPgECvkr3gNZTAQAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAWZJREFUeJzt20FKw0AYhuH/r4LgBYqYjblCcwT3hdzBI4hnED2B3iHQA3iDdtdlyU48gYgLGRfiRhxfbWcSk34PdNNCJrydTMuEeAjBJG7S9wn8dwoEFAgoEFAgcBj7oGmavfp5q+vav3tfMwhEZ9CnWNmxoCtFMwgoENgukPvM3EPkNUt8jr3CNeivHheL5Wvbpj5sVFmWWdfI7QKFsDIzf1qtjk+q6tnMrN1szHx863myGfRwfXYZfNLZf6fzq/a2i3G0SAMFAgoEFAgoEFAgoEBAgYACAQUCCgQUCAw60NF6bbn3nwYd6HQ+NzNb5hxj0IG6kGw/6OL+4CbVsX7lrpthdppBb9Pp6G8u7jSDiqJ4sRD622d1z/4FaQ0Cye9qdKzKPcCwA33cXclKlxhQIKBAQIGAAgEFAgoEFAgoEFAgoEBAgYACAQUCuN2xb89sfKUZBFzPrP5MMwgoEFAgoEBAgcA77iI8lXJnSIMAAAAASUVORK5CYII=',
 				parameters: ['w'],
 				x: '0.5 * sw', 
@@ -1579,7 +1582,7 @@ export default class Presets {
 			},{
 				name: 'increase width',
 				text: '+',
-				size: '30',
+				size: 14.29, // was '30', compensated for the confirmed 2.1x rendering scale on the reference setup
 				png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAARxJREFUeJzt270JwkAcQPE7cQB7u9SO4QQZwgkEZxCcwCEC9q4SO4ewOgs/QDE+TxCN936lchBf/hebS0wpBXUbfPsCfp2BgIGAgYCBwLDri6Zpivp7q+s6Pvq8qAkatW0YtW3Wms4Juugq20sxnnZFStffRDulqAl6B07QjcsdKIgTBLImaHd+wG2X1fwjV/Nhs3Vc5a5xgkDeM6jn9ptNCCGEccaaogIdJpPsNW4xYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCDw1umO6WKXfRCpr5wgkDVBVVX9z5HgFzlBwEAAt1hp72zcc4JA9J3V55wgYCBgIGAgYCBwBIbOJVyxYIi9AAAAAElFTkSuQmCC+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAATBJREFUeJzt28FNw0AQQNGZQAG500JudOIeQgdUARWQHiylDyjBR4rgAMshIopQzGctIbLa/462VrK/ZuXLOkspoXmr/36AS2cgYCBgIGAgcD13YxzHrj5vwzDkuetdTdB6mmI9TVVrZifoy1zZJmUedkUpx3eindLVBC2BE3SUmRHx8XePcpmcIPD7CTqx277fl1w195W7e8rH2jVOEFg0Qa163e8jIuKmYk1Xgd42m+o1bjFgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIMCnOzJvI+L59NJ2d/UQcThOsuTEREucIMATVMpLRJw9ClxzEKlVThAwEMAt1ts/G985QSD9Z/VnThAwEDAQMBAwEPgECvkr3gNZTAQAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAWZJREFUeJzt20FKw0AYhuH/r4LgBYqYjblCcwT3hdzBI4hnED2B3iHQA3iDdtdlyU48gYgLGRfiRhxfbWcSk34PdNNCJrydTMuEeAjBJG7S9wn8dwoEFAgoEFAgcBj7oGmavfp5q+vav3tfMwhEZ9CnWNmxoCtFMwgoENgukPvM3EPkNUt8jr3CNeivHheL5Wvbpj5sVFmWWdfI7QKFsDIzf1qtjk+q6tnMrN1szHx863myGfRwfXYZfNLZf6fzq/a2i3G0SAMFAgoEFAgoEFAgoEBAgYACAQUCCgQUCAw60NF6bbn3nwYd6HQ+NzNb5hxj0IG6kGw/6OL+4CbVsX7lrpthdppBb9Pp6G8u7jSDiqJ4sRD622d1z/4FaQ0Cye9qdKzKPcCwA33cXclKlxhQIKBAQIGAAgEFAgoEFAgoEFAgoEBAgYACAQUCuN2xb89sfKUZBFzPrP5MMwgoEFAgoEBAgcA77iI8lXJnSIMAAAAASUVORK5CYII=',
 				parameters: ['w'],
 				x: '0.5 * sw', 
@@ -1592,7 +1595,7 @@ export default class Presets {
 			},{
 				name: 'decrease width',
 				text: '-',
-				size: '30',
+				size: 14.29, // was '30', compensated for the confirmed 2.1x rendering scale on the reference setup
 				png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAARxJREFUeJzt270JwkAcQPE7cQB7u9SO4QQZwgkEZxCcwCEC9q4SO4ewOgs/QDE+TxCN936lchBf/hebS0wpBXUbfPsCfp2BgIGAgYCBwLDri6Zpivp7q+s6Pvq8qAkatW0YtW3Wms4Juugq20sxnnZFStffRDulqAl6B07QjcsdKIgTBLImaHd+wG2X1fwjV/Nhs3Vc5a5xgkDeM6jn9ptNCCGEccaaogIdJpPsNW4xYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCDw1umO6WKXfRCpr5wgkDVBVVX9z5HgFzlBwEAAt1hp72zcc4JA9J3V55wgYCBgIGAgYCBwBIbOJVyxYIi9AAAAAElFTkSuQmCC+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAATBJREFUeJzt28FNw0AQQNGZQAG500JudOIeQgdUARWQHiylDyjBR4rgAMshIopQzGctIbLa/462VrK/ZuXLOkspoXmr/36AS2cgYCBgIGAgcD13YxzHrj5vwzDkuetdTdB6mmI9TVVrZifoy1zZJmUedkUpx3eindLVBC2BE3SUmRHx8XePcpmcIPD7CTqx277fl1w195W7e8rH2jVOEFg0Qa163e8jIuKmYk1Xgd42m+o1bjFgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIMCnOzJvI+L59NJ2d/UQcThOsuTEREucIMATVMpLRJw9ClxzEKlVThAwEMAt1ts/G985QSD9Z/VnThAwEDAQMBAwEPgECvkr3gNZTAQAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAWZJREFUeJzt20FKw0AYhuH/r4LgBYqYjblCcwT3hdzBI4hnED2B3iHQA3iDdtdlyU48gYgLGRfiRhxfbWcSk34PdNNCJrydTMuEeAjBJG7S9wn8dwoEFAgoEFAgcBj7oGmavfp5q+vav3tfMwhEZ9CnWNmxoCtFMwgoENgukPvM3EPkNUt8jr3CNeivHheL5Wvbpj5sVFmWWdfI7QKFsDIzf1qtjk+q6tnMrN1szHx863myGfRwfXYZfNLZf6fzq/a2i3G0SAMFAgoEFAgoEFAgoEBAgYACAQUCCgQUCAw60NF6bbn3nwYd6HQ+NzNb5hxj0IG6kGw/6OL+4CbVsX7lrpthdppBb9Pp6G8u7jSDiqJ4sRD622d1z/4FaQ0Cye9qdKzKPcCwA33cXclKlxhQIKBAQIGAAgEFAgoEFAgoEFAgoEBAgYACAQUCuN2xb89sfKUZBFzPrP5MMwgoEFAgoEBAgcA77iI8lXJnSIMAAAAASUVORK5CYII=',
 				parameters: ['w'],
 				x: '0.5 * sw', 
@@ -1605,7 +1608,7 @@ export default class Presets {
 			},{
 				name: 'increase height',
 				text: '+',
-				size: '30',
+				size: 14.29, // was '30', compensated for the confirmed 2.1x rendering scale on the reference setup
 				png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAR5JREFUeJzt27FNw1AYReH7B7agwnU6VmAC78AIiBkQ2YAdLGUANoANonQMQcOjCopQnBMkEA45X+ko0tPRtdzY1VqLxs3++gBTZyBgIGAgYCBwPvbDMAwn9Xjr+752XXdBYHRBG2Nl/wu6U1wQwAV9qqok70myXq2SOt5hdV138OFdEDh8QVue7i9vW82O7il3fbdefPc/LggYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCPALVFVXSZ63L908nj0kyetymbf5/HdONhEuCPCCWntJsvOlx4ufPs0EuSBgIIC32Kl9s/GVCwLlN6v7uSBgIGAgYCBgIPABo2QklBYEXBkAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAATBJREFUeJzt28FNw0AQQNGZQAG500JudOIeQgdUARWQHiylDyjBR4rgAMshIopQzGctIbLa/462VrK/ZuXLOkspoXmr/36AS2cgYCBgIGAgcD13YxzHrj5vwzDkuetdTdB6mmI9TVVrZifoy1zZJmUedkUpx3eindLVBC2BE3SUmRHx8XePcpmcIPD7CTqx277fl1w195W7e8rH2jVOEFg0Qa163e8jIuKmYk1Xgd42m+o1bjFgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIMCnOzJvI+L59NJ2d/UQcThOsuTEREucIMATVMpLRJw9ClxzEKlVThAwEMAt1ts/G985QSD9Z/VnThAwEDAQMBAwEPgECvkr3gNZTAQAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAWZJREFUeJzt20FKw0AYhuH/r4LgBYqYjblCcwT3hdzBI4hnED2B3iHQA3iDdtdlyU48gYgLGRfiRhxfbWcSk34PdNNCJrydTMuEeAjBJG7S9wn8dwoEFAgoEFAgcBj7oGmavfp5q+vav3tfMwhEZ9CnWNmxoCtFMwgoENgukPvM3EPkNUt8jr3CNeivHheL5Wvbpj5sVFmWWdfI7QKFsDIzf1qtjk+q6tnMrN1szHx863myGfRwfXYZfNLZf6fzq/a2i3G0SAMFAgoEFAgoEFAgoEBAgYACAQUCCgQUCAw60NF6bbn3nwYd6HQ+NzNb5hxj0IG6kGw/6OL+4CbVsX7lrpthdppBb9Pp6G8u7jSDiqJ4sRD622d1z/4FaQ0Cye9qdKzKPcCwA33cXclKlxhQIKBAQIGAAgEFAgoEFAgoEFAgoEBAgYACAQUCuN2xb89sfKUZBFzPrP5MMwgoEFAgoEBAgcA77iI8lXJnSIMAAAAASUVORK5CYII=',
 				parameters: ['h'],
 				x: '0.5 * sw', 
@@ -1618,7 +1621,7 @@ export default class Presets {
 			},{
 				name: 'decrease height',
 				text: '-',
-				size: '30',
+				size: 14.29, // was '30', compensated for the confirmed 2.1x rendering scale on the reference setup
 				png64: 'iVBORw0KGgoAAAANSUhEUgAAAEgAAAA6CAYAAAATBx+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAR5JREFUeJzt27FNw1AYReH7B7agwnU6VmAC78AIiBkQ2YAdLGUANoANonQMQcOjCopQnBMkEA45X+ko0tPRtdzY1VqLxs3++gBTZyBgIGAgYCBwPvbDMAwn9Xjr+752XXdBYHRBG2Nl/wu6U1wQwAV9qqok70myXq2SOt5hdV138OFdEDh8QVue7i9vW82O7il3fbdefPc/LggYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCPALVFVXSZ63L908nj0kyetymbf5/HdONhEuCPCCWntJsvOlx4ufPs0EuSBgIIC32Kl9s/GVCwLlN6v7uSBgIGAgYCBgIPABo2QklBYEXBkAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAATBJREFUeJzt28FNw0AQQNGZQAG500JudOIeQgdUARWQHiylDyjBR4rgAMshIopQzGctIbLa/462VrK/ZuXLOkspoXmr/36AS2cgYCBgIGAgcD13YxzHrj5vwzDkuetdTdB6mmI9TVVrZifoy1zZJmUedkUpx3eindLVBC2BE3SUmRHx8XePcpmcIPD7CTqx277fl1w195W7e8rH2jVOEFg0Qa163e8jIuKmYk1Xgd42m+o1bjFgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIGAgYCBgIMCnOzJvI+L59NJ2d/UQcThOsuTEREucIMATVMpLRJw9ClxzEKlVThAwEMAt1ts/G985QSD9Z/VnThAwEDAQMBAwEPgECvkr3gNZTAQAAAAASUVORK5CYII=+NAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAWZJREFUeJzt20FKw0AYhuH/r4LgBYqYjblCcwT3hdzBI4hnED2B3iHQA3iDdtdlyU48gYgLGRfiRhxfbWcSk34PdNNCJrydTMuEeAjBJG7S9wn8dwoEFAgoEFAgcBj7oGmavfp5q+vav3tfMwhEZ9CnWNmxoCtFMwgoENgukPvM3EPkNUt8jr3CNeivHheL5Wvbpj5sVFmWWdfI7QKFsDIzf1qtjk+q6tnMrN1szHx863myGfRwfXYZfNLZf6fzq/a2i3G0SAMFAgoEFAgoEFAgoEBAgYACAQUCCgQUCAw60NF6bbn3nwYd6HQ+NzNb5hxj0IG6kGw/6OL+4CbVsX7lrpthdppBb9Pp6G8u7jSDiqJ4sRD622d1z/4FaQ0Cye9qdKzKPcCwA33cXclKlxhQIKBAQIGAAgEFAgoEFAgoEFAgoEBAgYACAQUCuN2xb89sfKUZBFzPrP5MMwgoEFAgoEBAgcA77iI8lXJnSIMAAAAASUVORK5CYII=',
 				parameters: ['h'],
 				x: '0.5 * sw', 
@@ -1693,7 +1696,7 @@ export default class Presets {
 			presets[`posSize${val.name.replace(/\W/g, '')}`] = {
 				type: 'simple',
 				name: `${val.name}`,
-				category: 'Position / Size',
+				category: 'Layers - Adjust Position and Size',
 				style: {
 					text: val.text,
 					size: val.size as CompanionTextSize,
@@ -1732,10 +1735,10 @@ export default class Presets {
 		presets[`posSizeSizeHVrot`] = {
 			type: 'simple',
 			name: `size with rotary`,
-			category: 'Position / Size',
+			category: 'Layers - Adjust Position and Size',
 			style: {
 				text: '',
-				size: 14 as CompanionTextSize,
+				size: 6.67 as CompanionTextSize, // was 14, compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_bright,
 				bgcolor: this.config.color_dark,
 				png64: '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',
@@ -1806,7 +1809,7 @@ export default class Presets {
 				presets['Load MV' + memory.id + nameSuffix] = {
 			type: 'simple',
 					name: 'Load MV' + memory.id + nameSuffix,
-					category: 'Multiviewer Memories',
+					category: 'Multiviewer - Recall Memories',
 					style: {
 						text: (multimulti ? `MV${multiviewer} `: '') +  `MV${memory.id}\\n$(${ilabel}:${this.varName(`multiviewerMemory${memory.id}label`, `MV${memory.id}.label`)})`,
 						size: 'auto',
@@ -1843,10 +1846,10 @@ export default class Presets {
 			presets['Select ' + widget.label] = {
 			type: 'simple',
 				name: 'Select ' + widget.label,
-				category: 'Select Widgets',
+				category: 'Multiviewer - Select Widgets',
 				style: {
 					text: 'Select ' + widget.label.replace(/Multiviewer /, 'MV').replace(/Widget /, 'W'),
-					size: '14',
+					size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,
 				},
@@ -1890,10 +1893,10 @@ export default class Presets {
 			presets['Toggle Selection of ' + widget.label] = {
 			type: 'simple',
 				name: 'Toggle Selection of ' + widget.label,
-				category: 'Select Widgets',
+				category: 'Multiviewer - Select Widgets',
 				style: {
 					text: 'Toggle ' + widget.label.replace(/Multiviewer /, 'MV').replace(/Widget /, 'W'),
-					size: '14',
+					size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,
 				},
@@ -1936,7 +1939,7 @@ export default class Presets {
 			presets['Select Widget Source' + source.label] = {
 			type: 'simple',
 				name: 'Select Widget Source' + source.label,
-				category: 'Multiviewer Source',
+				category: 'Multiviewer - Assign Source to Widget',
 				style: {
 					text: 'MV ' + source.label.replace(/ - /, '\\n'),
 					size: 'auto',
@@ -1975,7 +1978,7 @@ export default class Presets {
 				category: 'Timer',
 				style: {
 					text: timer.label.replace(/\D/g, '') + '⏯',
-					size: '30',
+					size: 23.81, // compensates a confirmed 2.1x rendering scale on the reference setup (50 requested -> 105 rendered), see project_base_v2_migration memory notes
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,
 				},
@@ -2051,7 +2054,7 @@ export default class Presets {
 				category: 'Timer',
 				style: {
 					text: timer.label.replace(/\D/g, '') + ' ⏹',
-					size: '30',
+					size: 23.81, // compensates a confirmed 2.1x rendering scale on the reference setup (50 requested -> 105 rendered), see project_base_v2_migration memory notes
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,
 				},
@@ -2161,6 +2164,69 @@ export default class Presets {
 					},
 				],
 			}
+
+		return presets
+	}
+
+	/**
+	 * MARK: Live Thumbnails
+	 * One "Show Thumbnail" preset per currently-available Input/Output/Still Image (Store)/Timer, following the
+	 * style confirmed with the first exploratory example (Output 1, 2026-08-21). No Library presets - live-
+	 * confirmed the snapshot API only ever returns real content for images actually loaded into a Store slot,
+	 * not arbitrary Library images (see the deviceThumbnail comment in awjdevice/feedback.ts).
+	 * button's own static style is just the source's short name as bottom-centered text - deliberately the only
+	 * thing shown before a live image has ever loaded, and it stays that way for any preset sitting unused in
+	 * the preset browser, since building these preset *definitions* never touches the feedback's callback at
+	 * all (it's plain data - id/options/style), so it cannot start any polling by itself. The poller only starts
+	 * once a copy of the feedback is actually running on a real placed button (see deviceThumbnail in
+	 * awjdevice/feedback.ts) - dragging one of these onto a page is exactly (and only) that moment.
+	 */
+	get liveThumbnails() {
+		const presets: CategorizedPresetDefinitions = {}
+
+		const addThumbnailPreset = (id: string, label: string, feedbackOptions: Record<string, string | number>) => {
+			presets[`thumbnail${id}`] = {
+				type: 'simple',
+				name: `Thumbnail ${label}`,
+				category: 'Live - Thumbnails',
+				style: {
+					text: label,
+					size: 9.52, // was 20, compensated for the confirmed 2.1x rendering scale on the reference setup
+					alignment: 'center:bottom',
+					color: this.config.color_bright,
+					bgcolor: this.config.color_dark,
+				},
+				steps: [{ down: [], up: [] }],
+				feedbacks: [
+					{
+						feedbackId: 'deviceThumbnail',
+						options: {
+							...feedbackOptions,
+							// Companion does not fill in a preset's missing feedback option values with the
+							// field's own declared default - refreshRate showed up as 0 (not the field's
+							// default of 5) until set explicitly here.
+							refreshRate: 5,
+						},
+					},
+				],
+			}
+		}
+
+		for (const input of this.choices.getLiveInputArray()) {
+			const num = input.index ?? input.id.replace(/^\D+/, '')
+			addThumbnailPreset(`Input${num}`, `Input ${num}`, { source: 'inputs', inputItem: num })
+		}
+		for (const output of this.choices.getOutputArray()) {
+			if (this.choices.getMultiviewerOutputListKeys().includes(output.id)) continue
+			addThumbnailPreset(`Output${output.id}`, `Output ${output.id}`, { source: 'outputs', outputItem: output.id })
+		}
+		for (const store of this.choices.getStillsArray()) {
+			addThumbnailPreset(`Store${store.id}`, `Store ${store.id}`, { source: 'imagesStore', storeItem: store.id })
+		}
+		for (const timer of this.choices.getTimerArray()) {
+			const num = timer.index ?? timer.id.replace(/^\w+_/, '')
+			addThumbnailPreset(`Timer${num}`, `Timer ${num}`, { source: 'timers', timerItem: num })
+		}
 
 		return presets
 	}

@@ -1,4 +1,4 @@
-import {AWJinstance} from '../index.js'
+﻿import {AWJinstance} from '../index.js'
 
 import Choices, { Choicemeta, AnchorPoint } from './choices.js'
 import {
@@ -141,9 +141,9 @@ export default class Actions {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 				},
 				{
 					id: 'memory',
@@ -199,7 +199,7 @@ export default class Actions {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
 					default: 'pvw',
 					isVisibleExpression: "$(options:method) == 'spec'",
@@ -285,9 +285,9 @@ export default class Actions {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 				},
 				{
 					id: 'memory',
@@ -321,9 +321,9 @@ export default class Actions {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 				},
 				{
 					id: 'memory',
@@ -424,7 +424,7 @@ export default class Actions {
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
 					choices: [
-						{ id: 'all', label: 'All' },
+						{ id: 'all', label: 'All Screens' },
 						{ id: 'sel', label: 'Selected Screens' },
 						...this.choices.getScreenAuxChoices()
 					],
@@ -450,7 +450,7 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: ['sel'],
 				},
 			],
@@ -494,7 +494,7 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: ['all'],
 				},
 				{
@@ -552,14 +552,14 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: ['all'],
 				},
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
-					choices: [{ id: 'all', label: 'Both' }, ...this.choices.choicesPreset],
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'all', label: 'Both (Program/Preview)' }, ...this.choices.choicesPreset],
 					default: 'all',
 				},
 				{
@@ -631,7 +631,7 @@ export default class Actions {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: this.choices.choicesPreset,
 					default: 'pvw',
 					isVisibleExpression: "$(options:method) == 'spec'",
@@ -946,21 +946,27 @@ export default class Actions {
 			}
 		}
 
-		/** Resolves the "screen"/"layersel"/"layer{screen}" options into concrete target layers. "first" targets
-		 * only the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a
-		 * multi-selection - safer than "sel" (all selected layers) for X/Y/W/H values that were read from those
-		 * variables, since those only ever describe that one layer. */
+		/** Resolves the "screen"/"layersel" options into concrete target layers. "First/Only Selected Screen" and
+		 * "First/Only Selected Layer" each target just the first (Ctrl-clicked first in WebRCS, same screen/layer
+		 * the SelectedScreen and SelectedLayer variables describe) of a multi-selection - safer than "all selected"
+		 * for X/Y/W/H values that were read from those variables, since those only ever describe that one
+		 * screen/layer, so applying them to every selected screen/layer could move layers you did not intend to
+		 * touch. A single "Layer" field covers every screen choice (specific screen, "sel", or "first" alike) -
+		 * there used to be one hidden field per screen instead, shown/hidden via isVisibleExpression depending on
+		 * the "screen" field's value, but Companion's isVisibleExpression evaluation turned out to be unreliable
+		 * for fields depending on another field that has disableAutoExpression set (as "screen" did, needed only
+		 * for that now-removed cross-field dependency) - occasionally showing several of them at once instead of
+		 * exactly one. Removing the dependency entirely sidesteps that, and as a bonus "screen" itself can now be
+		 * expression-driven, which it couldn't while other fields depended on its value. */
 		const resolveLayers = (opt: DevicePositionSizeV3): {screenAuxKey: string, layerKey: string}[] => {
-			if (opt.screen === 'sel') {
-				if (opt.layersel === 'sel') return this.choices.getSelectedLayers()
-				if (opt.layersel === 'first') return this.choices.getSelectedLayers().slice(0, 1)
-				return [{screenAuxKey: opt.screen, layerKey: opt.layersel}]
-			} else {
-				const layerOpt = opt[`layer${opt.screen}`]
-				if (layerOpt === 'sel') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen)
-				if (layerOpt === 'first') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen).slice(0, 1)
-				return [{screenAuxKey: opt.screen, layerKey: layerOpt}]
-			}
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					: [opt.screen]
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
 		}
 
 		const devicePositionSizeV3: AWJaction<DevicePositionSizeV3> = {
@@ -971,16 +977,16 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Aux',
-					choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenAuxChoices()],
-					default: 'sel',
-					disableAutoExpression: true,
+					tooltip: 'When several screens/auxes are selected (common in daily use), "First/Only Selected Screen" targets just the first (Ctrl-clicked first in WebRCS, same screen the SelectedScreen.* variables describe) - safer than "All Selected Screens" for X/Y/W/H values that were read from those variables, since those only ever describe that one screen, so applying them to every selected screen could move layers on screens you did not intend to touch.',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					default: 'first',
 				},
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 				},
 				{
 					id: `layersel`,
@@ -989,19 +995,7 @@ export default class Actions {
 					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch.',
 					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
 					default: 'first',
-					isVisibleExpression: "$(options:screen) == 'sel'",
 				},
-				...this.screens.map((screen) => {
-					return{
-						id: `layer${screen.id}`,
-						type: 'dropdown' as const,
-						label: 'Layer',
-						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch.',
-						choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...this.choices.getLayerChoices(screen.id, false)],
-						default: 'first',
-						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
-					}
-				}),
 				{
 					id: 'anchor',
 					type: 'dropdown',
@@ -1080,7 +1074,7 @@ export default class Actions {
 				if (laydata === undefined) return undefined
 
 				newoptions.screen = screeninfo.id
-				newoptions[`layer${screeninfo.id}`] = layers[0].layerKey.replace(/^\w+_/, '')
+				newoptions.layersel = layers[0].layerKey.replace(/^\w+_/, '')
 				newoptions.preset = preset
 				const anchor: AnchorPoint = (options.anchor === undefined || options.anchor === 'sel') ? this.choices.getGlobalAnchorPoint() : options.anchor
 				const anchorPos = anchor === 'CENTER'
@@ -1269,21 +1263,24 @@ export default class Actions {
 			}
 		}
 
-		/** Resolves the "screen"/"layersel"/"layer{screen}" options into concrete target layers. "first" targets
-		 * only the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a
-		 * multi-selection - safer than "sel" (all selected layers) for Source Ratio/Content Size, which resize
-		 * relative to each layer's own current size. */
+		/** Resolves the "screen"/"layersel" options into concrete target layers. "First/Only Selected Layer"
+		 * targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables
+		 * describe) of a multi-selection - safer than "all selected layers" for Source Ratio/Content Size, which
+		 * resize relative to each layer's own current size. A single "Layer" field covers every screen choice -
+		 * there used to be one hidden field per screen instead, shown/hidden via isVisibleExpression depending on
+		 * the "screen" field's value, but Companion's isVisibleExpression evaluation turned out to be unreliable
+		 * for fields depending on another field that has disableAutoExpression set (as "screen" did, needed only
+		 * for that now-removed cross-field dependency) - occasionally showing several of them at once instead of
+		 * exactly one (same issue and fix as in "Set Layer Position and Size V3"). */
 		const resolveLayers = (opt: DeviceResetLayerSize): {screenAuxKey: string, layerKey: string}[] => {
-			if (opt.screen === 'sel') {
-				if (opt.layersel === 'sel') return this.choices.getSelectedLayers()
-				if (opt.layersel === 'first') return this.choices.getSelectedLayers().slice(0, 1)
-				return [{screenAuxKey: opt.screen, layerKey: opt.layersel}]
-			} else {
-				const layerOpt = opt[`layer${opt.screen}`]
-				if (layerOpt === 'sel') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen)
-				if (layerOpt === 'first') return this.choices.getSelectedLayers().filter(layer => layer.screenAuxKey == opt.screen).slice(0, 1)
-				return [{screenAuxKey: opt.screen, layerKey: layerOpt}]
-			}
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					: [opt.screen]
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
 		}
 
 		const deviceResetLayerSize: AWJaction<DeviceResetLayerSize> = {
@@ -1294,16 +1291,16 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Aux',
-					choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenAuxChoices()],
-					default: 'sel',
-					disableAutoExpression: true,
+					tooltip: 'When several screens/auxes are selected (common in daily use), "First/Only Selected Screen" targets just the first (Ctrl-clicked first in WebRCS, same screen the SelectedScreen.* variables describe) - safer than "All Selected Screens" for Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to layers on every selected screen at once could resize layers differently than intended.',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					default: 'first',
 				},
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 				},
 				{
 					id: `layersel`,
@@ -1312,19 +1309,7 @@ export default class Actions {
 					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended.',
 					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
 					default: 'first',
-					isVisibleExpression: "$(options:screen) == 'sel'",
 				},
-				...this.screens.map((screen) => {
-					return{
-						id: `layer${screen.id}`,
-						type: 'dropdown' as const,
-						label: 'Layer',
-						tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended.',
-						choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...this.choices.getLayerChoices(screen.id, false)],
-						default: 'first',
-						isVisibleExpression: `$(options:screen) == '${screen.id}'`,
-					}
-				}),
 				{
 					id: 'mode',
 					type: 'dropdown',
@@ -1666,16 +1651,16 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Aux',
-					choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: 'sel',
 					disableAutoExpression: true,
 				},
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 					disableAutoExpression: true,
 				},
 				{
@@ -1988,7 +1973,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'All' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: ['sel'],
 				},
 			],
@@ -2254,14 +2239,14 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					allowInvalidValues: true,
 					label: 'Screen',
 					type: 'multidropdown',
-					choices: [{ id: 'all', label: 'ALL' }, { id: 'sel', label: 'Selected' }, ...this.choices.getScreenAuxChoices()],
+					choices: [{ id: 'all', label: 'All Screens' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: ['all'],
 					tooltip:
 						'If you choose "All" and "Toggle", the behavior is exactly like in WebRCS, if you choose multiple screens they will be toggled individually',
 				},
 				{
 					id: 'preset',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					type: 'dropdown',
 					choices: [
 						{ id: 'PROGRAM', label: 'Program' },
@@ -3011,12 +2996,140 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	/**
 	 * MARK: Choose Testpatterns
 	 */
-	deviceTestpatterns_common(deviceTestpatternsOptions: CompanionInputFieldDropdown[]) {
-		type DeviceTestpatterns = {group: string, screenList: string, outputList: string, patall: string, screenListPat: string, outputListPat: string, inputList?: string, inputListPat?: string}
-		
+	deviceTestpatterns_common(deviceTestpatternsOptions: CompanionInputFieldDropdown[], name = 'Set Testpattern') {
+		type DeviceTestpatterns = {group: string, screenList: string, outputList: string, patall: string, screenListPat: string, outputListPat: string, inputList?: string, inputListPat?: string, area?: string, rawColors?: boolean, outputListColor?: number | string, outputListGridBackColor?: string, outputListGridThickness?: number, outputListGridSizeH?: number, outputListGridSizeV?: number, outputListGridShowIds?: boolean, outputListCrossSizeH?: number, outputListCrossSizeV?: number, outputListCheckerSizeH?: number, outputListCheckerSizeV?: number, outputListCheckerInvert?: boolean}
+
+		// Area/Raw Colors/Color only exist on the outputList group's pattern model (live-confirmed on a real
+		// Aquilon, LivePremier platform fw 6.2.73: device/outputList/items/{id}/pattern/control/pp/{fitArea,
+		// disableColorimetry} and .../pattern/color/pp/{red,green,blue}) - identical across platforms, so built
+		// once here rather than duplicated per platform like the pattern-type choice lists.
+		const outputExtraOptions: SomeCompanionActionInputField[] = [
+			{
+				id: 'area',
+				type: 'dropdown',
+				label: 'Area',
+				choices: [
+					{ id: 'FORMAT', label: 'Format' },
+					{ id: 'AOI', label: 'AOI' },
+				],
+				default: 'FORMAT',
+				isVisibleExpression: "$(options:group) == 'outputList'",
+			},
+			{
+				id: 'rawColors',
+				type: 'checkbox',
+				label: 'Raw Colors',
+				default: false,
+				isVisibleExpression: "$(options:group) == 'outputList'",
+			},
+			{
+				id: 'outputListColor',
+				type: 'colorpicker',
+				label: 'Color',
+				default: 0xffffff,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'COLOR'",
+			},
+			// Grid Custom-only: device/outputList/items/{id}/pattern/grid/pp/{backColor,thickness,sizeH,sizeV,id}.
+			// backColor is a PATTERN_BACK_COLOR enum (Black/White/Red/Green/Blue), not a free RGB value like the
+			// Solid Color field above - confirmed via WebRCS's own bundled enum definitions.
+			{
+				id: 'outputListGridBackColor',
+				type: 'dropdown',
+				label: 'Background Color',
+				choices: [
+					{ id: 'BLACK', label: 'Black' },
+					{ id: 'WHITE', label: 'White' },
+					{ id: 'RED', label: 'Red' },
+					{ id: 'GREEN', label: 'Green' },
+					{ id: 'BLUE', label: 'Blue' },
+				],
+				default: 'BLACK',
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'GRID_CUSTOM'",
+			},
+			{
+				id: 'outputListGridThickness',
+				type: 'number',
+				label: 'Thickness',
+				min: 0,
+				max: 16,
+				default: 1,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'GRID_CUSTOM'",
+			},
+			{
+				id: 'outputListGridSizeH',
+				type: 'number',
+				label: 'H Size',
+				min: 32,
+				max: 4096,
+				default: 64,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'GRID_CUSTOM'",
+			},
+			{
+				id: 'outputListGridSizeV',
+				type: 'number',
+				label: 'V Size',
+				min: 16,
+				max: 4096,
+				default: 64,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'GRID_CUSTOM'",
+			},
+			{
+				id: 'outputListGridShowIds',
+				type: 'checkbox',
+				label: 'Show IDs',
+				default: false,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'GRID_CUSTOM'",
+			},
+			// Crosshatch-only: device/outputList/items/{id}/pattern/cross/pp/{sizeH,sizeV}
+			{
+				id: 'outputListCrossSizeH',
+				type: 'number',
+				label: 'H Size',
+				min: 32,
+				max: 4096,
+				default: 256,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'CROSSHATCH'",
+			},
+			{
+				id: 'outputListCrossSizeV',
+				type: 'number',
+				label: 'V Size',
+				min: 32,
+				max: 2160,
+				default: 256,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'CROSSHATCH'",
+			},
+			// Checkerboard-only: device/outputList/items/{id}/pattern/checker/pp/{sizeH,sizeV}
+			{
+				id: 'outputListCheckerSizeH',
+				type: 'number',
+				label: 'H Size',
+				min: 1,
+				max: 4096,
+				default: 16,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'CHECKERBOARD'",
+			},
+			{
+				id: 'outputListCheckerSizeV',
+				type: 'number',
+				label: 'V Size',
+				min: 1,
+				max: 2160,
+				default: 16,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'CHECKERBOARD'",
+			},
+			{
+				id: 'outputListCheckerInvert',
+				type: 'checkbox',
+				label: 'Invert Color',
+				default: false,
+				isVisibleExpression: "$(options:group) == 'outputList' && $(options:outputListPat) == 'CHECKERBOARD'",
+			},
+		]
+
 		const deviceTestpatterns: AWJaction<DeviceTestpatterns> = {
-			name: 'Set Testpattern',
-			options: deviceTestpatternsOptions,
+			name,
+			options: [...deviceTestpatternsOptions, ...outputExtraOptions],
 			callback: (action) => {
 				if (action.options.group === 'all') {
 					const idx = deviceTestpatternsOptions.findIndex((option) => {
@@ -3033,6 +3146,19 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 							)
 						} )
 					})
+
+					// "Disable all active Testpatterns" should also clear the Raster Box overlay (Format/AOI
+					// centering markers) on every output - it belongs conceptually to "testpatterns off", and is
+					// easy to leave on by accident before a show since it's barely visible on its own. Raster Box
+					// only exists as a built action on platforms with "deviceTestpatternRasterBox" (LivePremier/
+					// LivePremier4 - device/outputList/items/{id}/pattern/control/pp/centering); Midra models the
+					// same concept differently (two separate booleans) and has no Raster Box action yet, so this
+					// deliberately does not touch Midra.
+					if (this.actionsToUse.includes('deviceTestpatternRasterBox')) {
+						for (const output of this.choices.getOutputChoices()) {
+							this.connection.sendWSmessage(['device', 'outputList', 'items', output.id.toString(), 'pattern', 'control', 'pp', 'centering'], [])
+						}
+					}
 				} else {
 					this.connection.sendWSmessage(
 						[
@@ -3065,11 +3191,109 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						],
 						inhibit
 					)
+
+					// Area/Raw Colors/Color only exist on the outputList group's pattern model - live-confirmed
+					// on a real Aquilon (LivePremier platform, fw 6.2.73): device/outputList/items/{id}/pattern/
+					// control/pp/{fitArea,disableColorimetry} and .../pattern/color/pp/{red,green,blue}. Color
+					// is only meaningful for the "COLOR" (Solid Color) pattern, but harmless to always send.
+					if (action.options.group === 'outputList') {
+						const outputPath = ['device', 'outputList', 'items', action.options.outputList, 'pattern']
+						if (action.options.area !== undefined) {
+							this.connection.sendWSmessage([...outputPath, 'control', 'pp', 'fitArea'], action.options.area)
+						}
+						if (action.options.rawColors !== undefined) {
+							this.connection.sendWSmessage([...outputPath, 'control', 'pp', 'disableColorimetry'], parseBoolean(action.options.rawColors))
+						}
+						if (action.options.outputListPat === 'COLOR' && action.options.outputListColor !== undefined) {
+							const color = Number(action.options.outputListColor)
+							this.connection.sendWSmessage([...outputPath, 'color', 'pp', 'red'], (color >> 16) & 0xff)
+							this.connection.sendWSmessage([...outputPath, 'color', 'pp', 'green'], (color >> 8) & 0xff)
+							this.connection.sendWSmessage([...outputPath, 'color', 'pp', 'blue'], color & 0xff)
+						}
+						if (action.options.outputListPat === 'GRID_CUSTOM') {
+							if (action.options.outputListGridBackColor !== undefined) this.connection.sendWSmessage([...outputPath, 'grid', 'pp', 'backColor'], action.options.outputListGridBackColor)
+							if (action.options.outputListGridThickness !== undefined) this.connection.sendWSmessage([...outputPath, 'grid', 'pp', 'thickness'], action.options.outputListGridThickness)
+							if (action.options.outputListGridSizeH !== undefined) this.connection.sendWSmessage([...outputPath, 'grid', 'pp', 'sizeH'], action.options.outputListGridSizeH)
+							if (action.options.outputListGridSizeV !== undefined) this.connection.sendWSmessage([...outputPath, 'grid', 'pp', 'sizeV'], action.options.outputListGridSizeV)
+							if (action.options.outputListGridShowIds !== undefined) this.connection.sendWSmessage([...outputPath, 'grid', 'pp', 'id'], parseBoolean(action.options.outputListGridShowIds))
+						}
+						if (action.options.outputListPat === 'CROSSHATCH') {
+							if (action.options.outputListCrossSizeH !== undefined) this.connection.sendWSmessage([...outputPath, 'cross', 'pp', 'sizeH'], action.options.outputListCrossSizeH)
+							if (action.options.outputListCrossSizeV !== undefined) this.connection.sendWSmessage([...outputPath, 'cross', 'pp', 'sizeV'], action.options.outputListCrossSizeV)
+						}
+						if (action.options.outputListPat === 'CHECKERBOARD') {
+							if (action.options.outputListCheckerSizeH !== undefined) this.connection.sendWSmessage([...outputPath, 'checker', 'pp', 'sizeH'], action.options.outputListCheckerSizeH)
+							if (action.options.outputListCheckerSizeV !== undefined) this.connection.sendWSmessage([...outputPath, 'checker', 'pp', 'sizeV'], action.options.outputListCheckerSizeV)
+							if (action.options.outputListCheckerInvert !== undefined) this.connection.sendWSmessage([...outputPath, 'checker', 'pp', 'invert'], parseBoolean(action.options.outputListCheckerInvert))
+						}
+					}
 				}
 			},
 		}
 
 		return deviceTestpatterns
+	}
+
+	/**
+	 * MARK: Testpattern Raster Box (shared)
+	 * Live-confirmed on a real Aquilon (RS6, fw 6.2.73, "LivePremier" platform): an output's Raster Box overlay
+	 * (alignment/centering markers for the Format border and/or the AOI border) is independent of whether a
+	 * Testpattern itself is enabled - device/outputList/items/{id}/pattern/control/pp/centering, an array that
+	 * can hold "FORMAT", "AOI", both, or be empty. Only confirmed on Output (Screen Canvas patterns have no such
+	 * field at all - live-checked, just {inhibit, type}). Not yet checked on Midra, which has the same underlying
+	 * concept but modeled as two separate booleans (formatCentering/aoiCentering) instead of one array.
+	 */
+	deviceTestpatternRasterBox_common(name: string) {
+		type DeviceTestpatternRasterBox = {output: string, rasterBox: string[], mode: string}
+
+		const deviceTestpatternRasterBox: AWJaction<DeviceTestpatternRasterBox> = {
+			name,
+			options: [
+				{
+					id: 'output',
+					type: 'dropdown',
+					label: 'Output or Output Group',
+					choices: this.choices.getOutputChoices(),
+					default: this.choices.getOutputChoices()[0]?.id,
+				},
+				{
+					id: 'rasterBox',
+					type: 'multidropdown',
+					label: 'Raster Box',
+					choices: [
+						{ id: 'FORMAT', label: 'Format' },
+						{ id: 'AOI', label: 'AOI' },
+					],
+					default: [],
+					minSelection: 0,
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: [
+						{ id: 'enable', label: 'Enable' },
+						{ id: 'disable', label: 'Disable' },
+						{ id: 'toggle', label: 'Toggle' },
+					],
+					default: 'enable',
+				},
+			],
+			callback: (action) => {
+				const path = ['device', 'outputList', 'items', action.options.output, 'pattern', 'control', 'pp', 'centering']
+				const current: string[] = this.state.get(['DEVICE', ...path]) ?? []
+				const result = new Set(current)
+				for (const box of action.options.rasterBox) {
+					if (action.options.mode === 'enable') result.add(box)
+					else if (action.options.mode === 'disable') result.delete(box)
+					else if (result.has(box)) result.delete(box)
+					else result.add(box)
+				}
+				this.connection.sendWSmessage(path, Array.from(result))
+			},
+		}
+
+		return deviceTestpatternRasterBox
 	}
 
 	/**
@@ -3083,9 +3307,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				type: 'dropdown',
 				label: 'Group',
 				choices: [
-					{ id: 'all', label: 'All' },
+					{ id: 'all', label: 'All active Testpatterns' },
 					{ id: 'screenList', label: 'Screen Canvas' },
-					{ id: 'outputList', label: 'Output Group' },
+					{ id: 'outputList', label: 'Output or Output Group' },
 					{ id: 'inputList', label: 'Input Group' },
 				],
 				default: 'outputList',
@@ -3119,7 +3343,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				id: 'patall',
 				type: 'dropdown',
 				label: 'Pattern',
-				choices: [{ id: '0', label: 'Off' }],
+				choices: [{ id: '0', label: 'Disable all active Testpatterns' }],
 				default: '0',
 				isVisibleExpression: "$(options:group) == 'all'",
 			},
@@ -3152,6 +3376,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				],
 				default: 'NO_PATTERN',
 				isVisibleExpression: "$(options:group) == 'outputList'",
+				disableAutoExpression: true,
 			},
 		]
 

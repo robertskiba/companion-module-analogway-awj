@@ -1,7 +1,8 @@
-import Feedbacks from '../awjdevice/feedback.js'
+﻿import Feedbacks from '../awjdevice/feedback.js'
 import {AWJinstance} from '../index.js'
 import {
-	CompanionFeedbackDefinition, 
+	CompanionFeedbackDefinition,
+	CompanionInputFieldDropdown,
 } from '@companion-module/base'
 
 
@@ -46,7 +47,9 @@ export default class FeedbacksMidra extends Feedbacks  {
 		// 'deviceGpioOut',
 		// 'deviceGpioIn',
 		'deviceStreaming',
+		'deviceTestpatternActive',
 		'deviceCustom',
+		'deviceThumbnail',
 	]
 
 	constructor (instance: AWJinstance) {
@@ -68,7 +71,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 				id: 'screens',
 				type: 'dropdown',
 				label: 'Screens',
-				choices: [{ id: 'all', label: 'Any' }, ...this.choices.getScreenChoices()],
+				choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getScreenChoices()],
 				multiple: true,
 				tags: true,
 				regex: '/^S([1-9]|[1-3][0-9]|4[0-8])$/',
@@ -276,5 +279,94 @@ export default class FeedbacksMidra extends Feedbacks  {
 
 		return deviceStreaming
 	}
-	
+
+	/**
+	 * MARK: Testpattern Active - Midra
+	 */
+	get deviceTestpatternActive() {
+		const options: CompanionInputFieldDropdown[] = [
+			{
+				id: 'group',
+				type: 'dropdown',
+				label: 'Group',
+				choices: [
+					{ id: 'screenList', label: 'Screen Canvas' },
+					{ id: 'outputList', label: 'Output' },
+				],
+				default: 'outputList',
+				disableAutoExpression: true,
+			},
+			{
+				id: 'screenList',
+				type: 'dropdown',
+				label: 'Screen',
+				// id must be the plain screenList item key (e.g. "1"), not the "S1"-style id getScreenChoices()
+				// returns elsewhere - device/screenList/items/{id}/... only recognizes the plain key.
+				choices: this.choices.getScreensArray().map((s) => ({ id: s.id.replace(/^\D+/, ''), label: s.id })),
+				default: this.choices.getScreensArray()[0]?.id.replace(/^\D+/, ''),
+				isVisibleExpression: "$(options:group) == 'screenList'",
+			},
+			{
+				id: 'outputList',
+				type: 'dropdown',
+				label: 'Output',
+				choices: this.choices.getOutputChoices(),
+				default: this.choices.getOutputChoices()[0]?.id,
+				isVisibleExpression: "$(options:group) == 'outputList'",
+			},
+			{
+				id: 'screenListPat',
+				type: 'dropdown',
+				label: 'Pattern',
+				choices: [
+					{ id: 'NONE', label: 'Off' },
+					{ id: 'GEOMETRIC', label: 'Geometric' },
+					{ id: 'VERTICAL_GREY_SCALE', label: 'Vertical Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE', label: 'Horizontal Greyscale' },
+					{ id: 'VERTICAL_COLOR_BAR', label: 'Vertical Colorbars' },
+					{ id: 'HORIZONTAL_COLOR_BAR', label: 'Horizontal Colorbars' },
+					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
+					{ id: 'SMPTE', label: 'SMPTE' },
+					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'CROSSHATCH', label: 'Crosshatch' },
+					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
+					{ id: 'SOFTEDGE', label: 'Covering' },
+					{ id: 'THIRTY_BPP_1', label: '30bit Testpattern #1' },
+					{ id: 'THIRTY_BPP_2', label: '30bit Testpattern #2' },
+				],
+				default: 'NONE',
+				isVisibleExpression: "$(options:group) == 'screenList'",
+			},
+			{
+				id: 'outputListPat',
+				type: 'dropdown',
+				label: 'Pattern',
+				choices: [
+					{ id: 'NO_PATTERN', label: 'Off' },
+					{ id: 'COLOR', label: 'Solid Color' },
+					{ id: 'VERTICAL_GREY_SCALE', label: 'Vertical Greyscale' },
+					{ id: 'HORIZONTAL_GREY_SCALE', label: 'Horizontal Greyscale' },
+					{ id: 'VERTICAL_COLOR_BAR', label: 'Vertical Colorbars' },
+					{ id: 'HORIZONTAL_COLOR_BAR', label: 'Horizontal Colorbars' },
+					{ id: 'GRID_16_16', label: 'Grid 16x16' },
+					{ id: 'GRID_32_32', label: 'Grid 32x32' },
+					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
+					{ id: 'SMPTE', label: 'SMPTE' },
+					{ id: 'BURST_H', label: 'Horizontal Burst' },
+					{ id: 'BURST_V', label: 'Vertical Burst' },
+					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
+					{ id: 'SOFTEDGE', label: 'Covering' },
+					{ id: 'PATHOLOGICAL', label: 'Pathological' },
+				],
+				default: 'NO_PATTERN',
+				isVisibleExpression: "$(options:group) == 'outputList'",
+			},
+		]
+
+		return this.deviceTestpatternActive_common(options, 'Midra 4K Testpattern Active')
+	}
+
 }

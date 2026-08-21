@@ -155,6 +155,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.config.color_reddark = combineRgb(82,0,0)
 			this.config.color_redgrey = combineRgb(79,31,31)
 			this.config.useOldVariableNames = false
+			this.config.allowLiveThumbnails = true
 			this.saveConfig(this.config)
 		}
 
@@ -248,6 +249,16 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.updateStatus(InstanceStatus.Connecting)
 			this.connection.disconnect()
 			this.connection.connect(this.config.deviceaddr)
+		}
+		if (this.config.allowLiveThumbnails !== oldconfig.allowLiveThumbnails) {
+			if (!this.config.allowLiveThumbnails) {
+				// stop instantly, not just "stop showing" - tears down the actual HTTP polling, not just the
+				// button image, since the point of the toggle is to cut the load, not just hide the result
+				this.feedbacks.stopAllThumbnailPollers()
+			} else {
+				// re-registers every existing "Show Thumbnail" feedback's poller (callback is idempotent)
+				this.checkFeedbacks('deviceThumbnail')
+			}
 		}
 		if (
 			this.label !== this.oldlabel ||

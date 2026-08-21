@@ -1,4 +1,4 @@
-import {AWJinstance} from '../index.js'
+﻿import {AWJinstance} from '../index.js'
 
 import {
 	CompanionActionContext,
@@ -62,6 +62,7 @@ export default class ActionsMidra extends Actions {
 		'deviceResetLayerSize',
 		'deviceCopyProgram',
 		'devicePresetToggle',
+		'deviceAssignImageLibraryToFrame',
 		'remoteMultiviewerSelectWidget',
 		'deviceMultiviewerSource',
 		'selectScreen',
@@ -96,7 +97,7 @@ export default class ActionsMidra extends Actions {
 		
 		const deviceScreenMemory  = super.deviceScreenMemory
 
-		deviceScreenMemory.options[0]['choices'] = [{ id: 'sel', label: 'Selected' }, ...this.choices.getScreenChoices()]
+		deviceScreenMemory.options[0]['choices'] = [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()]
 		deviceScreenMemory.callback = (action) => {
 			const screens = this.choices.getChosenScreens(action.options.screens)
 			const preset = this.choices.getPresetSelection(action.options.preset, true)
@@ -193,9 +194,9 @@ export default class ActionsMidra extends Actions {
 				{
 					id: 'preset',
 					type: 'dropdown',
-					label: 'Preset',
+					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
-					default: 'sel',
+					default: 'pvw',
 				},
 				{
 					id: 'memory',
@@ -667,8 +668,8 @@ export default class ActionsMidra extends Actions {
 			id: 'screen',
 			type: 'dropdown',
 			label: 'Screen',
-			choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenChoices()],
-			default: 'sel',
+			choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()],
+			default: 'first',
 			allowInvalidValues: true,
 		}
 
@@ -686,8 +687,8 @@ export default class ActionsMidra extends Actions {
 			id: 'screen',
 			type: 'dropdown',
 			label: 'Screen',
-			choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenChoices()],
-			default: 'sel',
+			choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()],
+			default: 'first',
 			allowInvalidValues: true,
 		}
 
@@ -704,7 +705,7 @@ export default class ActionsMidra extends Actions {
 			id: 'screen',
 			type: 'dropdown',
 			label: 'Screen',
-			choices: [{ id: 'sel', label: 'Selected Screen(s)' }, ...this.choices.getScreenChoices()],
+			choices: [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()],
 			default: 'sel',
 			allowInvalidValues: true,
 			disableAutoExpression: true,
@@ -1179,7 +1180,7 @@ export default class ActionsMidra extends Actions {
 				type: 'dropdown',
 				label: 'Group',
 				choices: [
-					{ id: 'all', label: 'All' },
+					{ id: 'all', label: 'All active Testpatterns' },
 					{ id: 'screenList', label: 'Screen Canvas' },
 					{ id: 'outputList', label: 'Output' },
 				],
@@ -1190,8 +1191,10 @@ export default class ActionsMidra extends Actions {
 				id: 'screenList',
 				type: 'dropdown',
 				label: 'Screen',
-				choices: this.choices.getScreenChoices(),
-				default: this.choices.getScreenChoices()[0]?.id,
+				// id must be the plain screenList item key (e.g. "1"), not the "S1"-style id getScreenChoices()
+				// returns elsewhere - device/screenList/items/{id}/... only recognizes the plain key.
+				choices: this.choices.getScreensArray().map((s) => ({ id: s.id.replace(/^\D+/, ''), label: s.id })),
+				default: this.choices.getScreensArray()[0]?.id.replace(/^\D+/, ''),
 				isVisibleExpression: "$(options:group) == 'screenList'",
 			},
 			{
@@ -1206,7 +1209,7 @@ export default class ActionsMidra extends Actions {
 				id: 'patall',
 				type: 'dropdown',
 				label: 'Pattern',
-				choices: [{ id: '0', label: 'Off' }],
+				choices: [{ id: '0', label: 'Disable all active Testpatterns' }],
 				default: '0',
 				isVisibleExpression: "$(options:group) == 'all'",
 			},
@@ -1228,6 +1231,8 @@ export default class ActionsMidra extends Actions {
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'SOFTEDGE', label: 'Covering' },
+					{ id: 'THIRTY_BPP_1', label: '30bit Testpattern #1' },
+					{ id: 'THIRTY_BPP_2', label: '30bit Testpattern #2' },
 				],
 				default: 'NONE',
 				isVisibleExpression: "$(options:group) == 'screenList'",
@@ -1253,13 +1258,15 @@ export default class ActionsMidra extends Actions {
 					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'SOFTEDGE', label: 'Covering' },
+					{ id: 'PATHOLOGICAL', label: 'Pathological' },
 				],
 				default: 'NO_PATTERN',
 				isVisibleExpression: "$(options:group) == 'outputList'",
+				disableAutoExpression: true,
 			},
 		]
 
-		return this.deviceTestpatterns_common(deviceTestpatternsOptions)
+		return this.deviceTestpatterns_common(deviceTestpatternsOptions, 'Set Midra 4K Testpattern')
 	}
 
 	/**
@@ -1305,6 +1312,68 @@ export default class ActionsMidra extends Actions {
 		}
 
 		return devicePower
+	}
+
+	/**
+	 * MARK: Assign Image from Library to Foreground/Background Frame - Midra
+	 */
+	get deviceAssignImageLibraryToFrame() {
+		type DeviceAssignImageLibraryToFrame = {screens: string[], frameType: string, slot: string, source: string}
+
+		const libraryChoices = [{ id: 'NONE', label: 'None (clear)' }, ...this.choices.getStillLibraryChoices()]
+
+		const deviceAssignImageLibraryToFrame: AWJaction<DeviceAssignImageLibraryToFrame> = {
+			name: 'Assign Image from Library to Foreground/Background Frame',
+			options: [
+				{
+					id: 'screens',
+					allowInvalidValues: true,
+					type: 'multidropdown',
+					label: 'Screen',
+					choices: [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()],
+					default: ['sel'],
+				},
+				{
+					id: 'frameType',
+					type: 'dropdown',
+					label: 'Frame Type',
+					choices: [
+						{ id: 'topFrameList', label: 'Foreground / Logo' },
+						{ id: 'backFrameList', label: 'Background' },
+					],
+					default: 'topFrameList',
+				},
+				{
+					id: 'slot',
+					type: 'dropdown',
+					label: 'Frame Slot',
+					choices: [1, 2, 3, 4].map((n) => ({ id: n.toString(), label: `Slot ${n}` })),
+					default: '1',
+				},
+				{
+					id: 'source',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Library Image',
+					choices: libraryChoices,
+					default: libraryChoices[0]?.id,
+				},
+			],
+			callback: (action) => {
+				const source = action.options.source
+				if (!source) return
+				const value = source === 'NONE' ? 'NONE' : Number(source)
+				for (const screen of this.choices.getChosenScreens(action.options.screens)) {
+					this.connection.sendWSmessage([
+						'device', 'screenList', 'items', screen.replaceAll(/\D/g, ''),
+						action.options.frameType, 'items', action.options.slot,
+						'control', 'pp', 'librarySlot',
+					], value)
+				}
+			},
+		}
+
+		return deviceAssignImageLibraryToFrame
 	}
 
 

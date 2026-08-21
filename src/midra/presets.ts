@@ -1,4 +1,4 @@
-import {AWJinstance} from '../index.js'
+﻿import {AWJinstance} from '../index.js'
 import Presets, { CategorizedPresetDefinitions, PresetDefWithCategory } from '../awjdevice/presets.js'
 
 type Dropdown<t> = { id: t, label: string }
@@ -37,6 +37,7 @@ export default class PresetsMidra extends Presets {
 		'selectWidgetSource',
 		'timers',
 		'stream',
+		'liveThumbnails',
 	]
 
 	constructor(instance: AWJinstance) {
@@ -54,7 +55,7 @@ export default class PresetsMidra extends Presets {
 		const presets: CategorizedPresetDefinitions = {}
 		const ilabel = this.instance.label
 
-		for (const screen of [{ id: 'sel', label: 'Selected', index: '0' }, ...this.choices.getScreensArray()]
+		for (const screen of [{ id: 'sel', label: 'All Selected Screens', index: '0' }, ...this.choices.getScreensArray()]
 		) {
 			for (const memory of this.choices.getScreenMemoryArray()) {
 				// const label = this.state.get(['DEVICE', 'device', 'presetBank', 'bankList', 'items', memory, 'control', 'pp', 'label'])
@@ -63,7 +64,7 @@ export default class PresetsMidra extends Presets {
 				presets[`LoadScreenMemory_${memory.id}_to_${screen.id}`] = {
 					type: 'simple',
 					name: `Load Screen Memory ${memory.id} into screen ${screen.id}${screen.label ? ' ('+screen.label+')' : ''}`,
-					category: `Screen Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
+					category: `Screens - Recall Screen Memories into ${screen.id != 'sel' ? screen.id : 'Selection'}`,
 					style: {
 						text: `SM${memory.id}${screen.id != 'sel' ? ' '+screen.id : ''}\\n$(${ilabel}:screenMemory${memory.id}label)`,
 						size: 'auto',
@@ -152,7 +153,7 @@ export default class PresetsMidra extends Presets {
 		const presets: CategorizedPresetDefinitions = {}
 		const ilabel = this.instance.label
 
-		for (const screen of [{ id: 'sel', label: 'Selected', index: '0' }, ...this.choices.getAuxArray()]) {
+		for (const screen of [{ id: 'sel', label: 'All Selected Screens', index: '0' }, ...this.choices.getAuxArray()]) {
 			for (const memory of this.choices.getAuxMemoryArray()) {
 				// const label = this.state.get(['DEVICE', 'device', 'presetBank', 'bankList', 'items', memory, 'control', 'pp', 'label'])
 				const bgcolor = parseInt(this.state.get(['REMOTE', 'banks', 'aux', 'items', memory.id, 'color'])?.slice(1), 16)
@@ -259,7 +260,7 @@ export default class PresetsMidra extends Presets {
 			const preparedPreset: PresetDefWithCategory = {
 				type: 'simple',
 				name: 'Choose Input ' + input.label + ' for selected '+ layerdescription +' Layer(s)',
-				category: 'Layer Source',
+				category: 'Layers - Assign Source to selected Layer',
 				style: {
 					text: input.label.replace(/^(\D+\d+)\s.+$/, '$1') + sourceLabelVariable,
 					size: 'auto',

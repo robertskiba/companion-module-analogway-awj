@@ -15,6 +15,7 @@ export interface Config extends JsonObject {
 	color_reddark: number
 	color_redgrey: number
 	useOldVariableNames: boolean
+	allowLiveThumbnails: boolean
 }
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
@@ -58,6 +59,15 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			tooltip:
 				'V3 renamed most dynamic variables to a clearer, consistent scheme (e.g. "SM1.label" instead of "screenMemory1label"). Enable this to keep using the old V2 names if you already reference them in button texts or triggers. New connections start with this off.',
 			default: false,
+			width: 12,
+		},
+		{
+			id: 'allowLiveThumbnails',
+			type: 'checkbox',
+			label: 'Allow Live Thumbnails',
+			tooltip:
+				'Enables the "Show Thumbnail" feedback to poll the device for live preview images. Turn off to stop all thumbnail polling instantly (e.g. on lower-power Companion hardware, or if many thumbnails are causing too much load) without having to remove every "Show Thumbnail" feedback individually.',
+			default: true,
 			width: 12,
 		},
 		{
