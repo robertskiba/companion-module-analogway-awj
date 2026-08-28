@@ -116,14 +116,8 @@ export const parseBoolean = (value: unknown): boolean => {
 /**
  * process times
  * @param time as number of deciseconds
- * @returns timestring in format M:SS.S
+ * @returns timestring in format SECONDS.D, e.g. "1.5" - matches the "Set Transition Time" action's own seconds field (0.1 step), so a read value can be fed straight back into it
  */
 export const deciSceondsToString = (time: number): string => {
-    return (
-        Math.floor(time / 600)
-            .toString()
-            .padStart(2, '0') +
-        ':' +
-        ((time % 600) / 10).toFixed(2).padStart(5, '0')
-    )
+    return (time / 10).toFixed(1)
 }

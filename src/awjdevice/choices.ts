@@ -54,9 +54,57 @@ export default class Choices {
 		this.constants = instance.constants
 	}
 
+	/**
+	 * A dropdown with zero choices (e.g. a freshly factory-reset device with no Screens/Memories configured
+	 * yet) leaves Companion with nothing to render, and any previously stored option value then fails
+	 * validation as "not in the list of choices" - live-confirmed 2026-08-28 against a factory-reset Aquilon
+	 * (no Screens, no Screen/Master/Layer Memories at all). Rather than leaving the list empty, every
+	 * *Choices() method below falls back to a single informational, non-functional placeholder entry so the
+	 * dropdown stays valid and the reason is visible instead of it just silently not working - matches the
+	 * empty-string default already used elsewhere when nothing is available (e.g. `?.id ?? ''`).
+	 * Distinguishes "genuinely nothing configured" from "no device has ever answered yet" (relevant now that
+	 * the generic action set is published before any connection exists, see index.ts init()) - `DEVICE` is
+	 * only ever set once, wholesale, from the first successful REST snapshot (`state.set('DEVICE', res)` in
+	 * connection.ts), so its mere presence reliably means "we have seen real device data at least once",
+	 * regardless of whether we're currently connected/reconnecting.
+	 */
+	private placeholderIfEmpty(list: Dropdown<string>[], label: string): Dropdown<string>[] {
+		if (list.length > 0) return list
+		const everConnected = !!this.state.get('DEVICE')
+		return [{ id: '', label: everConnected ? label : 'No device connected' }]
+	}
+
+	/**
+	 * While no device has ever answered yet, the generic/default Choices class (this one - platform-specific
+	 * subclasses permanently replace it in setDevice() the moment a real device is identified, so this only
+	 * ever runs during that initial window) synthesizes the full theoretical-maximum range for the given axis
+	 * instead of a single "(emulated)" example or an empty list - lets a user pre-program buttons offline by
+	 * picking e.g. "Input 42" or "S15" directly, which then correctly resolves once a real device with that
+	 * many Inputs/Screens actually connects. Uses the base Constants class's own numbers, which are already
+	 * the largest value across all three platforms for every one of these axes (confirmed 2026-08-28 by
+	 * comparing livepremier/livepremier4/midra's constants.ts) - so the offline list is never too short for
+	 * whichever platform ends up connecting. If a real (even if empty) list is already available - meaning a
+	 * platform-specific subclass's own override actually ran - this is a no-op; genuinely-empty-after-
+	 * connecting stays handled by placeholderIfEmpty()'s "No X configured", never by this.
+	 */
+	private syntheticRangeIfNeverConnected(real: Choicemeta[], count: number, buildId: (n: number) => string): Choicemeta[] {
+		if (real.length > 0) return real
+		if (this.state.get('DEVICE')) return real
+		return Array.from({ length: count }, (_, i) => ({ id: buildId(i + 1), label: '', index: (i + 1).toString() }))
+	}
+
+	// 'prw' is the current, preferred value for Preview (matches the PVW->PRW variable-naming rename). The
+	// legacy 'pvw' value is deliberately NOT listed here (2026-08-28: an earlier attempt added it as a visible
+	// second "Preview (legacy value...)" choice, which just confused users with two near-identical entries).
+	// Instead, every "Preset (Program/Preview)" field using this list also sets `allowInvalidValues: true`, so
+	// a button saved before this rename with 'pvw' still stored keeps validating fine (Companion tolerates a
+	// stored value that isn't in the current choices list) without 'pvw' needing to clutter the dropdown -
+	// never remove that flag from those fields. Everything reading this option already treats 'pvw'/'prw' as
+	// fully equivalent regardless (see e.g. getPresetSelection()'s regex, or the inline `=== 'prw' ? 'pvw' :`
+	// normalization in a few action callbacks).
 	choicesPreset: Dropdown<string>[] = [
 		{ id: 'pgm', label: 'Program' },
-		{ id: 'pvw', label: 'Preview' },
+		{ id: 'prw', label: 'Preview' },
 	]
 
 	choicesPresetLong: Dropdown<string>[] = [
@@ -158,36 +206,36 @@ export default class Choices {
 
 	/** returns array of the currently available and active screens only (no auxes)*/
 	public  getScreensArray(_getAlsoDisabled = false): Choicemeta[] {
-		return [{ id: 'S1', label: '(emulated)', index: '1' }]
+		return this.syntheticRangeIfNeverConnected([], this.constants.maxScreens, (n) => `S${n}`)
 	}
 
 	public getScreenChoices(): Dropdown<string>[] {
 
-		return this.getScreensArray().map((scr: Choicemeta) => {
+		return this.placeholderIfEmpty(this.getScreensArray().map((scr: Choicemeta) => {
 			return {
 				id: scr.id,
 				label: `S${scr.index}${scr.label === '' ? '' : ' - ' + scr.label}`
 			}
-		})
+		}), 'No Screens configured')
 	}
 
 	/** returns array of the currently available and active auxscreens only (no regular screens)*/
 	public getAuxArray(_getAlsoDisabled = false ): Choicemeta[] {
-		return [{ id: 'A1', label: '(emulated)', index: '1' }]
+		return this.syntheticRangeIfNeverConnected([], this.constants.maxAuxScreens, (n) => `A${n}`)
 	}
 
 	public getAuxChoices(): Dropdown<string>[] {
 
-		return this.getAuxArray().map((scr: Choicemeta) => {
+		return this.placeholderIfEmpty(this.getAuxArray().map((scr: Choicemeta) => {
 			return {
 				id: scr.id,
 				label: `A${scr.index}${scr.label === '' ? '' : ' - ' + scr.label}`
 			}
-		})
+		}), 'No Auxscreens configured')
 	}
 
 	public getScreenAuxChoices(): Dropdown<string>[] {
-		return [
+		return this.placeholderIfEmpty([
 			...this.getScreensArray().map((scr: Choicemeta) => {
 			return {
 				id: scr.id,
@@ -200,37 +248,30 @@ export default class Choices {
 				label: `A${scr.index}${scr.label === '' ? '' : ' - ' + scr.label}`
 			}
 			})
-		]
+		], 'No Screens/Auxscreens configured')
 	}
 
 	public getPlatformScreenChoices(): Dropdown<string>[] {
 		return []
 	}
 
-	public getLiveInputArray(_prefix?: string): Choicemeta[] {
-		return []
+	public getLiveInputArray(prefix?: string): Choicemeta[] {
+		return this.syntheticRangeIfNeverConnected([], this.constants.maxInputs, (n) => `${prefix ?? 'IN'}_${n}`)
 	}
 
 	public getLiveInputChoices(prefix?: string): Dropdown<string>[] {
 		const ret: Dropdown<string>[] = []
 		const inputs = this.getLiveInputArray(prefix)
 
-		if (inputs?.length) {
-			for (const input of inputs) {
-				ret.push({
-					id: input.id,
-					label: `Input ${input.index}${
-						input.label.length === 0 ? '' : ' - ' + input.label
-					}`,
-				})
-			}
-		} else {
-			if (prefix == undefined) prefix = 'IN'
-			for (let i = 1; i <= 8; i += 1) {
-				ret.push({ id: `${prefix}_${i.toString()}`, label: `Input ${i.toString()} (emulated)` })
-			}
+		for (const input of inputs) {
+			ret.push({
+				id: input.id,
+				label: `Input ${input.index}${
+					input.label.length === 0 ? '' : ' - ' + input.label
+				}`,
+			})
 		}
-		return ret
+		return this.placeholderIfEmpty(ret, 'No Inputs configured')
 	}
 
 	choicesForegroundImagesSource: Dropdown<string>[] = []
@@ -252,7 +293,7 @@ export default class Choices {
 	/** All Image Store slots that actually exist on this device (licensed/available), meant as the target of an "assign image" action. Empty slots are included, since assigning is how you fill them. */
 	public getStillStoreChoices(): Dropdown<string>[] {
 		const bankpath = 'DEVICE/device/stillList/'
-		return (
+		const real: Dropdown<string>[] = (
 			this.state.get(this.state.concat(bankpath, 'itemKeys'))?.filter((itm: string) => {
 				return this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isAvailable']))
 			}).map((itm: string) => {
@@ -264,6 +305,8 @@ export default class Choices {
 				}
 			}) ?? []
 		)
+		if (real.length > 0 || this.state.get('DEVICE')) return real
+		return Array.from({ length: this.constants.maxStills }, (_, i) => ({ id: `${i + 1}`, label: `${i + 1}` }))
 	}
 
 	/** All valid images in the Image Library, with file name and resolution, meant as the source of an "assign image" action */
@@ -343,9 +386,69 @@ export default class Choices {
 		) ?? []
 	}
 
+	/**
+	 * Backup Sets (backup-enabled inputs) and Backup Groups, meant as the target for the "Backups" actions.
+	 * An input that is a member of a Group is deliberately left out of this list - per Analog Way's own Backup
+	 * UI, a grouped input's backup only ever gets switched together with its Group, so only the Group appears
+	 * (confirmed live: IN_12/IN_13 both had backup.control.pp.group === 'GROUP_1' and only "Testgroup1" is
+	 * meant to be selectable, not the two inputs individually).
+	 * Ungrouped Backup Sets have no name of their own (unlike Groups), so the label is built from the actual
+	 * assigned sources instead: "Primary: <input> > Backup1: <source> > Backup2: <source>", with an unused
+	 * slot's segment left out entirely (a Backup Set can have only Backup1, only Backup2, or both set).
+	 */
+	public getBackupSetChoices(): Dropdown<string>[] {
+		const ret: Dropdown<string>[] = []
+		const inputKeys: string[] = this.state.get(['DEVICE', 'device', 'inputList', 'itemKeys']) ?? []
+		for (const key of inputKeys) {
+			const backupControl = this.state.get(['DEVICE', 'device', 'inputList', 'items', key, 'backup', 'control', 'pp'])
+			if (!backupControl?.enable || backupControl.group !== 'NONE') continue
+			const primaryLabel = this.state.get(['DEVICE', 'device', 'inputList', 'items', key, 'control', 'pp', 'label'])
+			const parts = [`Primary: ${key.replace(/^\w+_/, 'Input ')}${primaryLabel ? ' - ' + primaryLabel : ''}`]
+			for (const slot of ['1', '2']) {
+				const source = this.state.get(['DEVICE', 'device', 'inputList', 'items', key, 'backup', 'slotList', 'items', slot, 'control', 'pp', 'source'])
+				if (!source || source === 'NONE') continue
+				const sourceLabel = this.getSourceChoices().find((choice) => choice.id === source)?.label ?? source
+				parts.push(`Backup${slot}: ${sourceLabel}`)
+			}
+			ret.push({ id: `INPUT:${key}`, label: parts.join(' > ') })
+		}
+		// Background Set backups - live-confirmed (2026-08-28) on a real Aquilon: a completely separate
+		// structure from Input backups, one independent backup config per Screen per Background Set slot at
+		// DEVICE/device/preconfig/backgrounds/screenList/items/{screen}/backgroundSetList/items/{1-8}/backup -
+		// same control/status/slotList shape as an input's own backup, but the "sources" being backed up are
+		// other Background Sets (NATIVE_n) on the SAME screen, not live inputs. Scoped to real/enabled screens
+		// only (not all 24 theoretical ones), matching this module's established registration-scope rule.
+		for (const scr of this.getScreensArray()) {
+			for (const setNum of ['1', '2', '3', '4', '5', '6', '7', '8']) {
+				const bgPath = ['DEVICE', 'device', 'preconfig', 'backgrounds', 'screenList', 'items', scr.id, 'backgroundSetList', 'items', setNum, 'backup']
+				const backupControl = this.state.get([...bgPath, 'control', 'pp'])
+				if (!backupControl?.enable || backupControl.group !== 'NONE') continue
+				const parts = [`Primary: ${scr.id} Background Set ${setNum}`]
+				for (const slot of ['1', '2']) {
+					const source = this.state.get([...bgPath, 'slotList', 'items', slot, 'control', 'pp', 'source'])
+					if (!source || source === 'NONE') continue
+					const sourceLabel = this.choicesBackgroundSources.find((choice) => choice.id === source)?.label ?? source
+					parts.push(`Backup${slot}: ${sourceLabel}`)
+				}
+				ret.push({ id: `BGSET:${scr.id}:${setNum}`, label: parts.join(' > ') })
+			}
+		}
+		const groupKeys: string[] = this.state.get(['DEVICE', 'device', 'backup', 'groupList', 'itemKeys']) ?? []
+		for (const key of groupKeys) {
+			// status.pp.isEnabled reflects whether the group currently has member inputs/Background Sets assigned,
+			// i.e. is "in use" (confirmed live: both Testgroup1 and Testgroup2 show isEnabled=true, an unused
+			// GROUP_n does not) - the same GROUP_n pool is shared between Input and Background Set backups.
+			if (!this.state.get(['DEVICE', 'device', 'backup', 'groupList', 'items', key, 'status', 'pp', 'isEnabled'])) continue
+			const label = this.state.get(['DEVICE', 'device', 'backup', 'groupList', 'items', key, 'control', 'pp', 'label'])
+			const num = key.replace('GROUP_', '')
+			ret.push({ id: `GROUP:${key}`, label: `Backup Group ${num}${label ? ' - ' + label : ''}` })
+		}
+		return this.placeholderIfEmpty(ret, 'No Backup Set configured')
+	}
+
 	public getMasterMemoryArray(): Choicemeta[] {
 		const bankpath = 'DEVICE/device/masterPresetBank/bankList'
-		return (
+		const real: Choicemeta[] = (
 			this.state.get(this.state.concat(bankpath, 'itemKeys'))?.filter((mem: string) => {
 				return this.state.get(this.state.concat(bankpath, ['items', mem, 'status', 'pp', 'isValid']))
 			}).map((mem: string) => {
@@ -355,22 +458,23 @@ export default class Choices {
 				}
 			}) ?? []
 		)
+		return this.syntheticRangeIfNeverConnected(real, this.constants.maxMasterMemories, (n) => `${n}`)
 	}
 
 	public getMasterMemoryChoices(): Dropdown<string>[] {
 
-		return this.getMasterMemoryArray().map((mem: Choicemeta) => {
+		return this.placeholderIfEmpty(this.getMasterMemoryArray().map((mem: Choicemeta) => {
 			return {
 				id: mem.id,
 				label: `MM${mem.id}${mem.label === '' ? '' : ' - ' + mem.label}`
 			}
-		})
+		}), 'No Master Memories configured')
 	}
 
 	public getScreenMemoryArray(): Choicemeta[] {
 		let bankpath = this.constants.screenMemoryPath
 
-		return (
+		const real: Choicemeta[] = (
 			this.state.get(this.state.concat('DEVICE', bankpath, 'itemKeys'))?.filter((mem: string) => {
 				return this.state.get(this.state.concat('DEVICE', bankpath, ['items', mem, 'status', 'pp', 'isValid']))
 			}).map((mem: string) => {
@@ -380,16 +484,81 @@ export default class Choices {
 				}
 			}) ?? []
 		)
+		return this.syntheticRangeIfNeverConnected(real, this.constants.maxScreenMemories, (n) => `${n}`)
 	}
 
 	public getScreenMemoryChoices(): Dropdown<string>[] {
 
-		return this.getScreenMemoryArray().map((mem: Choicemeta) => {
+		return this.placeholderIfEmpty(this.getScreenMemoryArray().map((mem: Choicemeta) => {
 			return {
 				id: mem.id,
 				label: `SM${mem.id}${mem.label === '' ? '' : ' - ' + mem.label}`
 			}
-		})
+		}), 'No Screen Memories configured')
+	}
+
+	/**
+	 * Every Screen Memory slot (both already-saved/valid ones AND empty/unused ones), for "Save to Slot"-style
+	 * actions where an empty slot is a valid, common target - unlike getScreenMemoryArray()/getScreenMemoryChoices()
+	 * (used for Recall), which deliberately only ever list already-valid slots since you can't recall nothing.
+	 */
+	public getAllScreenMemorySlotArray(): Choicemeta[] {
+		const bankpath = this.constants.screenMemoryPath
+
+		const real: Choicemeta[] = (
+			this.state.get(this.state.concat('DEVICE', bankpath, 'itemKeys'))?.map((mem: string) => {
+				const isValid = this.state.get(this.state.concat('DEVICE', bankpath, ['items', mem, 'status', 'pp', 'isValid']))
+				return {
+					id: mem,
+					label: isValid ? this.state.get(this.state.concat('DEVICE', bankpath, ['items', mem, 'control', 'pp', 'label'])) : '',
+				}
+			}) ?? []
+		)
+		return this.syntheticRangeIfNeverConnected(real, this.constants.maxScreenMemories, (n) => `${n}`)
+	}
+
+	public getAllScreenMemorySlotChoices(): Dropdown<string>[] {
+		const usedIds = new Set(this.getScreenMemoryArray().map((mem) => mem.id))
+		return this.placeholderIfEmpty(this.getAllScreenMemorySlotArray().map((mem: Choicemeta) => {
+			return {
+				id: mem.id,
+				label: usedIds.has(mem.id) ? `SM${mem.id}${mem.label === '' ? '' : ' - ' + mem.label} (overwrite)` : `SM${mem.id} (empty)`
+			}
+		}), 'No Screen Memories configured')
+	}
+
+	/** First currently-empty (not yet valid) Screen Memory slot id, or undefined if every slot is already used. */
+	public getNextAvailableScreenMemorySlot(): string | undefined {
+		const usedIds = new Set(this.getScreenMemoryArray().map((mem) => mem.id))
+		return this.getAllScreenMemorySlotArray().find((mem) => !usedIds.has(mem.id))?.id
+	}
+
+	/** Layer keying presets ("Keyer Bank") - live-confirmed (2026-08-27) on a LivePremier4 device at
+	 * device/keyerBank/bankList/items/{SLOT_n}, same {control.pp.label, status.pp.isValid} shape as the other
+	 * memory banks. Not yet verified whether this path is identical on Midra. Creating/editing a keying preset's
+	 * own content is WebRCS's job, not this module's - we only ever select which existing preset a layer uses. */
+	public getKeyingPresetArray(): Choicemeta[] {
+		const bankpath = ['device', 'keyerBank', 'bankList']
+
+		return (
+			this.state.get(this.state.concat('DEVICE', bankpath, 'itemKeys'))?.filter((slot: string) => {
+				return this.state.get(this.state.concat('DEVICE', bankpath, ['items', slot, 'status', 'pp', 'isValid']))
+			}).map((slot: string) => {
+				return {
+					id: slot,
+					label: this.state.get(this.state.concat('DEVICE', bankpath, ['items', slot, 'control', 'pp', 'label']))
+				}
+			}) ?? []
+		)
+	}
+
+	public getKeyingPresetChoices(): Dropdown<string>[] {
+		return this.placeholderIfEmpty(this.getKeyingPresetArray().map((mem: Choicemeta) => {
+			return {
+				id: mem.id,
+				label: `${mem.id.replace('SLOT_', 'Keying Memory ')}${mem.label === '' ? '' : ' - ' + mem.label}`
+			}
+		}), 'No Keying Memories configured')
 	}
 
 	public getAuxMemoryArray(): Choicemeta[] {
@@ -401,12 +570,12 @@ export default class Choices {
 	}
 
 	public getLayerMemoryArray(): Choicemeta[] {
-		return (
+		const real: Choicemeta[] = (
 			(this.state.get('DEVICE/device/layerBank/bankList/itemKeys')?.filter((mem: string) => {
 				return this.state.get(['DEVICE', 'device', 'layerBank', 'bankList', 'items', mem, 'status', 'pp', 'isValid'])
 			}) ?? [])
 			.map(
-				(id: string) => { 
+				(id: string) => {
 					return {
 						id,
 						label: this.state.get(['DEVICE', 'device', 'layerBank', 'bankList', 'items', id, 'control', 'pp', 'label'])
@@ -414,18 +583,22 @@ export default class Choices {
 				}
 			)
 		)
+		// no dedicated max-Layer-Memory constant exists (unlike Screen/Master/Multiviewer Memory) - Layer
+		// Memory shares the same general preset-bank mechanism as Screen Memory, so maxScreenMemories is used
+		// as the best available stand-in until a real per-axis number is confirmed.
+		return this.syntheticRangeIfNeverConnected(real, this.constants.maxScreenMemories, (n) => `${n}`)
 	}
 
 	public getLayerMemoryChoices(): Dropdown<string>[] {
-		return this.getLayerMemoryArray().map((memory) => {return {
+		return this.placeholderIfEmpty(this.getLayerMemoryArray().map((memory) => {return {
 			id: memory.id,
 			label: `LM${memory.id}${memory.label === '' ? '' : ' - ' + memory.label}`,
-		}})
+		}}), 'No Layer Memories configured')
 	}
 
 	public getMultiviewerMemoryArray(): Choicemeta[] {
 		const bankpath = this.constants.multiviewerMemoryPath
-		return (
+		const real: Choicemeta[] = (
 			this.state.get(bankpath + '/itemKeys')?.filter((mem: string) => {
 				return this.state.get(this.state.concat(bankpath,['items', mem, 'status', 'pp', 'isValid']))
 			}).map((mem: string) => {
@@ -435,16 +608,17 @@ export default class Choices {
 				}
 			}) ?? []
 		)
+		return this.syntheticRangeIfNeverConnected(real, this.constants.maxMultiviewerMemories, (n) => `${n}`)
 	}
 
 	public getMultiviewerMemoryChoices(): Dropdown<string>[] {
 
-		return this.getMultiviewerMemoryArray().map((mem: Choicemeta) => {
+		return this.placeholderIfEmpty(this.getMultiviewerMemoryArray().map((mem: Choicemeta) => {
 			return {
 				id: mem.id,
 				label: `VM${mem.id}${mem.label === '' ? '' : ' - ' + mem.label}`
 			}
-		})
+		}), 'No Multiviewer Memories configured')
 	}
 
 	public getMultiviewerArray(): string[] {
@@ -473,10 +647,10 @@ export default class Choices {
 			const label = this.state.get(['DEVICE', 'device', 'monitoringList', 'items', multiviewer, 'control', 'pp', 'label'])
 			ret.push({
 				id: multiviewer,
-				label: `Multiviewer ${multiviewer}${label === '' ? '' : ' - ' + label}`,
+				label: `Multiviewer ${multiviewer}${label ? ' - ' + label : ''}`,
 			})
 		}
-		return ret
+		return this.placeholderIfEmpty(ret, 'No Multiviewers configured')
 	}
 
 	public getWidgetChoices(): Dropdown<string>[] {
@@ -491,15 +665,15 @@ export default class Choices {
 				'layout',
 				'widgetList',
 				'itemKeys',
-			])) {
+			]) ?? []) {
 				ret.push({
 					id: `${multiviewer}:${widget}`,
 					label: `Multiviewer ${multiviewer} Widget ${parseInt(widget)+1}`,
 				})
 			}
 		}
-		
-		return ret
+
+		return this.placeholderIfEmpty(ret, 'No Widgets configured')
 	}
 
 	public getWidgetSourceChoices(): Dropdown<string>[] {
@@ -522,15 +696,20 @@ export default class Choices {
 	 * @param top whether to include foreground layer if available, follows bkg if omitted 
 	*/
 	public getLayersAsArray(param: string | number, bkg?: boolean, _top?: boolean): Choicemeta[] {
-		const ret: Choicemeta[] = []
 		if (typeof param === 'number') {
+			const ret: Choicemeta[] = []
 			if (bkg === undefined || bkg === true) ret.push({ id: 'NATIVE', label: 'Background', longname: 'BKG' })
 			for (let i = 1; i <= param; i += 1) {
 				ret.push({ id: `${i.toString()}`, label: `Layer ${i.toString()}` })
 			}
 			return ret
 		}
-		return ret
+		// param is a screen/aux id (string) - the generic/default class has no per-screen layer count to read
+		// yet, so offer the full theoretical-maximum range instead of nothing (see
+		// syntheticRangeIfNeverConnected's own comment) - live-confirmed 2026-08-28 this was showing as
+		// Companion's "??" unresolved-value rendering for a plain empty list with a non-matching default.
+		const bkgEntry: Choicemeta[] = bkg === undefined || bkg === true ? [{ id: 'NATIVE', label: 'Background', longname: 'BKG' }] : []
+		return [...bkgEntry, ...this.syntheticRangeIfNeverConnected([], this.constants.maxLayers, (n) => `${n}`).map((l) => ({ ...l, label: `Layer ${l.index}` }))]
 	}
 
 	/**
@@ -548,7 +727,7 @@ export default class Choices {
 				}
 			})
 			?? []
-		return ret
+		return this.placeholderIfEmpty(ret, 'No Layers configured')
 	}
 
 	/** The highest number of (non-background) layers actually configured on any single screen/aux on this
@@ -564,24 +743,34 @@ export default class Choices {
 	}
 
 	public getOutputArray(): Choicemeta[] {
-		return this.state.get('DEVICE/device/outputList/itemKeys')?.filter((itm: string) => {
-			return this.state.get('DEVICE/device/outputList/items/'+itm+'/status/pp/isAvailable') === true
+		// Exclude any id that is actually a multiviewer's own output (Midra folds its "MTVW" entry into the
+		// same outputList as real physical outputs, unlike Aquilon which keeps its multiviewer in a wholly
+		// separate structure) - matches Aquilon's own behavior, where the multiviewer never appears as an
+		// "Output" choice at all, instead of just relabeling it while still mixing it in (2026-08-28: user
+		// explicitly asked for the Aquilon-consistent fix over a cosmetic-only relabel). Midra's Multiviewer
+		// stays fully reachable via its own dedicated getMultiviewerChoices()/getMultiviewerArray() override.
+		const multiviewerKeys = this.getMultiviewerOutputListKeys()
+		const real: Choicemeta[] = this.state.get('DEVICE/device/outputList/itemKeys')?.filter((itm: string) => {
+			return this.state.get('DEVICE/device/outputList/items/'+itm+'/status/pp/isAvailable') === true && !multiviewerKeys.includes(itm)
 		}).map((itm: string) => {
 			return {
 				id: itm,
 				label: this.state.get('DEVICE/device/outputList/items/'+itm+'/control/pp/label')
 			}
 		}) ?? []
-
+		// no dedicated max-Outputs constant exists - 96 matches this module's own established assumption for
+		// the outputList array's theoretical size (see the registration-scope rule discussion elsewhere in
+		// this project, "confirmed both are always-present 256/96-key state arrays").
+		return this.syntheticRangeIfNeverConnected(real, 96, (n) => `${n}`)
 	}
 
 	public getOutputChoices(): Dropdown<string>[] {
-		return this.getOutputArray().map((itm: Choicemeta) => {
+		return this.placeholderIfEmpty(this.getOutputArray().map((itm: Choicemeta) => {
 			return {
 				id: itm.id,
 				label: `Output ${itm.id}${itm.label === '' ? '' : ' - ' + itm.label}`
 			}
-		})
+		}), 'No Outputs configured')
 	}
 
 	/**
@@ -616,7 +805,7 @@ export default class Choices {
 				index: timer.replace(/^\w+_/, ''),
 			})
 		}
-		return ret
+		return this.syntheticRangeIfNeverConnected(ret, this.constants.maxTimers, (n) => `TIMER_${n}`)
 	}
 
 	public getTimerChoices(): Dropdown<string>[] {
@@ -670,12 +859,19 @@ export default class Choices {
 	public getLayerSourceInfo(layerPath: string[]): {number: string, name: string, width: number | '', height: number | ''} {
 		const input = this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum'])
 
-		if (typeof input === 'string' && input.match(/^IN_/)) {
-			const number = input.replace(/^IN_/, '')
-			const name = this.state.get(`DEVICE/device/inputList/items/${input}/control/pp/label`) || `Input ${number}`
-			const plug = this.state.get(`DEVICE/device/inputList/items/${input}/control/pp/plug`) || '1'
-			const width = this.state.get(`DEVICE/device/inputList/items/${input}/plugList/items/${plug}/status/signal/pp/imageWidth`)
-			const height = this.state.get(`DEVICE/device/inputList/items/${input}/plugList/items/${plug}/status/signal/pp/imageHeight`)
+		// A layer's own source uses "LIVE_n" for a live input when assigned via WebRCS drag&drop (confirmed
+		// live, matching the Backup subsystem's own convention) - "IN_n" accepted too defensively, but
+		// inputList/plugList are keyed by "IN_n" either way, so the id must be normalized before lookup.
+		// Also fixed: the active plug lives at status.pp.plug, not control.pp.plug (which doesn't exist -
+		// silently fell back to the '1' default every time, masking the bug on single-plug inputs).
+		const liveMatch = typeof input === 'string' ? input.match(/^(?:LIVE|IN)_(\d+)$/) : null
+		if (liveMatch) {
+			const inputKey = `IN_${liveMatch[1]}`
+			const number = liveMatch[1]
+			const name = this.state.get(`DEVICE/device/inputList/items/${inputKey}/control/pp/label`) || `Input ${number}`
+			const plug = this.state.get(`DEVICE/device/inputList/items/${inputKey}/status/pp/plug`) || '1'
+			const width = this.state.get(`DEVICE/device/inputList/items/${inputKey}/plugList/items/${plug}/status/signal/pp/imageWidth`)
+			const height = this.state.get(`DEVICE/device/inputList/items/${inputKey}/plugList/items/${plug}/status/signal/pp/imageHeight`)
 			return { number, name, width: width || '', height: height || '' }
 		}
 
@@ -723,6 +919,25 @@ export default class Choices {
 	}
 
 	/**
+	 * Locks or unlocks a single screen/aux's given preset side directly - shared helper backing the "Unlock Screen
+	 * if locked?" / "Relock after change" convenience options on the Layer Properties actions (a module-only
+	 * addition, not present in WebRCS, since users often don't notice a screen is locked). Mirrors the same
+	 * REMOTE/LOCAL branching already used by the "Lock Screen" action, just for exactly one screen instead of its
+	 * multi-screen/toggle UI.
+	 */
+	public setScreenLock(screen: string, preset: string, lock: boolean): void {
+		const normalizedPreset = preset.replace(/.+m.*/i, 'PROGRAM').replace(/.+w.*/i, 'PREVIEW')
+		const platformLongId = this.getScreenInfo(screen).platformLongId
+		if (this.instance.state.syncSelection) {
+			const pst = normalizedPreset === 'PREVIEW' ? 'Prw' : 'Pgm'
+			this.instance.connection.sendWSdata('REMOTE', (lock ? 'lock' : 'unlock') + 'ScreenAuxes' + pst, '/live/screens/presetModeLock', [[platformLongId]])
+		} else {
+			this.state.set(['LOCAL', 'presetModeLock', normalizedPreset, screen], lock)
+		}
+		this.instance.checkFeedbacks('liveScreenLock')
+	}
+
+	/**
 	 * Returns the currently selected preset or just the input if a specific preset is given.
 	 * @param preset if omitted or if 'sel' then the currently selected preset is returned
 	 * @param fullName if set to true the return value is PROGRAM/PREVIEW instead of pgm/pvw
@@ -739,11 +954,11 @@ export default class Choices {
 		}
 		if (pst && pst.match(/^pgm|program$/i) && !fullName) {
 			return 'pgm'
-		} else if (pst && pst.match(/^pvw|preview$/i) && !fullName) {
+		} else if (pst && pst.match(/^pvw|^prw|^prv|preview$/i) && !fullName) {
 			return 'pvw'
 		} else if (pst && pst.match(/^pgm|program$/i) && fullName) {
 			return 'PROGRAM'
-		} else if (pst && pst.match(/^pvw|preview$/i) && fullName) {
+		} else if (pst && pst.match(/^pvw|^prw|^prv|preview$/i) && fullName) {
 			return 'PREVIEW'
 		} else if (fullName) {
 			return 'PREVIEW'
@@ -755,12 +970,14 @@ export default class Choices {
 	/**
 	 * Returns the actual preset (A or B) representing program or preview of the given input or of the selection
 	 * @param screen S1-S... or A1-A...
-	 * @param preset can be A or B or PGM or PVW or 'sel', A and B are returned unchanged
+	 * @param preset can be A or B or PGM or PVW/PRW or 'sel', A and B are returned unchanged
 	 * @returns A or B or '', whichever is the actual preset for program or preview, during fades the preset is changed only at the end of the fade
 	 */
 	public getPreset(screen: string, preset: string): string {
 		if (screen.match(/^S|A\d+$/) === null) return ''
-		if (preset.match(/^A|B|PGM|PVW|SEL$/i) === null) return ''
+		// PVW and PRV are accepted for backwards compatibility / typo-tolerance alongside the current PRW -
+		// never remove them
+		if (preset.match(/^A|B|PGM|PVW|PRW|PRV|SEL$/i) === null) return ''
 		if (preset.toLowerCase() === 'sel') {
 			preset = this.getPresetSelection()
 		}
@@ -768,7 +985,9 @@ export default class Choices {
 		if (preset.match(/^A|B$/i)) {
 			ret = preset.toUpperCase()
 		} else {
-			ret = this.state.get(`LOCAL/screens/${screen}/${preset.toLowerCase()}/preset`)
+			// the internal state key is always 'pvw', regardless of whether the user typed PVW, PRW or PRV
+			const presetSegment = ['PRW', 'PRV'].includes(preset.toUpperCase()) ? 'pvw' : preset.toLowerCase()
+			ret = this.state.get(`LOCAL/screens/${screen}/${presetSegment}/preset`)
 		}
 		return ret
 	}
@@ -917,7 +1136,7 @@ export default class Choices {
 		if (this.instance.state.syncSelection) {
 			path = 'REMOTE/live/screens/screenAuxSelection/keys'
 		}
-		return [...this.state.get(path)]
+		return [...(this.state.get(path) ?? [])]
 	}
 
 	/** Returns selected layers always in LP format */

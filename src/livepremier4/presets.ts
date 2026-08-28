@@ -78,7 +78,7 @@ export default class PresetsLivepremier4 extends Presets {
 								actionId: 'deviceSelectSource',
 								options: {
 									method: 'sel',
-									preset: 'pvw',
+									preset: 'prw',
 									screen: [],
 								},
 							},
@@ -91,7 +91,7 @@ export default class PresetsLivepremier4 extends Presets {
 						feedbackId: 'deviceSourceTally',
 						options: {
 							screens: ['all'],
-							preset: 'pvw',
+							preset: 'prw',
 							source: input.id,
 						},
 						style: {

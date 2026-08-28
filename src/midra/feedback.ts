@@ -210,11 +210,11 @@ export default class FeedbacksMidra extends Feedbacks  {
 			let widgetSelection: {widgetKey: string, mocOutputLogicKey: string}[] = []
 			if (this.state.syncSelection) {
 				widgetSelection = [
-					...this.state.get('REMOTE/live/multiviewer/widgetSelection/widgetKeys')
+					...(this.state.get('REMOTE/live/multiviewer/widgetSelection/widgetKeys') ?? [])
 					.map((key: string) => {return {widgetKey: key, mocOutputLogicKey: '1'}})
 				]
 			} else {
-				widgetSelection = this.state.get('LOCAL/widgetSelection/widgetIds')
+				widgetSelection = this.state.get('LOCAL/widgetSelection/widgetIds') ?? []
 			}
 			return JSON.stringify(widgetSelection).includes(`{"widgetKey":"${widget}","mocOutputLogicKey":"1"}`)
 		}

@@ -17,6 +17,7 @@ type AWJaction<T> = {
 	name: string
 	description?: string
 	tooltip?: string,
+	sortName?: string
 	options: SomeAWJactionInputfield<T>[]
 	callback?: (action: ActionEvent<T>, context: CompanionActionContext) => void
 	subscribe?: (action: ActionEvent<T>) => void
@@ -42,6 +43,14 @@ export default class ActionsLivepremier extends Actions {
 
 	readonly actionsToUse = [
 		'deviceScreenMemory',
+		// 'deviceUpdatePreset' - only live-confirmed on LivePremier4 (192.168.20.112, 2026-08-28) so far. Plain
+		// LivePremier's own "is Modified" feedback (awjdevice/feedback.ts base, unlike LP4's own override in
+		// livepremier4/feedback.ts) reads a differently-shaped status path (presetList/items/{preset}/presetId/
+		// status/pp/id, not presetBank/status/presetId/.../presetList/items/{A|B}/pp/id) - needs its own live
+		// verification of both the read path AND the save/load write paths before enabling here, don't assume
+		// they're identical to LP4's just because the feature exists on both.
+		// 'deviceSaveScreenMemory' - same presetBank/control/save/... path family as deviceUpdatePreset above,
+		// same live-verification caveat applies.
 		// 'deviceAuxMemory',
 		'deviceMasterMemory',
 		'deviceLayerMemory',
@@ -50,13 +59,25 @@ export default class ActionsLivepremier extends Actions {
 		'deviceCutScreen',
 		'deviceTbar',
 		'deviceTakeTime',
-		'deviceSelectSource',
+		'deviceScreenEncoderAdjustV3',
 		'deviceInputKeying',
 		'deviceInputFreeze',
 		// 'deviceLayerFreeze',
 		// 'deviceScreenFreeze',
+		'deviceSelectSource',
 		'devicePositionSize',
+		'deviceSelectSourceV3',
 		'devicePositionSizeV3',
+		'deviceLayerTransitionsV3',
+		'deviceLayerKeyingV3',
+		'deviceLayerOpacityV3',
+		'deviceLayerAspectCropV3',
+		'deviceLayerMaskV3',
+		'deviceLayerBorderV3',
+		'deviceLayerEffectsV3',
+		'deviceLayerSpeedV3',
+		'deviceLayerTimingV3',
+		'deviceLayerEncoderAdjustV3',
 		'deviceSetAnchorPoint',
 		'deviceResetLayerSize',
 		'deviceCopyProgram',
@@ -80,7 +101,9 @@ export default class ActionsLivepremier extends Actions {
 		'cstawjcmd',
 		'cstawjgetcmd',
 		'deviceGPO',
-		'devicePower'
+		'devicePower',
+		'deviceBackupSetSource',
+		'deviceBackupAutoMode'
 	]
 	
 	constructor (instance: AWJinstance) {
@@ -91,17 +114,46 @@ export default class ActionsLivepremier extends Actions {
 
 	/**
 	 * MARK: Take one or multiple screens
+	 *
+	 * "Wait for Transition Completion" (2026-08-28): no live-verified status field to poll for plain
+	 * LivePremier (unlike LP4's confirmed screenAuxGroupList/.../status/pp/take) - instead delays by the
+	 * screen's own configured takeUpTime/takeDownTime (already read/written elsewhere, e.g. deviceTakeTime,
+	 * so this unit conversion is trusted) plus a small buffer, as the best available estimate of how long the
+	 * real fade takes. Capped at 4500ms (2026-08-28) - Companion's own module-host IPC kills a single action
+	 * call at a hard 5000ms regardless of what this code does (confirmed live, see waitForLevelReturnToRest's
+	 * own doc comment for the full explanation) - staying under that ourselves avoids the resulting scary "Call
+	 * timed out" error for a longer configured Transition Time, without changing the practical outcome (the
+	 * next action fires around the same moment either way).
 	 */
+	// "Wait for Transition Completion" deliberately sits OUTSIDE the serialize()-guarded section below - see
+	// LivePremier4's deviceTakeScreen for why (a later panic-button Cut on the same screen must never be stuck
+	// queued behind a still-running, possibly long transition wait).
 	get deviceTakeScreen() {
 		const deviceTakeScreen = super.deviceTakeScreen
 		deviceTakeScreen.callback = (action) => {
 			let dir = 'xTakeUp'
-			for (const screen of this.choices.getChosenScreenAuxes(action.options.screens)) {
-				if (this.choices.getPreset(screen, 'pgm') === 'B') {
-					dir = 'xTakeDown'
+			const targetScreens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			let longestTransitionMs = 0
+			const sent = this.instance.serialize(targetScreens, async () => {
+				for (const screen of targetScreens) {
+					if (this.choices.getPreset(screen, 'pgm') === 'B') {
+						dir = 'xTakeDown'
+					}
+					this.connection.sendWSmessage(['device', 'screenGroupList', 'items', screen, 'control', 'pp', dir], true)
+					if (parseBoolean(action.options.waitForComplete)) {
+						const timeProp = dir === 'xTakeUp' ? 'takeUpTime' : 'takeDownTime'
+						const deciseconds = this.state.get(['DEVICE', 'device', 'screenGroupList', 'items', screen, 'control', 'pp', timeProp]) ?? 0
+						longestTransitionMs = Math.max(longestTransitionMs, deciseconds * 100)
+					}
 				}
-				this.connection.sendWSmessage(['device', 'screenGroupList', 'items', screen, 'control', 'pp', dir], true)
-			}
+				// Confirms receipt only, not full completion - see waitForPulseComplete()'s doc comment for why
+				// a fixed delay (not a status poll) is used specifically for Take/Cut.
+				await this.delay(200)
+			})
+			if (!parseBoolean(action.options.waitForComplete)) return sent
+			return sent.then(() => longestTransitionMs > 0 ? this.delay(Math.min(longestTransitionMs + 300, 4500)) : undefined)
 		}
 		return deviceTakeScreen
 	}
@@ -109,14 +161,18 @@ export default class ActionsLivepremier extends Actions {
 	/**
 	 *  MARK: Recall Screen Memory LivePremier
 	 */
-	get deviceScreenMemory(): AWJaction<{ screens: string[], preset: string, memory: string, selectScreens: boolean}> {
-		
+	get deviceScreenMemory(): AWJaction<{ screens: string, preset: string, memory: string, selectScreens: boolean, unlockIfLocked: boolean, relockAfterChange: boolean}> {
+
 		const returnAction  = super.deviceScreenMemory
 
-		returnAction.options[0]['choices'] = [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()]
+		returnAction.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()]
 		returnAction.callback = (action) => {
-			const screens = this.choices.getChosenScreenAuxes(action.options.screens)
+			const screens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			return this.instance.serialize(screens, async () => {
 			const preset = this.choices.getPresetSelection(action.options.preset, true)
+			const unlockedScreens = new Set<string>()
 			for (const screen of screens) {
 				const path = [
 					'device',
@@ -135,10 +191,19 @@ export default class ActionsLivepremier extends Actions {
 					'pp',
 					'xRequest',
 				]
-				if (this.choices.isLocked(screen, preset)) continue
+				if (this.choices.isLocked(screen, preset)) {
+					if (!parseBoolean(action.options.unlockIfLocked)) continue
+					if (!unlockedScreens.has(screen)) {
+						this.choices.setScreenLock(screen, preset, false)
+						unlockedScreens.add(screen)
+					}
+				}
 
 				this.connection.sendWSmessage(path,false, true)
 				this.instance.sendXupdate()
+				// Same reasoning as Recall Master Memory above - not independently live-verified for plain
+				// LivePremier, fixed delay instead of assuming LP4's confirmed isLoading path applies here too.
+				await this.delay(200)
 
 				if (parseBoolean(action.options.selectScreens)) {
 					if (this.state.syncSelection) {
@@ -149,6 +214,12 @@ export default class ActionsLivepremier extends Actions {
 					}
 				}
 			}
+			if (parseBoolean(action.options.relockAfterChange)) {
+				for (const screenAuxKey of unlockedScreens) {
+					this.choices.setScreenLock(screenAuxKey, preset, true)
+				}
+			}
+			})
 		}
 
 		return returnAction
@@ -158,18 +229,18 @@ export default class ActionsLivepremier extends Actions {
 	 * MARK: Recall Master Memory - LivePremier
 	 */
 	get deviceMasterMemory() {
-		
+
 		const deviceMasterMemory = super.deviceMasterMemory
-		
+
 		deviceMasterMemory.callback = (action) => {
 			const preset = this.choices.getPresetSelection(action.options.preset, true)
 			const bankpath = ['device', 'masterPresetBank']
-			const list = 'bankList'	
+			const list = 'bankList'
 			const memorypath = ['items', action.options.memory]
 			const loadpath = ['control', 'load', 'slotList']
 
-			const filterpath = this.state.get(['DEVICE', ...bankpath, list, ...memorypath, 'status', 'pp', 'isShadow']) ? ['status', 'shadow', 'pp'] : ['status', 'pp']			
-			
+			const filterpath = this.state.get(['DEVICE', ...bankpath, list, ...memorypath, 'status', 'pp', 'isShadow']) ? ['status', 'shadow', 'pp'] : ['status', 'pp']
+
 			const screens = this.state.get([
 				'DEVICE',
 				...bankpath,
@@ -179,14 +250,22 @@ export default class ActionsLivepremier extends Actions {
 				'screenFilter',
 			])
 
-			if (
-				screens.find((screen: string) => {
-					return this.choices.isLocked(screen, preset)
-				})
-			) {
+			// serialize() keyed by every screen this Master Memory affects - see its own doc comment for why
+			// this must never be a single fixed key: an unrelated screen's action must never wait on this one.
+			return this.instance.serialize(screens, async () => {
+			const unlockedScreens = new Set<string>()
+			const stillLocked = screens.filter((screen: string) => {
+				if (!this.choices.isLocked(screen, preset)) return false
+				if (!parseBoolean(action.options.unlockIfLocked)) return true
+				if (!unlockedScreens.has(screen)) {
+					this.choices.setScreenLock(screen, preset, false)
+					unlockedScreens.add(screen)
+				}
+				return false
+			})
+			if (stillLocked.length > 0) {
 				return // TODO: resembles original WebRCS behavior, but could be also individual screen handling
 			}
-			// if (this.choices.isLocked(layer.screenAuxKey, preset)) continue
 
 			const fullpath = [
 				...bankpath,
@@ -200,6 +279,10 @@ export default class ActionsLivepremier extends Actions {
 			]
 			this.connection.sendWSmessage( fullpath, false, true)
 			this.instance.sendXupdate()
+			// masterPresetBank shares LP4's exact path naming, but plain LivePremier hasn't been independently
+			// live-verified this session to actually have the same "isLoading" flag - fixed delay for now
+			// rather than assuming, same reasoning as Midra's Recall Master/Aux Memory above.
+			await this.delay(200)
 
 			if (action.options.selectScreens) {
 				if (this.state.syncSelection) {
@@ -210,7 +293,12 @@ export default class ActionsLivepremier extends Actions {
 				}
 			}
 
-
+			if (parseBoolean(action.options.relockAfterChange)) {
+				for (const screenAuxKey of unlockedScreens) {
+					this.choices.setScreenLock(screenAuxKey, preset, true)
+				}
+			}
+			})
 		}
 
 		return deviceMasterMemory
@@ -334,6 +422,118 @@ export default class ActionsLivepremier extends Actions {
 		return deviceSelectSource
 	}
 
+	/**
+	 * MARK: Layer Properties - Source (V3) - LivePremier
+	 */
+	get deviceSelectSourceV3() {
+		const deviceSelectSourceV3 = super.deviceSelectSourceV3
+
+		const resolveTargets = (opt: {screen: string, layer: string}): {screenAuxKey: string, layerKey: string}[] => {
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					// still supports a concatenated multi-selection like "S1A1" via expression, same convention as elsewhere in the module
+					: this.choices.getChosenScreenAuxes(opt.screen)
+			if (opt.layer === 'first') {
+				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			}
+			if (opt.layer === 'sel') {
+				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
+			}
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layer}))
+		}
+
+		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
+		// current source and pins screen/preset/layer to the concrete values it read from.
+		deviceSelectSourceV3.learn = (action) => {
+			const targets = resolveTargets(action.options)
+			if (targets.length === 0) return undefined
+			const target = targets[0]
+
+			const preset = this.choices.getPresetSelection()
+			const presetpath = [
+				'device', 'screenList', 'items', target.screenAuxKey,
+				'presetList', 'items', this.choices.getPreset(target.screenAuxKey, preset),
+			]
+			const inputNumPath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'pp', 'inputNum']
+			const raw = this.state.get(['DEVICE', ...inputNumPath])
+			if (typeof raw !== 'string') return undefined
+
+			const newoptions: Partial<typeof action.options> = {
+				screen: target.screenAuxKey,
+				layer: target.layerKey,
+				preset,
+			}
+
+			const isBackground = target.layerKey === 'NATIVE' || target.layerKey === 'BKG'
+			// background layers store just the bare digit ("3"), not "NATIVE_3" - same reverse mapping the
+			// callback's own `source.replace(/\D/g, '')` does in the other direction
+			newoptions.sourceLayer = (isBackground && /^\d+$/.test(raw)) ? `NATIVE_${raw}` : raw
+
+			if (raw === 'COLOR') {
+				const colorpath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'color', 'pp']
+				const r = this.state.get(['DEVICE', ...colorpath, 'red']) ?? 0
+				const g = this.state.get(['DEVICE', ...colorpath, 'green']) ?? 0
+				const b = this.state.get(['DEVICE', ...colorpath, 'blue']) ?? 0
+				newoptions.sourceColor = (r << 16) + (g << 8) + b
+			}
+
+			return newoptions
+		}
+
+		deviceSelectSourceV3.callback = (action) => {
+			const preset = action.options.preset
+			const source = action.options.sourceLayer
+			if (source === 'keep') return
+			for (const target of resolveTargets(action.options)) {
+				let unlockedByUs = false
+				if (this.choices.isLocked(target.screenAuxKey, preset)) {
+					if (!parseBoolean(action.options.unlockIfLocked)) continue
+					this.choices.setScreenLock(target.screenAuxKey, preset, false)
+					unlockedByUs = true
+				}
+				const presetpath = [
+					'device', 'screenList', 'items', target.screenAuxKey,
+					'presetList', 'items', this.choices.getPreset(target.screenAuxKey, preset),
+				]
+				const inputNumPath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'pp', 'inputNum']
+				const colorpath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'color', 'pp']
+				const sendColor = (r: number, g: number, b: number) => {
+					this.connection.sendWSmessage([...colorpath, 'red'], r)
+					this.connection.sendWSmessage([...colorpath, 'green'], g)
+					this.connection.sendWSmessage([...colorpath, 'blue'], b)
+				}
+				const isBackground = target.layerKey === 'NATIVE' || target.layerKey === 'BKG'
+				if (isBackground) {
+					if (source === 'NONE') {
+						this.connection.sendWSmessage(inputNumPath, 'NONE')
+						sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
+					} else if (source === 'COLOR') {
+						this.connection.sendWSmessage(inputNumPath, 'COLOR')
+						const color = Number(action.options.sourceColor)
+						sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+					} else if (/^NATIVE_\d+$/.test(source)) {
+						this.connection.sendWSmessage(inputNumPath, source.replace(/\D/g, ''))
+					}
+					// anything else picked from the shared list isn't valid for a background layer - no-op
+				} else {
+					this.connection.sendWSmessage(inputNumPath, source)
+					if (source === 'COLOR') {
+						const color = Number(action.options.sourceColor)
+						sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+					}
+				}
+				if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
+					this.choices.setScreenLock(target.screenAuxKey, preset, true)
+				}
+			}
+			this.instance.sendXupdate()
+		}
+
+		return deviceSelectSourceV3
+	}
+
 	// MARK: Set Preset Toggle - LivePremier
 	get devicePresetToggle() {
 		const devicePresetToggle = super.devicePresetToggle
@@ -368,10 +568,10 @@ export default class ActionsLivepremier extends Actions {
 			const widget = action.options.widget?.split(':')[1] ?? '0'
 			let widgetSelection: Record<'mocOutputLogicKey' | 'widgetKey', string>[] = []
 			if (this.state.syncSelection) {
-				widgetSelection = [...this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds')]
+				widgetSelection = [...(this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds') ?? [])]
 					.map((key) => {return {widgetKey: key.widgetKey, mocOutputLogicKey: key.multiviewerKey}})
 			} else {
-				widgetSelection = [...this.state.get('LOCAL/widgetSelection/widgetIds')]
+				widgetSelection = [...(this.state.get('LOCAL/widgetSelection/widgetIds') ?? [])]
 			}
 			const idx = widgetSelection.findIndex((elem) => {
 				return elem.widgetKey == widget && elem.mocOutputLogicKey == mvw
@@ -411,10 +611,10 @@ export default class ActionsLivepremier extends Actions {
 			let widgetSelection: Record<'mocOutputLogicKey' | 'widgetKey', string>[] = []
 			if (action.options.widget === 'sel') {
 				if (this.state.syncSelection) {
-					widgetSelection = [...this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds')]
+					widgetSelection = [...(this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds') ?? [])]
 						.map((key) => {return {widgetKey: key.widgetKey, mocOutputLogicKey: key.multiviewerKey}})
 				} else {
-					widgetSelection = [...this.state.get('LOCAL/widgetSelection/widgetIds')]
+					widgetSelection = [...(this.state.get('LOCAL/widgetSelection/widgetIds') ?? [])]
 				}
 			} else {
 				widgetSelection = [
@@ -456,7 +656,9 @@ export default class ActionsLivepremier extends Actions {
 		const audioInputChoices = this.choices.getAudioInputChoices()
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
-			name: 'Route Audio (Block)',
+			name: 'Audio - Route (Block)',
+			sortName: '07 Audio - Route (Block)',
+			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
 					type: 'dropdown',
@@ -540,7 +742,9 @@ export default class ActionsLivepremier extends Actions {
 		const audioInputChoices = this.choices.getAudioInputChoices()
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
-			name: 'Route Audio (Channels)',
+			name: 'Audio - Route (Channels)',
+			sortName: '07 Audio - Route (Channels)',
+			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
 					type: 'dropdown',
@@ -815,7 +1019,7 @@ export default class ActionsLivepremier extends Actions {
 			},
 		]
 
-		return this.deviceTestpatterns_common(deviceTestpatternsOptions, 'Set LivePremier ≤ V3 Testpattern')
+		return this.deviceTestpatterns_common(deviceTestpatternsOptions, 'Device - Set LivePremier ≤ V3 Testpattern')
 
 	}
 
@@ -823,7 +1027,7 @@ export default class ActionsLivepremier extends Actions {
 	 * MARK: Testpattern Raster Box - LivePremier
 	 */
 	get deviceTestpatternRasterBox() {
-		return this.deviceTestpatternRasterBox_common('Set LivePremier ≤ V3 Testpattern Raster Box')
+		return this.deviceTestpatternRasterBox_common('Device - Set LivePremier ≤ V3 Testpattern Raster Box')
 	}
 
 	/**
@@ -834,7 +1038,9 @@ export default class ActionsLivepremier extends Actions {
 		type DeviceGPO = {gpo: number, action: number}
 		
 		const deviceGPO: AWJaction<DeviceGPO> = {
-			name: 'Set GPO',
+			name: 'Device - Set GPO',
+			sortName: '09 Device - Set GPO',
+			description: 'Turns a General Purpose Output (GPO) on, off, or toggles it.',
 			options: [
 				{
 					id: 'gpo',

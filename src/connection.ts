@@ -17,9 +17,13 @@ class AWJconnection {
 	private wsTimeout: NodeJS.Timeout | undefined
 	private addr: string | undefined
 	private authcookie = ''
-	private readonly reconnectmin = 100
-	private readonly reconnectmax = 16_500
+	// Flat 10s retry pause (was an exponential backoff from 100ms up to 16.5s) - simpler/more predictable,
+	// and avoids a burst of near-instant retry attempts against a device that just got a Wake-on-LAN packet
+	// and needs real time to boot before it can answer at all.
+	private readonly reconnectmin = 10_000
+	private readonly reconnectmax = 10_000
 	private reconnectinterval = this.reconnectmin
+	private countdownTimer: ReturnType<typeof setInterval> | undefined
 	private readonly delimiter = '!' // '\x04'
 	private readonly bufferMaxLength = 64_000
 	private buffer = ''
@@ -30,6 +34,36 @@ class AWJconnection {
 		this.instance = instance
 		this.hadError = false
 		this.shouldBeConnected = false
+	}
+
+	/**
+	 * Schedules the next reconnect attempt after `this.reconnectinterval` and keeps the status field's message
+	 * ticking down every second in the meantime (the same field that shows "Syncing NNNMB" during a successful
+	 * connect) - so it's visible at a glance when the next attempt will happen, rather than a static message
+	 * that silently sits there for the whole 10s. `buildMessage` receives the whole-seconds remaining.
+	 */
+	private scheduleRetryWithCountdown(status: InstanceStatus, buildMessage: (secondsLeft: number) => string): void {
+		if (this.wsTimeout) clearTimeout(this.wsTimeout)
+		if (this.countdownTimer) clearInterval(this.countdownTimer)
+
+		let secondsLeft = Math.ceil(this.reconnectinterval / 1000)
+		this.instance.updateStatus(status, buildMessage(secondsLeft))
+		this.countdownTimer = setInterval(() => {
+			secondsLeft -= 1
+			if (secondsLeft > 0) {
+				this.instance.updateStatus(status, buildMessage(secondsLeft))
+			} else if (this.countdownTimer) {
+				clearInterval(this.countdownTimer)
+			}
+		}, 1000)
+
+		this.wsTimeout = setTimeout(() => {
+			if (this.countdownTimer) clearInterval(this.countdownTimer)
+			this.connect(this.addr)
+		}, this.reconnectinterval)
+
+		this.reconnectinterval *= 1.2
+		if (this.reconnectinterval > this.reconnectmax) this.reconnectinterval = this.reconnectmax
 	}
 
 	bufferFragment(data: string): void {
@@ -92,8 +126,13 @@ class AWJconnection {
 		this.instance.updateStatus(InstanceStatus.Connecting, `Init Connection`)
 
 		try {
+			// retry: 0 overrides fetchDefaultParameters' own retry: 2 specifically for this initial reachability
+			// check - our own retry countdown (scheduleRetryWithCountdown) already handles retries visibly, so
+			// ky retrying silently underneath would just add an unpredictable, invisible delay before the first
+			// status update ever appears.
 			const authResponse = await ky.get(`${urlObj.protocol()}://${urlObj.host()}/auth/status`, {
 				...fetchDefaultParameters,
+				retry: 0,
 			}).json<{[name: string]: any}>()
 			// console.log('auth response', authResponse)
 			const isAuth = authResponse.authentication?.isAuthenticationEnabled
@@ -322,15 +361,11 @@ class AWJconnection {
 					this.websocket.on('close', () => {
 						// console.log('ws closed', ev.toString(), this.shouldBeConnected ? 'should be connected' : 'should not be connected')
 						if (this.shouldBeConnected) {
-							this.instance.updateStatus(InstanceStatus.Disconnected)
 							this.hadError = true
-							// console.log('ws retry in', this.reconnectinterval)
-							if (this.wsTimeout) clearTimeout(this.wsTimeout)
-							this.wsTimeout = setTimeout(() => {
-								this.connect(this.addr)
-							}, this.reconnectinterval)
-							this.reconnectinterval *= 1.2
-							if (this.reconnectinterval > this.reconnectmax) this.reconnectinterval = this.reconnectmax
+							this.scheduleRetryWithCountdown(
+								InstanceStatus.Disconnected,
+								(secondsLeft) => `Disconnected, retrying in ${secondsLeft}s`
+							)
 						}
 					})
 
@@ -430,24 +465,21 @@ class AWJconnection {
 		} catch (error) {
 			// console.log('ws close and retry in', this.reconnectinterval)
 			this.disconnect()
-			if (this.wsTimeout) clearTimeout(this.wsTimeout)
-			this.wsTimeout = setTimeout(() => {
-				this.connect(this.addr)
-			}, this.reconnectinterval)
-			this.reconnectinterval *= 1.2
-			if (this.reconnectinterval > this.reconnectmax) this.reconnectinterval = this.reconnectmax
-			const retrysec = Math.round(this.reconnectinterval / 100)/10
-			if(String(error).match(/fetch failed/)) {
-				this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Device unreachable, retrying in ${retrysec}s`)
-				this.instance.log('error', `Can't connect to device, probably offline. Will retry in ${retrysec}s`)
-			} else if(String(error).match(/terminated/)) {
-				this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Connection terminated, retrying in ${retrysec}s`)
-				this.instance.log('error', `Connection to device has been terminated unexpectedly. Will retry in ${retrysec}s`)
+			let logMessage: string
+			let buildMessage: (secondsLeft: number) => string
+			if (String(error).match(/fetch failed/)) {
+				buildMessage = (secondsLeft) => `Device unreachable, retrying in ${secondsLeft}s`
+				logMessage = `Can't connect to device, probably offline. Will retry in ${Math.ceil(this.reconnectinterval / 1000)}s`
+			} else if (String(error).match(/terminated/)) {
+				buildMessage = (secondsLeft) => `Connection terminated, retrying in ${secondsLeft}s`
+				logMessage = `Connection to device has been terminated unexpectedly. Will retry in ${Math.ceil(this.reconnectinterval / 1000)}s`
 			} else {
-				this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Connection failed, retrying in ${retrysec}s`)
-				this.instance.log('error', `Can't connect to device webserver. ${error}\nWill retry in ${retrysec}s`)
+				buildMessage = (secondsLeft) => `Connection failed, retrying in ${secondsLeft}s`
+				logMessage = `Can't connect to device webserver. ${error}\nWill retry in ${Math.ceil(this.reconnectinterval / 1000)}s`
 			}
-		}		
+			this.instance.log('error', logMessage)
+			this.scheduleRetryWithCountdown(InstanceStatus.ConnectionFailure, buildMessage)
+		}
 	}
 
 	async downloadDevicestate(urlObj) {
@@ -627,6 +659,7 @@ class AWJconnection {
 
 	disconnect(): void {
 		clearTimeout(this.wsTimeout)
+		if (this.countdownTimer) clearInterval(this.countdownTimer)
 		this.shouldBeConnected = false
 		this.hadError = false
 		this.websocket?.close()
@@ -637,6 +670,7 @@ class AWJconnection {
 
 	destroy(): void {
 		clearTimeout(this.wsTimeout)
+		if (this.countdownTimer) clearInterval(this.countdownTimer)
 		this.shouldBeConnected = false
 		this.hadError = false
 		this.websocket?.close()

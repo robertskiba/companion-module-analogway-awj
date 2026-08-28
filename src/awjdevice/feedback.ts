@@ -226,6 +226,7 @@ export default class Feedbacks {
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'all', label: 'Any (Program/Preview)' }, ...this.choices.choicesPreset],
+				allowInvalidValues: true,
 					default: 'all',
 				},
 			],
@@ -235,7 +236,7 @@ export default class Feedbacks {
 					this.state.get(['DEVICE', ...this.constants.lastUsedMasterPresetPath, 'presetModeList', 'items', 'PROGRAM', 'pp', 'memoryId']) == feedback.options.memory
 				) return true
 				if (
-					(feedback.options.preset === 'all' || feedback.options.preset === 'pvw') &&
+					(feedback.options.preset === 'all' || feedback.options.preset === 'pvw' || feedback.options.preset === 'prw') &&
 					this.state.get(['DEVICE', ...this.constants.lastUsedMasterPresetPath, 'presetModeList', 'items', 'PREVIEW', 'pp', 'memoryId']) == feedback.options.memory
 				) return true
 				return false
@@ -271,6 +272,7 @@ export default class Feedbacks {
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'all', label: 'Any (Program/Preview)' }, ...this.choices.choicesPreset],
+				allowInvalidValues: true,
 					default: 'all',
 				},
 				{
@@ -369,6 +371,7 @@ export default class Feedbacks {
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'all', label: 'Any (Program/Preview)' }, ...this.choices.choicesPreset],
+				allowInvalidValues: true,
 					default: 'all',
 				},
 				{
@@ -456,6 +459,7 @@ export default class Feedbacks {
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: this.choices.choicesPreset,
+					allowInvalidValues: true,
 					default: 'pgm',
 				},
 				{
@@ -683,7 +687,7 @@ export default class Feedbacks {
 					preset = this.state.get('LOCAL/presetMode')
 				}
 				if (preset === 'PREVIEW') {
-					vartext = 'PVW'
+					vartext = this.config.useOldVariableNames ? 'PVW' : 'PRW'
 				}
 				this.instance.setVariableValues({ selectedPreset: vartext })
 				return preset === feedback.options.preset
@@ -797,9 +801,9 @@ export default class Feedbacks {
 				const widget = feedback.options.widget?.toString().split(':')[1] ?? '0'
 				let widgetSelection: {widgetKey: string, mocOutputLogicKey: string}[] = []
 				if (this.state.syncSelection) {
-					widgetSelection = [...this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds')]
+					widgetSelection = [...(this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds') ?? [])]
 				} else {
-					widgetSelection = this.state.get('LOCAL/widgetSelection/widgetIds')
+					widgetSelection = this.state.get('LOCAL/widgetSelection/widgetIds') ?? []
 				}
 				return JSON.stringify(widgetSelection).includes(`{"widgetKey":"${widget}","mocOutputLogicKey":"${mvw}"}`)
 			},
@@ -1128,7 +1132,7 @@ export default class Feedbacks {
 					label: 'path',
 					default: '',
 					regex: `/${regexAWJpath}/`,
-					tooltip: 'AWJ path of property to watch for, enter a path to exactly one property with no wildcards.\nPGM/PVW can be used for the presets and will be replaced dynamically.'
+					tooltip: 'AWJ path of property to watch for, enter a path to exactly one property with no wildcards.\nPGM/PRW (PVW also still works) can be used for the presets and will be replaced dynamically.'
 				},
 				{
 					type: 'dropdown',
@@ -1263,7 +1267,7 @@ export default class Feedbacks {
 							parts[4] === 'presetList' &&
 							parts[5] === 'items' &&
 							parts[6] &&
-							feedback.options.path.split('/')[6]?.match(/^PGM|PVW|program|preview$/i) !== null
+							feedback.options.path.split('/')[6]?.match(/^PGM|PVW|PRW|program|preview$/i) !== null
 						) {
 							parts[6] = '(\\w+?)'
 							sub[`${feedback.id}-take`] = {

@@ -67,6 +67,54 @@ export function initVariables(_instance: AWJinstance): TrackedVariable[] {
 			variableId: 'SelectedLayer.Input.height',
 			name: 'Native resolution height of the source assigned to the first selected layer',
 		},
+		{
+			variableId: 'SelectedLayer.opacity',
+			name: 'Opacity (raw 0-256 device value) of the first selected layer',
+		},
+		{
+			variableId: 'SelectedLayer.Crop.Top',
+			name: 'Classic crop Top of the first selected layer, in pixels of the source\'s native resolution - blank if the source\'s resolution is unknown',
+		},
+		{
+			variableId: 'SelectedLayer.Crop.Bottom',
+			name: 'Classic crop Bottom of the first selected layer, in pixels of the source\'s native resolution - blank if the source\'s resolution is unknown',
+		},
+		{
+			variableId: 'SelectedLayer.Crop.Left',
+			name: 'Classic crop Left of the first selected layer, in pixels of the source\'s native resolution - blank if the source\'s resolution is unknown',
+		},
+		{
+			variableId: 'SelectedLayer.Crop.Right',
+			name: 'Classic crop Right of the first selected layer, in pixels of the source\'s native resolution - blank if the source\'s resolution is unknown',
+		},
+		{
+			variableId: 'SelectedLayer.Mask.Top',
+			name: 'Mask Top of the first selected layer, in pixels of the layer\'s current on-screen size',
+		},
+		{
+			variableId: 'SelectedLayer.Mask.Bottom',
+			name: 'Mask Bottom of the first selected layer, in pixels of the layer\'s current on-screen size',
+		},
+		{
+			variableId: 'SelectedLayer.Mask.Left',
+			name: 'Mask Left of the first selected layer, in pixels of the layer\'s current on-screen size',
+		},
+		{
+			variableId: 'SelectedLayer.Mask.Right',
+			name: 'Mask Right of the first selected layer, in pixels of the layer\'s current on-screen size',
+		},
+		{
+			variableId: 'SelectedScreen.tbarPosition',
+			name: 'T-Bar position (0-100, matching "Set T-Bar Position"\'s Position field at its default Maximum of 100) of the first selected screen/aux',
+		},
+		{
+			variableId: 'SelectedScreen.TransitionTime.Pgm',
+			name: 'Transition time in seconds for the side currently on Program, for the first selected screen/aux',
+		},
+		{
+			variableId: 'SelectedScreen.TransitionTime.Pvw',
+			name: 'Transition time in seconds for the side currently on Preview, for the first selected screen/aux',
+		},
 	]
 
 	// for (const input of getLiveInputChoices(instance.state)) {

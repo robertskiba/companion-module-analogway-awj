@@ -2,6 +2,62 @@ This is a fork of the original companion-module-analogway-awj repository. It is 
 
 # Changelog
 
+# v3.0.0 Beta 4 – Changes (2026-08-28)
+
+This release completes the "Layer Properties" action family (now covering nearly every WebRCS layer panel), adds the long-requested "Save to Screen Memory"/"Save-Revert" workflow, extends Backup support to Background Sets, and closes out a large batch of reliability fixes so buttons behave correctly in tight action-list sequences and while the device is offline.
+
+## New Actions
+
+- **"LIVE - Save/Revert Screen Memory Changes"** (LivePremier4) – mirrors WebRCS's own "*" modified-preset workflow: Save writes the Screen/Aux's current live state back into whichever Screen Memory is already loaded; Revert discards unsaved changes by reloading that same memory. Screen Memories only – WebRCS has no equivalent "Update/Reset" concept for Master or Layer Memories, so none was added for those.
+- **"LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory)"** (LivePremier4) – the more flexible sibling: save the current state of a Screen/Aux into any Screen Memory slot (an explicit slot or "Next Available"), rename a slot's label, or delete a slot – three operations in one action. A new **"Allow save, update or delete of existing Screen Memory?"** checkbox (default off) prevents accidentally overwriting an already-used memory. Leaving the Label blank auto-generates one from the device's own clock when saving into an empty slot, or leaves an existing slot's name untouched when overwriting its content.
+- **Background Set Backups**: "Backups - Set Backup Set to Source" and "Backups - Set Auto Mode" now also cover every screen's 8 Background Set backups (BS1-BS8), alongside matching live status variables – previously only Input backups were supported.
+- Completed the **"Layer Properties - X"** action family: **Source, Transitions, Keying, Opacity, Aspect & Crop, Mask, Border, Effects, Speed,** and **Timing** are all now built (joining the already-shipped Position & Size), giving near-complete per-property layer control from Companion, mirrored panel-for-panel after WebRCS's own layer editor. Every action in the family has a blue **"Learn"** button that reads the first selected layer's current values straight into the action's fields.
+- **"Layer Properties - Encoder Adjust"** and **"Screen - Encoder Adjust"** – two new relative-adjustment actions built for rotary encoders (e.g. a Stream Deck+ dial): pick a property (layer Opacity/Position/Size/Crop/Mask, or screen T-Bar Position/Transition Time) and a step in Raw, Percent, or Pixel units, and the action adds or subtracts that step from the property's current value – no manual expression math required. Defaults to a sensible 1% step if left completely untouched.
+
+## New Variables
+
+- **`SelectedLayer.opacity`**, **`.Crop.Top/.Bottom/.Left/.Right`**, **`.Mask.Top/.Bottom/.Left/.Right`** – live values in the same units as their matching Layer Properties actions.
+- **`SelectedScreen.tbarPosition`** (0-100) and **`SelectedScreen.TransitionTime.Pgm`/`.Pvw`** (seconds) – scaled to match "Set T-Bar Position"/"Set Transition Time"'s own fields, so they can be read straight back into those actions.
+- **`S{n}`/`A{n}.layer{x}.status/.source/.width/.height/.x/.y`** – live per-layer variables for every currently-configured layer on every screen/aux (`.status`: VALID/INVALID; `.source`: a short id like `IN2`/`IMG4`/`BS1`/`SCR1`; `.x`/`.y` follow the currently selected global Anchor Point, same as `SelectedLayer.x/.y`). Only real, existing layers get variables – no fixed theoretical-maximum range.
+- **`S{n}`/`A{n}.layerbg.source`** – the background/NATIVE layer's source.
+- **`IN{n}.status`** – a real per-input availability signal (VALID/INVALID), unlike the existing enabled-flag which stays true even for inputs that don't physically exist.
+- **`OUT{n}.usedin`** – which Screen/Aux a physical output currently feeds (blank if unused).
+- **`S{n}`/`A{n}.aspectratio`**, **`OUT{n}.aspectratio`**, **`MVW{n}.aspectratio`** – real computed aspect ratios (previously `$NA` or a non-numeric mode string on some outputs).
+- **Backup variables**: `backups.setX.{activeslot, automode, primary.source, primary.status, backup1.source, backup1.status, backup2.source, backup2.status}` per ungrouped Backup Set, and `backups.groupX.{activeslot, label, automode, allprimaries.status, allbackup1.status, allbackup2.status}` per Backup Group – all status values are a plain **VALID/INVALID** so a single condition style works everywhere. A Backup Set that's a member of a Group only appears under its Group's variables, not on its own.
+- **`IMG{n}.label`** – renamed from `STILL{n}.label` for consistency with this module's "Image Store"/"Image Library" terminology. If you already reference `STILL{n}.label` on a button, it will need to be updated to `IMG{n}.label`.
+
+## Changed
+
+- **Action names reorganized under consistent "Category - Name" prefixes** (e.g. "Screen -", "Multiviewer -", "Audio -", "Device -", "Layer Properties -", "Backups -"), with a consistent sort order, so related actions sit together in the action picker instead of being scattered alphabetically.
+- **Several Screen/Auxscreen selector fields switched from multi-select to single-select dropdowns**, each gaining a new **"First/Only Selected Screen"** choice alongside "All Selected Screens" and the explicit list: Recall Screen Memory, Recall Aux Memory, Take, Cut, Set T-Bar Position, Set Transition Time, the new Encoder Adjust actions, Copy Program to Preview, and Lock Screen(s). This also produces plain Expression Mode values (e.g. `S1` instead of `["S1"]`) and fixes a couple of these fields occasionally showing duplicate/conflicting dropdowns.
+- **'PRV' is now accepted as a typo-tolerant alias for Preview** everywhere 'PVW'/'PRW' were already accepted, and a confusing duplicate "Preview (legacy value...)" dropdown entry was removed – existing configs keep working unchanged.
+- **Midra's built-in multiviewer (MTVW) no longer appears in any Output dropdown** (Testpattern, GPO, Raster Box, etc.), matching LivePremier's own architecture where the multiviewer was never mixed into the physical-output list in the first place. It remains fully reachable through the dedicated Multiviewer dropdowns.
+- **"LIVE - Take" and "LIVE - Cut" renamed to "LIVE - Transition TAKE" and "LIVE - Transition CUT"** for clarity – purely a display-name change, existing buttons keep working unchanged.
+- **"Backups - Set Backup Set to Source"/"Set Auto Mode" and "Layer Properties - Keying" now detect insufficient device firmware** (LivePremier/LivePremier4 older than firmware V6, where these features don't exist yet): instead of silently failing, the action's options are replaced with a clear notice to update the device's firmware.
+- **Backup and "Layer Properties - Keying" are no longer offered on Midra/Alta** (Zenith 100/200) – live-confirmed against a Zenith 200 simulator that neither concept exists on that platform; previously they were offered there but never actually worked.
+
+## Reliability
+
+- **The module now publishes its generic action set immediately on load**, before any connection to the device has succeeded. Previously, no actions existed at all until the device had answered at least once – which meant **Wake-on-LAN was unusable in exactly the situation it exists for** (device powered off/unreachable). Wake-on-LAN and the other connection-independent actions are now always available.
+- **Dynamic dropdowns behave sensibly while never connected or between reconnects**: Screens, Inputs, Layers, Images, Memories, Timers, and Outputs show the full theoretical range so a show can be pre-programmed offline, and empty dropdowns show a clear "No device connected"/"No X configured" placeholder instead of a stale or confusing entry.
+- **Recall Screen Memory, Take, Set Transition Time, Save/Revert Screen Memory Changes, Save Screen Memory to Slot, and several other memory-related actions now wait for the device to actually confirm the change before the next action in the list runs** – even in a plain (non-Sequential) action list. This fixes "Recall then Take" style button sequences, and makes tight stress-test loops with no manual Wait actions reliable.
+- **New "Wait for Transition Completion" checkbox on Take** – optionally waits for a transition to fully finish before the button's next action runs. Due to a hard limit in Companion's own action-execution timeout, this can only reliably cover Transition Times up to roughly **4.5 seconds**; longer transitions still need a manual Companion "Wait" action.
+- Sending a command and immediately taking or recalling something else on a **different, unrelated Screen/Aux** is never blocked by the above waiting – only actions targeting the same Screen(s)/Aux(es) queue behind each other.
+- **Reconnection now retries at a flat 10-second interval, with a live countdown shown in the connection status** (e.g. "Disconnected, retrying in 8s...") – replaces the previous exponential backoff, which could silently leave you waiting much longer between attempts without any visible indication of when the next one would happen.
+
+## Fixed
+
+- **`OUT{n}.sinkdetected`** now always reports `true` for SDI/QUAD_SDI outputs, since SDI is unidirectional and the device can never actually detect a connected sink there – previously it could misleadingly show "not connected" on a working SDI output.
+- **Disabling a Screen/Aux no longer leaves old variables stuck at their last value forever** – `.label`, `.pgm.time`/`.prw.time`, memory active/modified fields, and the newer per-layer variable set now all disappear on disable and repopulate correctly when the Screen/Aux is re-enabled.
+- **The Backup Set/Group dropdown now refreshes immediately** when a new Backup Set or Group is configured on the device, instead of only updating after some unrelated change triggered a republish.
+- **Backup variable updates no longer rebuild every Backup variable on every change** – e.g. toggling one Backup Set's Auto Mode no longer makes every other Backup variable briefly disappear and reappear, which could otherwise misfire a Companion Trigger watching for "variable changed" during a live show.
+- **Layer position/size variables no longer freeze on a freshly-connected instance** that hasn't had a live Take/Cut yet – they now read the screen's actual current Program/Preview state directly instead of a cache that was only ever updated by a live Take/Cut event.
+- **A layer's live-input source is now recognized correctly** regardless of whether the device reports it internally as `LIVE_n` or `IN_n` – fixes `SelectedLayer.Input.*` and the new per-layer `.status` variable both showing blank or wrong after assigning a live input to a layer via drag-and-drop.
+- **Multiviewer output variables renamed `MV{n}.*` → `MVW{n}.*`** to stop colliding with Multiviewer Memory's own `MV{n}.label` (two unrelated numbering domains were sharing one prefix).
+- **Newly-enabled Multiviewer outputs (and similar topology changes after connect) now get their variables registered live**, instead of only ever being considered at the moment Companion first connects.
+- **Fixed a live incident where rapid WebRCS actions (e.g. dragging a layer's resize handle) could flood the module with rebuild work**, in one observed case even blocking Companion's own "disable connection" command. Variable updates for Backups and Layer properties are now debounced and only add/remove the exact items that actually changed, instead of tearing down and rebuilding the entire variable set on every update.
+- Midra's Cut action didn't correctly handle the new "First/Only Selected Screen" choice, silently resolving to zero screens.
+
 # v3.0.0 Beta 3 – Changes (2026-08-21)
 
 ## New

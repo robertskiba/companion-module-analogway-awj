@@ -78,7 +78,7 @@ export default class PresetsMidra extends Presets {
 									actionId: 'deviceScreenMemory',
 									options: {
 										screens: [screen.id],
-										preset: screen.id === 'sel' ? 'sel' : 'pvw',
+										preset: screen.id === 'sel' ? 'sel' : 'prw',
 										memory: memory.id,
 										selectScreens: false,
 									},
@@ -92,7 +92,7 @@ export default class PresetsMidra extends Presets {
 							feedbackId: 'deviceScreenMemory',
 							options: {
 								screens: screen.id != 'sel' ? [screen.id] : ['all'],
-								preset: 'pvw',
+								preset: 'prw',
 								memory: memory.id,
 								unmodified: 0,
 							},
@@ -118,7 +118,7 @@ export default class PresetsMidra extends Presets {
 							feedbackId: 'deviceScreenMemory',
 							options: {
 								screens: screen.id != 'sel' ? [screen.id] : ['all'],
-								preset: 'pvw',
+								preset: 'prw',
 								memory: memory.id,
 								unmodified: 1,
 							},
@@ -175,7 +175,7 @@ export default class PresetsMidra extends Presets {
 									actionId: 'deviceAuxMemory',
 									options: {
 										screens: ['sel'],
-										preset: screen.id === 'sel' ? 'sel' : 'pvw',
+										preset: screen.id === 'sel' ? 'sel' : 'prw',
 										memory: memory.id,
 										selectScreens: false,
 									},
@@ -189,7 +189,7 @@ export default class PresetsMidra extends Presets {
 							feedbackId: 'deviceAuxMemory',
 							options: {
 								screens: screen.id != 'sel' ? [screen.id] : ['all'],
-								preset: 'pvw',
+								preset: 'prw',
 								memory: memory.id,
 								unmodified: 0,
 							},
@@ -215,7 +215,7 @@ export default class PresetsMidra extends Presets {
 							feedbackId: 'deviceAuxMemory',
 							options: {
 								screens: screen.id != 'sel' ? [screen.id] : ['all'],
-								preset: 'pvw',
+								preset: 'prw',
 								memory: memory.id,
 								unmodified: 1,
 							},
@@ -285,7 +285,7 @@ export default class PresetsMidra extends Presets {
 						feedbackId: 'deviceSourceTally',
 						options: {
 							screens: ['all'],
-							preset: 'pvw',
+							preset: 'prw',
 							source: input.id,
 						},
 						style: {

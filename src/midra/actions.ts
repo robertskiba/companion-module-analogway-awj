@@ -17,6 +17,7 @@ type AWJaction<T> = {
 	name: string
 	description?: string
 	tooltip?: string,
+	sortName?: string
 	options: SomeAWJactionInputfield<T>[]
 	callback?: (action: ActionEvent<T>, context: CompanionActionContext) => void
 	subscribe?: (action: ActionEvent<T>) => void
@@ -42,6 +43,11 @@ export default class ActionsMidra extends Actions {
 
 	readonly actionsToUse = [
 		'deviceScreenMemory',
+		// 'deviceUpdatePreset' - LivePremier/LivePremier4-specific "Save/Revert Screen Memory Changes" action, only
+		// live-confirmed against a real Aquilon (LivePremier4) so far. Midra addresses its screen-memory-load
+		// path differently (device/preset/bank/..., see deviceScreenMemory above) - needs its own live
+		// verification (does a matching device/preset/bank/control/save/... path even exist?) before enabling.
+		// 'deviceSaveScreenMemory' - same presetBank-family dependency as deviceUpdatePreset above, same caveat.
 		'deviceAuxMemory',
 		'deviceMasterMemory',
 		// 'deviceLayerMemory',
@@ -50,14 +56,31 @@ export default class ActionsMidra extends Actions {
 		'deviceCutScreen',
 		'deviceTbar',
 		'deviceTakeTime',
-		'deviceSelectSource',
+		'deviceScreenEncoderAdjustV3',
 		'deviceInputKeying',
 		'deviceInputFreeze',
 		'deviceInputPlug',
 		'deviceLayerFreeze',
 		'deviceScreenFreeze',
+		'deviceSelectSource',
 		'devicePositionSize',
+		'deviceSelectSourceV3',
 		'devicePositionSizeV3',
+		'deviceLayerTransitionsV3',
+		// Layer Properties - Keying does not exist on Midra/Alta - live-confirmed 2026-08-28 against a Zenith
+		// 200 simulator (fw 1.3.7): no `keying` property anywhere on a layer object, and no `device.keyerBank`
+		// (the Keyer Bank memory-preset system this action reads from) anywhere in the state tree. "Set Input
+		// Keying" (deviceInputKeying, chroma/luma mode directly on an input) is a different, unrelated concept
+		// that DOES exist here (device/inputList/items/X/plugList/items/Y/settings/keying) and stays enabled.
+		// 'deviceLayerKeyingV3',
+		'deviceLayerOpacityV3',
+		'deviceLayerAspectCropV3',
+		'deviceLayerMaskV3',
+		'deviceLayerBorderV3',
+		'deviceLayerEffectsV3',
+		'deviceLayerSpeedV3',
+		'deviceLayerTimingV3',
+		'deviceLayerEncoderAdjustV3',
 		'deviceSetAnchorPoint',
 		'deviceResetLayerSize',
 		'deviceCopyProgram',
@@ -80,7 +103,14 @@ export default class ActionsMidra extends Actions {
 		'deviceTestpatterns',
 		'cstawjcmd',
 		'cstawjgetcmd',
-		'devicePower'
+		'devicePower',
+		// Backup (Input Backup + Background Set Backup) does not exist on Midra/Alta at all - live-confirmed
+		// 2026-08-28 against a Zenith 200 simulator (fw 1.3.7): no `device.backup` anywhere in the state tree.
+		// Unlike the Aquilon firmware-version gate (see isBackupSupportedFirmware() in the base Actions class),
+		// this is a structural platform difference, not a version gate, so the actions are removed entirely
+		// rather than shown with a "please update" notice.
+		// 'deviceBackupSetSource',
+		// 'deviceBackupAutoMode',
 	]
 	
 	constructor (instance: AWJinstance) {
@@ -93,14 +123,18 @@ export default class ActionsMidra extends Actions {
 	/**
 	 *  MARK: Recall Screen Memory Midra
 	 */
-	get deviceScreenMemory(): AWJaction<{ screens: string[], preset: string, memory: string, selectScreens: boolean}>  {
-		
+	get deviceScreenMemory(): AWJaction<{ screens: string, preset: string, memory: string, selectScreens: boolean, unlockIfLocked: boolean, relockAfterChange: boolean}>  {
+
 		const deviceScreenMemory  = super.deviceScreenMemory
 
-		deviceScreenMemory.options[0]['choices'] = [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()]
+		deviceScreenMemory.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()]
 		deviceScreenMemory.callback = (action) => {
-			const screens = this.choices.getChosenScreens(action.options.screens)
+			const screens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreens(action.options.screens)
+			return this.instance.serialize(screens, async () => {
 			const preset = this.choices.getPresetSelection(action.options.preset, true)
+			const unlockedScreens = new Set<string>()
 			for (const screen of screens) {
 				const path = [
 					'device',
@@ -120,9 +154,18 @@ export default class ActionsMidra extends Actions {
 					'pp',
 					'xRequest',
 				]
-				if (this.choices.isLocked(screen, preset)) continue
+				if (this.choices.isLocked(screen, preset)) {
+					if (!parseBoolean(action.options.unlockIfLocked)) continue
+					if (!unlockedScreens.has(screen)) {
+						this.choices.setScreenLock(screen, preset, false)
+						unlockedScreens.add(screen)
+					}
+				}
 				this.connection.sendWSmessage(path,false, true)
 				this.instance.sendXupdate()
+				// No live Midra/Alta access this session to confirm an equivalent "isLoading" flag - fixed
+				// delay for now, same reasoning as deviceAuxMemory/deviceMasterMemory above.
+				await this.delay(200)
 
 				if (parseBoolean(action.options.selectScreens)) {
 					if (this.state.syncSelection) {
@@ -133,17 +176,26 @@ export default class ActionsMidra extends Actions {
 					}
 				}
 			}
+			if (parseBoolean(action.options.relockAfterChange)) {
+				for (const screenAuxKey of unlockedScreens) {
+					this.choices.setScreenLock(screenAuxKey, preset, true)
+				}
+			}
+			})
 		}
 
 		return deviceScreenMemory
 	}
-		
+
 	// MARK: recall Aux memory
 	get deviceAuxMemory() {
 		const deviceAuxMemory = super.deviceAuxMemory
-		
+
 		deviceAuxMemory.callback = (action) => {
-			const screens = this.choices.getChosenAuxes(action.options.screens as string[])
+			const screens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenAuxes(action.options.screens as string)
+			return this.instance.serialize(screens, async () => {
 			const preset = this.choices.getPresetSelection(action.options.preset as string, true)
 			for (const screen of screens) {
 				if (this.choices.isLocked(screen, preset)) continue
@@ -177,91 +229,69 @@ export default class ActionsMidra extends Actions {
 					}
 				}
 			}
+			// TODO: no live Midra/Alta access this session to confirm whether an equivalent per-slot "isLoading"
+			// flag exists at device/preset/auxBank/control/load/.../pp/isLoading (mirroring the LivePremier4
+			// structure confirmed for Recall Screen/Layer Memory and Recall Master Memory) - using a fixed
+			// delay for now instead of guessing an unverified path. Replace with waitForPulseComplete() once
+			// confirmed live, same as the other Recall actions.
+			await this.delay(200)
+			})
 		}
 
 		return deviceAuxMemory
 	}
 
 	/**
-	 * MARK: Recall Master Memory
-	 */
-	//type DeviceMasterMemory = {preset: string, memory: string, selectScreens: boolean}
-	get deviceMasterMemory_common() {
-		
-		const deviceMasterMemory: AWJaction<{preset: string, memory: string, selectScreens: boolean}> = {
-			name: 'Recall Master Memory',
-			options: [
-				{
-					id: 'preset',
-					type: 'dropdown',
-					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
-					default: 'pvw',
-				},
-				{
-					id: 'memory',
-					allowInvalidValues: true,
-					type: 'dropdown',
-					label: 'Master Memory',
-					choices: this.choices.getMasterMemoryChoices(),
-					default: this.choices.getMasterMemoryChoices()[0]?.id,
-				},
-				{
-					id: 'selectScreens',
-					type: 'checkbox',
-					label: 'Select screens after load',
-					default: true,
-				},
-			],
-			
-		}
-
-		return deviceMasterMemory
-	}
-
-	/**
 	 * MARK: Recall Master Memory - Midra
 	 */
 	get deviceMasterMemory() {
-		
+
 		const deviceMasterMemory = super.deviceMasterMemory
-		
+
 		deviceMasterMemory.callback = (action) => {
-			const preset = this.choices.getPresetSelection(action.options.preset, true)
 			const bankpath = ['device', 'preset', 'masterBank']
 			const list = 'slotList'
 			const memorypath = ['items', action.options.memory]
 			const loadpath = ['control', 'load', 'slotList']
 
-			const filterpath = this.state.get(['DEVICE', ...bankpath, list, ...memorypath, 'status', 'pp', 'isShadow']) ? ['status', 'shadow', 'pp'] : ['status', 'pp']			
-			
+			const filterpath = this.state.get(['DEVICE', ...bankpath, list, ...memorypath, 'status', 'pp', 'isShadow']) ? ['status', 'shadow', 'pp'] : ['status', 'pp']
+
 			const screens = [
-				...this.state.get([
+				...(this.state.get([
 					'DEVICE',
 					...bankpath,
 					list,
 					...memorypath,
 					...filterpath,
 					'screenFilter',
-				]).map((scr: string) => 'S' + scr),
-				...this.state.get([
+				]) ?? []).map((scr: string) => 'S' + scr),
+				...(this.state.get([
 					'DEVICE',
 					...bankpath,
 					list,
 					...memorypath,
 					...filterpath,
 					'auxFilter',
-				]).map((scr: string) => 'A' + scr)
+				]) ?? []).map((scr: string) => 'A' + scr)
 			]
 
-			if (
-				screens.some((screen: string) => {
-					return this.choices.isLocked(screen, preset)
-				})
-			) {
+			// serialize() keyed by every screen/aux this Master Memory affects - see its own doc comment for why
+			// this must never be a single fixed key: an unrelated screen's action must never wait on this one.
+			return this.instance.serialize(screens, async () => {
+			const preset = this.choices.getPresetSelection(action.options.preset, true)
+			const unlockedScreens = new Set<string>()
+			const stillLocked = screens.filter((screen: string) => {
+				if (!this.choices.isLocked(screen, preset)) return false
+				if (!parseBoolean(action.options.unlockIfLocked)) return true
+				if (!unlockedScreens.has(screen)) {
+					this.choices.setScreenLock(screen, preset, false)
+					unlockedScreens.add(screen)
+				}
+				return false
+			})
+			if (stillLocked.length > 0) {
 				return // TODO: resembles original WebRCS behavior, but could be also individual screen handling
 			}
-			// if (this.choices.isLocked(layer.screenAuxKey, preset)) continue
 			const fullpath = [
 				...bankpath,
 				...loadpath,
@@ -274,6 +304,10 @@ export default class ActionsMidra extends Actions {
 			]
 			this.connection.sendWSmessage( fullpath, false, true )
 			this.instance.sendXupdate()
+			// TODO: no live Midra/Alta access this session to confirm an equivalent per-slot "isLoading" flag
+			// at device/preset/masterBank/control/load/.../pp/isLoading - fixed delay for now, same reasoning
+			// as deviceAuxMemory above.
+			await this.delay(200)
 
 			if (action.options.selectScreens) {
 				if (this.state.syncSelection) {
@@ -284,9 +318,12 @@ export default class ActionsMidra extends Actions {
 				}
 			}
 
-
-
-
+			if (parseBoolean(action.options.relockAfterChange)) {
+				for (const screenAuxKey of unlockedScreens) {
+					this.choices.setScreenLock(screenAuxKey, preset, true)
+				}
+			}
+			})
 		}
 
 		return deviceMasterMemory
@@ -321,14 +358,38 @@ export default class ActionsMidra extends Actions {
 
 	/**
 	 * MARK: Take one or multiple screens
+	 *
+	 * "Wait for Transition Completion" (2026-08-28): no live-verified status field to poll on Midra/Alta this
+	 * session - instead delays by the screen's own configured takeTime (same path already written by
+	 * deviceTakeTime above, so the unit/location is trusted) plus a small buffer. Capped at 4500ms - Companion's
+	 * own module-host IPC kills a single action call at a hard 5000ms regardless (confirmed live, see
+	 * waitForLevelReturnToRest's doc comment in the base class for the full explanation).
 	 */
+	// "Wait for Transition Completion" deliberately sits OUTSIDE the serialize()-guarded section below - see
+	// LivePremier4's deviceTakeScreen for why (a later panic-button Cut on the same screen must never be stuck
+	// queued behind a still-running, possibly long transition wait).
 	get deviceTakeScreen() {
 		const deviceTakeScreen = super.deviceTakeScreen
 		deviceTakeScreen.callback = (action) => {
-			for (const screen of this.choices.getChosenScreenAuxes(action.options.screens)) {
-				const screeninfo = this.choices.getScreenInfo(screen)
-				this.connection.sendWSmessage(['device', 'transition', `${screeninfo.prefixverylong}List`, 'items', screeninfo.numstr, 'control', 'pp', 'xTake'], true)
-			}
+			const targetScreens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			let longestTransitionMs = 0
+			const sent = this.instance.serialize(targetScreens, async () => {
+				for (const screen of targetScreens) {
+					const screeninfo = this.choices.getScreenInfo(screen)
+					this.connection.sendWSmessage(['device', 'transition', `${screeninfo.prefixverylong}List`, 'items', screeninfo.numstr, 'control', 'pp', 'xTake'], true)
+					if (parseBoolean(action.options.waitForComplete)) {
+						const deciseconds = this.state.get(['DEVICE', 'device', 'transition', `${screeninfo.prefixverylong}List`, 'items', screeninfo.numstr, 'control', 'pp', 'takeTime']) ?? 0
+						longestTransitionMs = Math.max(longestTransitionMs, deciseconds * 100)
+					}
+				}
+				// Confirms receipt only, not full completion - see waitForPulseComplete()'s doc comment for why
+				// a fixed delay (not a status poll) is used specifically for Take/Cut.
+				await this.delay(200)
+			})
+			if (!parseBoolean(action.options.waitForComplete)) return sent
+			return sent.then(() => longestTransitionMs > 0 ? this.delay(Math.min(longestTransitionMs + 300, 4500)) : undefined)
 		}
 		return deviceTakeScreen
 	}
@@ -340,19 +401,27 @@ export default class ActionsMidra extends Actions {
 		const deviceCutScreen = super.deviceCutScreen
 
 		deviceCutScreen.callback = (action) => {
-			for (const screen of this.choices.getChosenScreenAuxes(action.options.screens)) {
+			const targetScreens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			return this.instance.serialize(targetScreens, async () => {
+			for (const screen of targetScreens) {
 				this.connection.sendWSmessage(
 					[
 						...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
-						'items', 
-						screen.replaceAll(/\D/g, ''), 
-						'control', 
-						'pp', 
+						'items',
+						screen.replaceAll(/\D/g, ''),
+						'control',
+						'pp',
 						'xCut'
-					], 
+					],
 					true
 				)
 			}
+			// Confirms receipt only, not full completion - see waitForPulseComplete()'s doc comment for why a
+			// fixed delay (not a status poll) is used specifically for Take/Cut.
+			await this.delay(200)
+			})
 		}
 
 		return deviceCutScreen
@@ -376,11 +445,14 @@ export default class ActionsMidra extends Actions {
 					value = position / maximum
 				}
 				const tbarint = Math.round(value * tbarmax)
-				for (const screen of this.choices.getChosenScreenAuxes(action.options.screens)) {
+				const targetScreens = action.options.screens === 'first'
+					? this.choices.getSelectedScreens().slice(0, 1)
+					: this.choices.getChosenScreenAuxes(action.options.screens)
+				for (const screen of targetScreens) {
 					this.connection.sendWSmessage(
 						[
 							...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
-							'items', 
+							'items',
 							screen.replaceAll(/\D/g, ''), 
 							'control', 
 							'pp', 
@@ -402,20 +474,26 @@ export default class ActionsMidra extends Actions {
 		const deviceTakeTime = super.deviceTakeTime
 
 		deviceTakeTime.callback = (action) => {
-			const time = action.options.time * 10
-			this.choices.getChosenScreenAuxes(action.options.screens).forEach((screen) =>
-				this.connection.sendWSmessage(
-					[
-						...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
-						'items', 
-						screen.replaceAll(/\D/g, ''), 
-						'control', 
-						'pp', 
-						'takeTime'
-					],
-					time
-				)
-			)
+			const targetScreens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			return this.instance.serialize(targetScreens, async () => {
+			// round to whole deciseconds - see the same fix in the base action for why
+			const time = Math.round(action.options.time * 10)
+			const waitPromises: Promise<boolean>[] = targetScreens.map((screen) => {
+				const path = [
+					...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
+					'items',
+					screen.replaceAll(/\D/g, ''),
+					'control',
+					'pp',
+					'takeTime'
+				]
+				this.connection.sendWSmessage(path, time)
+				return this.waitForStateValue(['DEVICE', ...path], (v) => v === time)
+			})
+			await Promise.all(waitPromises)
+			})
 		}
 
 		return deviceTakeTime
@@ -552,6 +630,211 @@ export default class ActionsMidra extends Actions {
 		return deviceSelectSource
 	}
 
+	/**
+	 * MARK: Layer Properties - Source (V3) - Midra
+	 */
+	get deviceSelectSourceV3() {
+		const deviceSelectSourceV3 = super.deviceSelectSourceV3
+
+		// Midra's Layer choices also include the TOP (foreground frame) layer, which LP/LP4 don't have
+		const layerField = deviceSelectSourceV3.options.find((opt) => opt.id === 'layer')
+		if (layerField) {
+			layerField['choices'] = [
+				{ id: 'first', label: 'First/Only Selected Layer' },
+				{ id: 'sel', label: 'All Selected Layers' },
+				...this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true, true),
+			]
+		}
+
+		// Aux screens (background only, via "content") and the TOP frame layer (via "frame") use their own
+		// separate device properties, distinct from numbered layers' "sourceLayer" - added here as raw
+		// passthrough textinputs (blank = don't change) since their exact accepted values are NOT live-verified
+		// on Midra yet (unlike sourceLayer/sourceColor, confirmed live on LivePremier4 only). This fixes a real
+		// bug found live-auditing this action: the callback below always referenced
+		// `action.options['sourceBack']`/`['sourceFront']` even though no such fields existed in the schema,
+		// so they were always `undefined` at runtime - silently sending `undefined` to every Aux target on
+		// every run (even with nothing changed), and throwing on every TOP-layer target (`undefined.replace`
+		// is not a function). Shown unconditionally like sourceLayer/sourceColor (same "showing an unneeded
+		// field is safer than hiding a needed one" precedent used elsewhere in this file), only applied when
+		// the resolved target is actually an Aux/TOP layer.
+		const sourceColorIndex = deviceSelectSourceV3.options.findIndex((opt) => opt.id === 'sourceColor')
+		if (sourceColorIndex !== -1) {
+			deviceSelectSourceV3.options.splice(sourceColorIndex + 1, 0,
+				{
+					id: 'sourceBack',
+					type: 'textinput',
+					label: 'Aux Background Source',
+					tooltip: 'Leave empty to not change this value. Only applies when the resolved target is an Aux screen (which only has a background, no per-layer addressing on Midra). Raw value, sent 1:1 - exact accepted values not yet confirmed live on Midra.',
+					default: '',
+					useVariables: true,
+				},
+				{
+					id: 'sourceFront',
+					type: 'textinput',
+					label: 'TOP Frame Source',
+					tooltip: 'Leave empty to not change this value. Only applies when the resolved target is the TOP (foreground frame) layer. Raw value (digits only are used), sent 1:1 - exact accepted values not yet confirmed live on Midra.',
+					default: '',
+					useVariables: true,
+				},
+			)
+		}
+
+		const resolveTargets = (opt: {screen: string, layer: string}): {screenAuxKey: string, layerKey: string}[] => {
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					// still supports a concatenated multi-selection like "S1A1" via expression, same convention as elsewhere in the module
+					: this.choices.getChosenScreenAuxes(opt.screen)
+			if (opt.layer === 'first') {
+				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			}
+			if (opt.layer === 'sel') {
+				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
+			}
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layer}))
+		}
+
+		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
+		// current source and pins screen/preset/layer to the concrete values it read from.
+		deviceSelectSourceV3.learn = (action) => {
+			const targets = resolveTargets(action.options)
+			if (targets.length === 0) return undefined
+			const target = targets[0]
+			const screen = this.choices.getScreenInfo(target.screenAuxKey)
+
+			const preset = this.choices.getPresetSelection()
+			const presetpath = [
+				'device',
+				screen.prefixverylong + 'List',
+				'items', screen.platformId,
+				'presetList', 'items', this.choices.getPreset(screen.id, preset)
+			]
+
+			const newoptions: Partial<typeof action.options> & {sourceBack?: string, sourceFront?: string} = {
+				screen: screen.id,
+				layer: target.layerKey,
+				preset,
+			}
+
+			const readColor = (colorpath: string[]) => {
+				const r = this.state.get(['DEVICE', ...colorpath, 'red']) ?? 0
+				const g = this.state.get(['DEVICE', ...colorpath, 'green']) ?? 0
+				const b = this.state.get(['DEVICE', ...colorpath, 'blue']) ?? 0
+				return (r << 16) + (g << 8) + b
+			}
+
+			if (screen.isAux) {
+				const raw = this.state.get(['DEVICE', ...presetpath, 'background', 'source', 'pp', 'content'])
+				if (typeof raw === 'string') newoptions.sourceBack = raw
+				return newoptions
+			}
+
+			if (target.layerKey === 'TOP') {
+				const raw = this.state.get(['DEVICE', ...presetpath, 'top', 'source', 'pp', 'frame'])
+				if (raw !== undefined) newoptions.sourceFront = String(raw)
+				return newoptions
+			}
+
+			if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
+				const raw = this.state.get(['DEVICE', ...presetpath, 'background', 'source', 'pp', 'set'])
+				if (typeof raw !== 'string') return newoptions
+				newoptions.sourceLayer = /^\d+$/.test(raw) ? `NATIVE_${raw}` : raw
+				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'background', 'source', 'color', 'pp'])
+				return newoptions
+			}
+
+			const raw = this.state.get(['DEVICE', ...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'])
+			if (typeof raw === 'string') {
+				newoptions.sourceLayer = raw
+				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp'])
+			}
+			return newoptions
+		}
+
+		deviceSelectSourceV3.callback = (action) => {
+			const preset = action.options.preset
+			for (const target of resolveTargets(action.options)) {
+				const screen = this.choices.getScreenInfo(target.screenAuxKey)
+				let unlockedByUs = false
+				if (this.choices.isLocked(screen.id, preset)) {
+					if (!parseBoolean(action.options.unlockIfLocked)) continue
+					this.choices.setScreenLock(screen.id, preset, false)
+					unlockedByUs = true
+				}
+				const presetpath = [
+					'device',
+					screen.prefixverylong + 'List',
+					'items', screen.platformId,
+					'presetList', 'items', this.choices.getPreset(screen.id, preset)
+				]
+				// on Midra, aux screens only have a background - there is no per-layer addressing at all
+				if (screen.isAux) {
+					if (action.options['sourceBack'] !== '') {
+						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
+					}
+				} else if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
+					const source = action.options['sourceLayer']
+					// NOT live-verified on Midra (only confirmed on a LivePremier4 device: color lives at
+					// .../source/color/pp/{red,green,blue}, sibling to .../source/pp/{inputNum|set|input}) -
+					// assumed to follow the same sibling-of-source convention here, please verify before relying on it
+					const colorpath = [...presetpath, 'background', 'source', 'color', 'pp']
+					const sendColor = (r: number, g: number, b: number) => {
+						this.connection.sendWSmessage([...colorpath, 'red'], r)
+						this.connection.sendWSmessage([...colorpath, 'green'], g)
+						this.connection.sendWSmessage([...colorpath, 'blue'], b)
+					}
+					if (source === 'NONE') {
+						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'NONE')
+						sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
+					} else if (source === 'COLOR') {
+						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'COLOR')
+						const color = Number(action.options['sourceColor'])
+						sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+					} else if (/^NATIVE_\d+$/.test(source)) {
+						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], source.replace(/\D/g, ''))
+					}
+					// anything else picked from the shared list isn't valid for a background layer - no-op
+				} else if (target.layerKey === 'TOP' && action.options['sourceFront'] !== '') {
+					this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], action.options['sourceFront'].replace(/\D/g, ''))
+				} else if (action.options['sourceLayer'] !== 'keep') {
+					this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'], action.options['sourceLayer'])
+					if (action.options['sourceLayer'] === 'COLOR') {
+						const color = Number(action.options['sourceColor'])
+						const colorpath = [...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp']
+						this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
+						this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
+						this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+					}
+				}
+				if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
+					this.choices.setScreenLock(screen.id, preset, true)
+				}
+			}
+			this.instance.sendXupdate()
+		}
+
+		// inserted before the last 2 fields (Unlock Screen if locked? / Relock after change), which must stay last
+		deviceSelectSourceV3.options.splice(deviceSelectSourceV3.options.length - 2, 0,
+			{
+				id: 'sourceFront',
+				type: 'dropdown',
+				label: 'Screen Foreground Source',
+				choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.choicesForegroundImagesSource],
+				default: 'keep',
+			},
+			{
+				id: 'sourceBack',
+				type: 'dropdown',
+				label: 'Aux Background Source',
+				choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.getAuxBackgroundChoices()],
+				default: 'keep',
+			},
+		)
+
+		return deviceSelectSourceV3
+	}
+
 
 	/**
 	 * MARK: Set input keying
@@ -609,7 +892,9 @@ export default class ActionsMidra extends Actions {
 		type DeviceInputPlug = Record<string,string>
 
 		const deviceInputPlug: AWJaction<DeviceInputPlug> = {
-			name: 'Set Input Plug',
+			name: 'Preconfig - Set Input Plug',
+			sortName: '08 Preconfig - Set Input Plug',
+			description: 'Assigns which physical plug an Input uses (Midra only).',
 			options: [
 				{
 					id: 'input',
@@ -747,9 +1032,9 @@ export default class ActionsMidra extends Actions {
 			const widget = action.options.widget?.split(':')[1] ?? '0'
 			let widgetSelection: Record<'mocOutputLogicKey' | 'widgetKey', string>[] = []
 			if (this.state.syncSelection) {
-				widgetSelection = [...this.state.get('REMOTE/live/multiviewer/widgetSelection/widgetKeys').map((key: string) => {return {widgetKey: key, mocOutputLogicKey: '1'}})]
+				widgetSelection = [...(this.state.get('REMOTE/live/multiviewer/widgetSelection/widgetKeys') ?? []).map((key: string) => {return {widgetKey: key, mocOutputLogicKey: '1'}})]
 			} else {
-				widgetSelection = [...this.state.get('LOCAL/widgetSelection/widgetIds')]
+				widgetSelection = [...(this.state.get('LOCAL/widgetSelection/widgetIds') ?? [])]
 			}
 			const idx = widgetSelection.findIndex((elem) => {
 				return elem.widgetKey == widget && elem.mocOutputLogicKey == mvw
@@ -784,9 +1069,9 @@ export default class ActionsMidra extends Actions {
 			let widgetSelection: Record<'mocOutputLogicKey' | 'widgetKey', string>[] = []
 			if (action.options.widget === 'sel') {
 				if (this.state.syncSelection) {
-					widgetSelection = [...this.state.get('REMOTE/live/multiviewer/widgetSelection/widgetKeys').map((key: string) => {return {widgetKey: key, mocOutputLogicKey: '1'}})]
+					widgetSelection = [...(this.state.get('REMOTE/live/multiviewer/widgetSelection/widgetKeys') ?? []).map((key: string) => {return {widgetKey: key, mocOutputLogicKey: '1'}})]
 				} else {
-					widgetSelection = [...this.state.get('LOCAL/widgetSelection/widgetIds')]
+					widgetSelection = [...(this.state.get('LOCAL/widgetSelection/widgetIds') ?? [])]
 				}
 			} else {
 				widgetSelection = [
@@ -892,7 +1177,9 @@ export default class ActionsMidra extends Actions {
 		type DeviceStreamControl = {stream: string}
 		
 		const deviceStreamControl: AWJaction<DeviceStreamControl> = {
-			name: 'Stream Control',
+			name: 'LIVE - Stream Control',
+			sortName: '01 LIVE - 15 Stream Control',
+			description: 'Starts, stops, or toggles the device\'s streaming output.',
 			options: [
 				{
 					type: 'dropdown',
@@ -933,7 +1220,9 @@ export default class ActionsMidra extends Actions {
 		type DeviceStreamAudioMute = {stream: string}
 		
 		const deviceStreamAudioMute: AWJaction<DeviceStreamAudioMute> = {
-			name: 'Stream Audio Mute',
+			name: 'Audio - Mute Stream',
+			sortName: '07 Audio - Mute Stream',
+			description: 'Mutes, unmutes, or toggles the audio of the device\'s streaming output.',
 			options: [
 				{
 					type: 'dropdown',
@@ -971,7 +1260,9 @@ export default class ActionsMidra extends Actions {
 		const audioInputChoices = this.choices.getAudioInputChoices()
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
-			name: 'Route Audio (Block)',
+			name: 'Audio - Route (Block)',
+			sortName: '07 Audio - Route (Block)',
+			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
 					type: 'dropdown',
@@ -1028,7 +1319,7 @@ export default class ActionsMidra extends Actions {
 						const block = sink.toString().split(':')[0]
 						const channel = sink.toString().split(':')[1]
 						if (!routings[block]) {
-							routings[block] = [...this.state.get('DEVICE/device/audio/custom/sourceList/items/' + block + '/control/pp/channelMapping')] as string[]
+							routings[block] = [...(this.state.get('DEVICE/device/audio/custom/sourceList/items/' + block + '/control/pp/channelMapping') ?? [])] as string[]
 						}
 						routings[block][parseInt(channel) - 1] = source.toString()
 
@@ -1066,7 +1357,9 @@ export default class ActionsMidra extends Actions {
 		const audioInputChoices = this.choices.getAudioInputChoices()
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
-			name: 'Route Audio (Channels)',
+			name: 'Audio - Route (Channels)',
+			sortName: '07 Audio - Route (Channels)',
+			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
 					type: 'dropdown',
@@ -1111,7 +1404,7 @@ export default class ActionsMidra extends Actions {
 						const block = sink.toString().split(':')[0]
 						const channel = sink.toString().split(':')[1]
 						if (!routings[block]) {
-							routings[block] = [...this.state.get('DEVICE/device/audio/custom/sourceList/items/' + block + '/control/pp/channelMapping')] as string[]
+							routings[block] = [...(this.state.get('DEVICE/device/audio/custom/sourceList/items/' + block + '/control/pp/channelMapping') ?? [])] as string[]
 						}
 						routings[block][parseInt(channel) - 1] = source.toString()
 
@@ -1266,7 +1559,7 @@ export default class ActionsMidra extends Actions {
 			},
 		]
 
-		return this.deviceTestpatterns_common(deviceTestpatternsOptions, 'Set Midra 4K Testpattern')
+		return this.deviceTestpatterns_common(deviceTestpatternsOptions, 'Device - Set Midra 4K Testpattern')
 	}
 
 	/**
@@ -1276,7 +1569,9 @@ export default class ActionsMidra extends Actions {
 		type DevicePower = {action : string}
 		
 		const devicePower: AWJaction<DevicePower> = {
-			name: 'Device Power',
+			name: 'Device - Power',
+			sortName: '09 Device - Power',
+			description: 'Switches the device on (Wake on LAN), off, or reboots it.',
 			options: [
 				{
 					id: 'action',
@@ -1323,7 +1618,9 @@ export default class ActionsMidra extends Actions {
 		const libraryChoices = [{ id: 'NONE', label: 'None (clear)' }, ...this.choices.getStillLibraryChoices()]
 
 		const deviceAssignImageLibraryToFrame: AWJaction<DeviceAssignImageLibraryToFrame> = {
-			name: 'Assign Image from Library to Foreground/Background Frame',
+			name: 'Preconfig - Assign Image from Library to Foreground/Background Frame',
+			sortName: '08 Preconfig - Assign Image from Library to Foreground/Background Frame',
+			description: 'Assigns an image from the Image Library to the Foreground or Background Frame (Midra only), so it becomes available as a Layer source.',
 			options: [
 				{
 					id: 'screens',
