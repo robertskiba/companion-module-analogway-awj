@@ -6,12 +6,12 @@
 	"description": "Module for controlling the Analog Way AWJ protocol devices (LivePremier, Alta 4K, Midra 4K)",
 	"version": "0.0.0",
 	"license": "MIT",
-	"repository": "git+https://github.com/bitfocus/companion-module-analogway-awj.git",
-	"bugs": "https://github.com/bitfocus/companion-module-analogway-awj/issues",
+	"repository": "git+https://github.com/robertskiba/companion-module-analogway-awj.git",
+	"bugs": "https://github.com/robertskiba/companion-module-analogway-awj/issues",
 	"maintainers": [
 		{
-			"name": "Dorian Meid",
-			"email": "meid@backstage.org"
+			"name": "Robert Skiba",
+			"email": "info@konferenzregie.de"
 		}
 	],
 	"legacyIds": [],
