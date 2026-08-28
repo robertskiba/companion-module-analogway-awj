@@ -172,7 +172,7 @@ export default class Presets {
 						feedbackId: 'deviceMasterMemory',
 						options: {
 							memory: memory.id,
-							preset: 'pvw',
+							preset: 'prw',
 						},
 						style: {
 							color: this.inverseColorBW(this.config.color_green),
@@ -224,7 +224,7 @@ export default class Presets {
 									actionId: 'deviceScreenMemory',
 									options: {
 										screens: [screen.id],
-										preset: screen.id === 'sel' ? 'sel' : 'pvw',
+										preset: screen.id === 'sel' ? 'sel' : 'prw',
 										memory: memory.id,
 										selectScreens: false,
 									},
@@ -238,7 +238,7 @@ export default class Presets {
 							feedbackId: 'deviceScreenMemory',
 							options: {
 								screens: screen.id != 'sel' ? [screen.id] : ['all'],
-								preset: 'pvw',
+								preset: 'prw',
 								memory: memory.id,
 								unmodified: 0,
 							},
@@ -264,7 +264,7 @@ export default class Presets {
 							feedbackId: 'deviceScreenMemory',
 							options: {
 								screens: screen.id != 'sel' ? [screen.id] : ['all'],
-								preset: 'pvw',
+								preset: 'prw',
 								memory: memory.id,
 								unmodified: 1,
 							},
@@ -325,7 +325,7 @@ export default class Presets {
 						options: {
 							method: 'sel',
 							screen: 'S1',
-							preset: 'pvw',
+							preset: 'prw',
 							layer: '1',
 							memory: memory.id,
 						},
@@ -627,7 +627,7 @@ export default class Presets {
 			name: 'Toggle Preset (Program/Preview)',
 			category: 'Live - Preset Program/Preview Settings',
 			style: {
-				text: 'Toggle preset\\nPGM/PVW',
+				text: 'Toggle preset\\nPGM/PRW',
 				size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_bright,
 				bgcolor: this.config.color_dark,
@@ -652,7 +652,7 @@ export default class Presets {
 						preset: 'PREVIEW',
 					},
 					style: {
-						text: 'PVW',
+						text: 'PRW',
 						size: 11.43, // was '24', compensated for the confirmed 2.1x rendering scale on the reference setup
 						color: this.inverseColorBW(this.config.color_green),
 						bgcolor: this.config.color_green,
@@ -810,7 +810,8 @@ export default class Presets {
 				name: 'Toggle Screen ' + screen + ' Selection and show some useful data of PGM',
 				category: 'Screens - Screen Selection',
 				style: {
-					text: `${screen} PGM\\n$(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)})\\n$(${ilabel}:${this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)})\\n$(${ilabel}:screen${screen}memoryPGM)$(${ilabel}:screen${screen}memoryModifiedPGM)\\n$(${ilabel}:${this.varName(`screen${screen}memoryLabelPGM`, `${screen}.pgm.memory.label`)})`,
+					text: `concat('${screen} PGM\\n', $(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)}), '\\n', $(${ilabel}:${this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)}), '\\n', $(${ilabel}:${this.varName(`screen${screen}memoryPGM`, `${screen}.pgm.memory.active`)}), ($(${ilabel}:${this.varName(`screen${screen}memoryModifiedPGM`, `${screen}.pgm.memory.modified`)}) ? '*' : ''), '\\n', $(${ilabel}:${this.varName(`screen${screen}memoryLabelPGM`, `${screen}.pgm.memory.label`)}))`,
+					textExpression: true,
 					size: 'auto',
 					color: this.config.color_bright,
 					bgcolor: this.config.color_reddark,
@@ -842,12 +843,13 @@ export default class Presets {
 					},
 				],
 			}
-			presets['Copy PGM of ' + screen + ' to PVW and show some useful data of PVW'] = {
+			presets['Copy PGM of ' + screen + ' to PRW and show some useful data of PRW'] = {
 			type: 'simple',
-				name: 'Copy PGM of ' + screen + ' to PVW and show some useful data of PVW',
+				name: 'Copy PGM of ' + screen + ' to PRW and show some useful data of PRW',
 				category: 'Screens - Screen Selection',
 				style: {
-					text: `${screen} PVW\\n$(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)})\\n$(${ilabel}:${this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)})\\n$(${ilabel}:screen${screen}memoryPVW)$(${ilabel}:screen${screen}memoryModifiedPVW)\\n$(${ilabel}:${this.varName(`screen${screen}memoryLabelPVW`, `${screen}.pvw.memory.label`)})`,
+					text: `concat('${screen} PRW\\n', $(${ilabel}:${this.varName(`screen${screen}label`, `${screen}.label`)}), '\\n', $(${ilabel}:${this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)}), '\\n', $(${ilabel}:${this.varName(`screen${screen}memoryPVW`, `${screen}.prw.memory.active`)}), ($(${ilabel}:${this.varName(`screen${screen}memoryModifiedPVW`, `${screen}.prw.memory.modified`)}) ? '*' : ''), '\\n', $(${ilabel}:${this.varName(`screen${screen}memoryLabelPVW`, `${screen}.prw.memory.label`)}))`,
+					textExpression: true,
 					size: 'auto',
 					color: this.config.color_bright,
 					bgcolor: this.config.color_greendark,
@@ -993,12 +995,12 @@ export default class Presets {
 	get toggleLockPvwAllScreens() {
 		const presets: CategorizedPresetDefinitions = {}
 
-		presets['Toggle Lock PVW All Screens'] = {
+		presets['Toggle Lock PRW All Screens'] = {
 			type: 'simple',
-			name: 'Toggle Lock PVW All Screens',
+			name: 'Toggle Lock PRW All Screens',
 			category: 'Screens - Lock Screens',
 			style: {
-				text: 'PVW',
+				text: 'PRW',
 				size: 11.43, // was '24', compensated for the confirmed 2.1x rendering scale on the reference setup
 				color: this.config.color_dark,
 				bgcolor: this.config.color_greendark,
@@ -1045,12 +1047,12 @@ export default class Presets {
 		const presets: CategorizedPresetDefinitions = {}
 
 		for (const screen of this.choices.getChosenScreenAuxes('all')) {
-			presets['Toggle Lock PVW Screen ' + screen] = {
+			presets['Toggle Lock PRW Screen ' + screen] = {
 			type: 'simple',
-				name: 'Toggle Lock PVW Screen ' + screen,
+				name: 'Toggle Lock PRW Screen ' + screen,
 				category: 'Screens - Lock Screens',
 				style: {
-					text: screen + '\\nPVW',
+					text: screen + '\\nPRW',
 					size: 8.57, // was '18', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_dark,
 					bgcolor: this.config.color_greendark,
@@ -1811,7 +1813,7 @@ export default class Presets {
 					name: 'Load MV' + memory.id + nameSuffix,
 					category: 'Multiviewer - Recall Memories',
 					style: {
-						text: (multimulti ? `MV${multiviewer} `: '') +  `MV${memory.id}\\n$(${ilabel}:${this.varName(`multiviewerMemory${memory.id}label`, `MV${memory.id}.label`)})`,
+						text: (multimulti ? `MVW${multiviewer} `: '') +  `MV${memory.id}\\n$(${ilabel}:${this.varName(`multiviewerMemory${memory.id}label`, `MV${memory.id}.label`)})`,
 						size: 'auto',
 						color: this.inverseColorBW(bgcolor),
 						bgcolor,
@@ -1848,7 +1850,7 @@ export default class Presets {
 				name: 'Select ' + widget.label,
 				category: 'Multiviewer - Select Widgets',
 				style: {
-					text: 'Select ' + widget.label.replace(/Multiviewer /, 'MV').replace(/Widget /, 'W'),
+					text: 'Select ' + widget.label.replace(/Multiviewer /, 'MVW').replace(/Widget /, 'W'),
 					size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,
@@ -1895,7 +1897,7 @@ export default class Presets {
 				name: 'Toggle Selection of ' + widget.label,
 				category: 'Multiviewer - Select Widgets',
 				style: {
-					text: 'Toggle ' + widget.label.replace(/Multiviewer /, 'MV').replace(/Widget /, 'W'),
+					text: 'Toggle ' + widget.label.replace(/Multiviewer /, 'MVW').replace(/Widget /, 'W'),
 					size: 6.67, // was '14', compensated for the confirmed 2.1x rendering scale on the reference setup
 					color: this.config.color_bright,
 					bgcolor: this.config.color_dark,

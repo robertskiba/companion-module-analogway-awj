@@ -24,7 +24,15 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		'globalAnchorPointChange',
 		'selectedLayerSourceChange',
 		'selectedLayerSourceSignalChange',
+		'selectedLayerOpacityChange',
+		'selectedLayerCroppingChange',
 		'selectedScreenChange',
+		'selectedScreenTbarChange',
+		'selectedScreenTransitionTimeChange',
+		'backupSetChange',
+		'backupBackgroundSetChange',
+		'backupGroupChange',
+		'backupPrimarySignalChange',
 		'widgetSelection',
 		'screenLock',
 		'sourceVisibility',
@@ -61,11 +69,15 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		'screenMemoryLabel',
 		'inputLabel',
 		'screenSize',
+		'layerVariables',
+		'inputStatus',
+		'outputUsedIn',
 		'outputStatus',
 		'outputLabel',
 		'deviceIOCount',
 		'outputPlugStatus',
 		'multiviewerOutputStatus',
+		'multiviewerEnabledChange',
 		'deviceIdentity',
 		'deviceHealth',
 		'shutdown',
@@ -133,28 +145,24 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 				const exists = [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()].some(scr => scr.id === screen)
 				if (pres === 'takeUpTime') {
 					const presname = 'B' === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PVW' : 'PGM'
-					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname.toLowerCase()}.time`)
+					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname === 'PVW' ? 'prw' : presname.toLowerCase()}.time`)
 					const deciseconds = this.instance.state.get(path)
 					if (exists) {
 						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
-						this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${varId}.ms`, name: `Transition time for ${screen} ${presname} (ms)` })
 					}
 					this.instance.setVariableValues({
 						[varId]: deciSceondsToString(deciseconds),
-						[`${varId}.ms`]: deciseconds * 100,
 					})
 				}
 				if (pres === 'takeDownTime') {
 					const presname = 'A' === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PVW' : 'PGM'
-					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname.toLowerCase()}.time`)
+					const varId = this.varName(`screen${screen}time${presname}`, `${screen}.${presname === 'PVW' ? 'prw' : presname.toLowerCase()}.time`)
 					const deciseconds = this.instance.state.get(path)
 					if (exists) {
 						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
-						this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${varId}.ms`, name: `Transition time for ${screen} ${presname} (ms)` })
 					}
 					this.instance.setVariableValues({
 						[varId]: deciSceondsToString(deciseconds),
-						[`${varId}.ms`]: deciseconds * 100,
 					})
 				}
 
@@ -222,11 +230,12 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 			pat: 'DEVICE/device/screenGroupList/items/(\\w+?)/status/pp/transition',
 			fbk: 'deviceTake',
 			ini: [
-				...Array.from({ length: this.constants.maxScreens }, (_, i) => 'S' + (i + 1).toString()),
-				...Array.from({ length: this.constants.maxAuxScreens }, (_, i) => 'A' + (i + 1).toString()),
+				...this.instance.choices.getScreensArray().map((s) => s.id),
+				...this.instance.choices.getAuxArray().map((a) => a.id),
 			],
 			fun: (path, _value) => {
 				const setMemoryVariables = (screen: string, preset: string, variableSuffix: string): void => {
+					const newPresetSegment = variableSuffix === 'PVW' ? 'prw' : 'pgm'
 					const mem = this.instance.state.get([
 						'DEVICE',
 						'device',
@@ -247,14 +256,14 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 						'pp',
 						'isNotModified',
 					]);
-					const memVarId = 'screen' + screen + 'memory' + variableSuffix
-					const modVarId = 'screen' + screen + 'memoryModified' + variableSuffix
+					const memVarId = this.varName(`screen${screen}memory${variableSuffix}`, `${screen}.${newPresetSegment}.memory.active`)
+					const modVarId = this.varName(`screen${screen}memoryModified${variableSuffix}`, `${screen}.${newPresetSegment}.memory.modified`)
 					this.instance.addVariable({ id: 'screenPreset', variableId: memVarId, name: `Active memory for ${screen} ${variableSuffix}` })
 					this.instance.addVariable({ id: 'screenPreset', variableId: modVarId, name: `Modified flag of active memory for ${screen} ${variableSuffix}` })
 					this.instance.setVariableValues({ [memVarId]: mem ? 'M' + mem : '' });
-					this.instance.setVariableValues({ [modVarId]: mem && !unmodified ? '*' : '' });
+					this.instance.setVariableValues({ [modVarId]: !!(mem && !unmodified) });
 					this.instance.setVariableValues({
-						['screen' + screen + 'memoryLabel' + variableSuffix]: mem
+						[this.varName(`screen${screen}memoryLabel${variableSuffix}`, `${screen}.${newPresetSegment}.memory.label`)]: mem
 							? this.instance.state.get(['DEVICE', 'device', 'presetBank', 'bankList', 'items', mem, 'control', 'pp', 'label'])
 							: ''
 					});
@@ -281,7 +290,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 						)
 					});
 					this.instance.setVariableValues({
-						[this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)]: deciSceondsToString(
+						[this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)]: deciSceondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenGroupList', 'items', screen, 'control', 'pp', 'takeDownTime'])
 						)
 					});
@@ -306,7 +315,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 						)
 					});
 					this.instance.setVariableValues({
-						[this.varName(`screen${screen}timePVW`, `${screen}.pvw.time`)]: deciSceondsToString(
+						[this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)]: deciSceondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenGroupList', 'items', screen, 'control', 'pp', 'takeUpTime'])
 						)
 					});
@@ -328,12 +337,13 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 				const screen = Array.isArray(path) ? path[4] : path.split('/')[4];
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7];
 				const presname = pres === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PGM' : 'PVW';
+				const newPresetSegment = presname === 'PVW' ? 'prw' : 'pgm'
 				const memorystr = value ? value.toString() : '';
-				const memVarId = 'screen' + screen + 'memory' + presname
+				const memVarId = this.varName(`screen${screen}memory${presname}`, `${screen}.${newPresetSegment}.memory.active`)
 				this.instance.addVariable({ id: 'screenMemoryChange', variableId: memVarId, name: `Active memory for ${screen} ${presname}` })
 				this.instance.setVariableValues({ [memVarId]: memorystr });
 				this.instance.setVariableValues({
-					['screen' + screen + 'memoryLabel' + presname]: memorystr !== ''
+					[this.varName(`screen${screen}memoryLabel${presname}`, `${screen}.${newPresetSegment}.memory.label`)]: memorystr !== ''
 						? this.instance.state.get([
 							'DEVICE',
 							'device',
@@ -361,14 +371,13 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 				const screen = Array.isArray(path) ? path[4] : path.split('/')[4];
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7];
 				const presname = pres === this.instance.state.get(`LOCAL/screens/${screen}/pgm/preset`) ? 'PGM' : 'PVW';
-				const modVarId = 'screen' + screen + 'memoryModified' + presname
+				const newPresetSegment = presname === 'PVW' ? 'prw' : 'pgm'
+				const modVarId = this.varName(`screen${screen}memoryModified${presname}`, `${screen}.${newPresetSegment}.memory.modified`)
 				this.instance.addVariable({ id: 'screenMemoryModifiedChange', variableId: modVarId, name: `Modified flag of active memory for ${screen} ${presname}` })
 				this.instance.setVariableValues({
-					[modVarId]: this.instance.state.get(
+					[modVarId]: !!(this.instance.state.get(
 						'DEVICE/device/screenList/items/' + screen + '/presetList/items/' + pres + '/presetId/status/pp/id'
-					) && !this.instance.state.get(path)
-						? '*'
-						: ''
+					) && !this.instance.state.get(path))
 				});
 				return false;
 			},

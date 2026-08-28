@@ -89,7 +89,7 @@ export default class PresetsLivepremier extends Presets {
 						feedbackId: 'deviceSourceTally',
 						options: {
 							screens: ['all'],
-							preset: 'pvw',
+							preset: 'prw',
 							source: input.id,
 						},
 						style: {

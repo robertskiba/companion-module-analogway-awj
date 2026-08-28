@@ -118,6 +118,52 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	private oldlabel = ''
 	public isRecording = false
 
+	/**
+	 * FIFO queues backing serialize() below - one chained Promise per key (a Screen/Aux id, e.g. "S1"/"A2"),
+	 * so a serialize() call only ever waits for PRIOR calls that touched at least one of the same keys.
+	 */
+	private actionQueues = new Map<string, Promise<unknown>>()
+
+	/**
+	 * Runs `fn` only after every previously-serialize()'d call sharing at least one of `keys` has finished (or
+	 * errored) - guaranteeing FIFO execution order for actions that touch the same Screen(s)/Aux(es), while
+	 * leaving actions on unrelated screens completely independent. Added (2026-08-28) because Companion's own
+	 * default action-list execution is CONCURRENT (fires every action in a button's list at once, not one after
+	 * another), and only an explicit "Sequential" Action Group actually waits for one action before starting
+	 * the next. Without this, an async action like "Recall Screen Memory" that awaits the device's confirmation
+	 * before returning would NOT reliably precede a following "Take" on the very same button unless the user
+	 * manually wrapped both in a Sequential Action Group - not something a normal user should need to know or
+	 * do for a sequence as basic as "load a memory, then take it".
+	 *
+	 * `keys` MUST be the actual Screen/Aux id(s) the action targets (e.g. `['S1']`, or `['S1','A2']` for
+	 * something spanning several at once like Recall Master Memory) - NEVER a single fixed key for the whole
+	 * module. This is a hard requirement, not an optimization: with a real Aquilon, multiple operators commonly
+	 * control different Screens through the same Companion instance at once (e.g. one running a livestream
+	 * output, another an LED wall) - a 20-second "Wait for Transition Completion" on one operator's Screen
+	 * must NEVER hold up an unrelated action on a different Screen. A single shared key was tried first and
+	 * explicitly rejected by the user once this cross-operator scenario came up: "ein screen darf niemals von
+	 * einer laufenden transition eines anderen screens abhängig sein."
+	 *
+	 * Relies on Companion still CALLING each action's callback in the button's authored order even though it
+	 * doesn't await between them (true as long as it kicks them off via something like
+	 * `actions.map(a => run(a))` before racing their promises) - each callback enqueues itself onto the shared
+	 * chain(s) synchronously, before its own first `await`, so the enqueue order matches the call order even
+	 * though the actual work happens later. A rejected `fn` does not poison the queue for subsequent calls.
+	 */
+	public serialize<T>(keys: string[], fn: () => Promise<T>): Promise<T> {
+		const uniqueKeys = [...new Set(keys)]
+		const prior = Promise.all(uniqueKeys.map((key) => this.actionQueues.get(key) ?? Promise.resolve()))
+		const result = prior.then(fn, fn)
+		const settled = result.then(
+			() => undefined,
+			() => undefined
+		)
+		for (const key of uniqueKeys) {
+			this.actionQueues.set(key, settled)
+		}
+		return result
+	}
+
 	constructor(system: unknown) {
 		super(system)
 		this.instanceOptions.disableVariableValidation = true
@@ -163,12 +209,19 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		this.updateVariableDefinitions(this.variables)
 		this.setVariableValues({connectionLabel: this.label})
 
+		// Publish the generic (platform-unknown) action/feedback/preset set immediately, before attempting to
+		// connect - previously this only ever happened deep inside connection.ts's post-connect success path,
+		// so if the device was never reachable (powered off, wrong address) NO actions existed at all,
+		// including "Device - Power"'s Wake-on-LAN option - the one action that specifically needs to work
+		// while the device is unreachable. Safe against a completely empty state (confirmed 2026-08-28): every
+		// choice-list builder already falls back to a "No X configured" placeholder (see placeholderIfEmpty()
+		// in choices.ts) instead of an empty/crashing list. setDevice('awjdevice') above already instantiated
+		// the generic Actions/Feedbacks/Presets classes, which is what makes this available here - once a real
+		// platform is detected after connecting, updateInstance() runs again with the real, richer action set.
+		await this.updateInstance()
+
 		this.connection.connect(this.config.deviceaddr)
 		//this.device = new AWJdevice(this.state, this.connection)
-
-
-
-		// void this.updateInstance()
 	}
 
 	/**
@@ -301,7 +354,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			preset = this.state.get('LOCAL/presetMode')
 		}
 		if (preset === 'PREVIEW') {
-			vartext = 'PVW'
+			vartext = this.config.useOldVariableNames ? 'PVW' : 'PRW'
 		}
 		this.setVariableValues({ selectedPreset: vartext })
 	}
@@ -447,7 +500,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 
 	/**
 	 * AWJ paths have some differences to JSON paths and the internal object, this function converts AWJ to JSON path.
-	 * Additionally it converts PGM and PVW to the actual preset which is on program or preview (A or B)
+	 * Additionally it converts PGM and PVW/PRW to the actual preset which is on program or preview (A or B)
 	 * @param awjPath the AWJ path as a string
 	 * @returns an array containing the path components of a JSON path
 	 */
@@ -478,7 +531,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			parts[2] === 'items' &&
 			parts[4] === 'presetList' &&
 			parts[5] === 'items' &&
-			parts[6].toLowerCase() === 'pvw'
+			['pvw', 'prw', 'prv'].includes(parts[6].toLowerCase())
 		) {
 			if (this.state.get(`LOCAL/screens/S${parts[3].replace(/\D/g, '')}/pvw/preset`)) {
 				parts[6] = this.state.get(`LOCAL/screens/S${parts[3].replace(/\D/g, '')}/pvw/preset`)
@@ -500,7 +553,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			parts[2] === 'items' &&
 			parts[4] === 'presetList' &&
 			parts[5] === 'items' &&
-			parts[6].toLowerCase() === 'pvw'
+			['pvw', 'prw', 'prv'].includes(parts[6].toLowerCase())
 		) {
 			if (this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pvw/preset`)) {
 				parts[6] = this.state.get(`LOCAL/screens/S${parts[3].replace(/\D/g, '')}/pvw/preset`)
@@ -522,7 +575,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			parts[2] === 'items' &&
 			parts[4] === 'presetList' &&
 			parts[5] === 'items' &&
-			parts[6].toLowerCase() === 'pvw'
+			['pvw', 'prw', 'prv'].includes(parts[6].toLowerCase())
 		) {
 			if (this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pvw/preset`)) {
 				parts[6] = this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pvw/preset`)

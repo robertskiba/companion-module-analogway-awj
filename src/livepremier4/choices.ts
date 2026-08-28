@@ -119,6 +119,16 @@ export default class ChoicesLivepremier4 extends Choices {
 			}
 		}))
 
+		// since V4, a split layer can also show another screen's PGM as its source - same reinsertion already
+		// offered for aux layers. Availability depends on the *target* layer being a split layer, not on any
+		// property of the candidate screen itself, so every active screen is offered unconditionally
+		ret.push(...this.getScreensArray().map((itm: Choicemeta) => {
+			return {
+				id: `SCREEN_${itm.index}`,
+				label: `Screen ${itm.index} PGM${itm.label === '' ? '' : ' - ' + itm.label}`
+			}
+		}) )
+
 		return ret
 	}
 
@@ -138,10 +148,9 @@ export default class ChoicesLivepremier4 extends Choices {
 				label: `Image ${itm.id}${itm.label === '' ? '' : ' - ' + itm.label}`,
 			}
 		}))
-		// last add split-layer screen pgms for reinsertion
-		ret.push(...this.getScreensArray().filter((itm: Choicemeta) => {
-			return this.state.get('DEVICE/device/screenList/items/'+itm.id+'/status/pp/mixingMode') === 'SPLIT'
-		}).map((itm: Choicemeta) => {
+		// last add screen pgms for reinsertion - availability depends on the *target* layer being a split layer,
+		// not on any property of the candidate screen itself, so every active screen is offered unconditionally
+		ret.push(...this.getScreensArray().map((itm: Choicemeta) => {
 			return {
 				id: `SCREEN_${itm.index}`,
 				label: `Screen ${itm.index} PGM${itm.label === '' ? '' : ' - ' + itm.label}`
@@ -163,7 +172,7 @@ export default class ChoicesLivepremier4 extends Choices {
 			})
 			ret.push({
 				id: 'PREVIEW_S' + screen.index,
-				label: `Screen ${screen.index} PVW${screen.label === '' ? '' : ' - ' + screen.label}`,
+				label: `Screen ${screen.index} PRW${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 		}
 

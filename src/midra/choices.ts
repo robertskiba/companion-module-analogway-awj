@@ -288,7 +288,7 @@ export default class ChoicesMidra extends Choices {
 
 	public getWidgetChoices(): Dropdown<string>[] {
 		const ret: Dropdown<string>[] = []
-		return this.state.get('DEVICE/device/multiviewer/status/pp/widgetValidity').map((widget: string) => {
+		return (this.state.get('DEVICE/device/multiviewer/status/pp/widgetValidity') ?? []).map((widget: string) => {
 			return {
 				id: '1:' + widget,
 				label: `Widget ${parseInt(widget)}`,
@@ -310,7 +310,7 @@ export default class ChoicesMidra extends Choices {
 			})
 			ret.push({
 				id: 'SCREEN_PRW_' + screen.index,
-				label: `Screen ${screen.index} PVW${screen.label === '' ? '' : ' - ' + screen.label}`,
+				label: `Screen ${screen.index} PRW${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 		}
 
@@ -448,7 +448,7 @@ export default class ChoicesMidra extends Choices {
 				inputtype = 'Media Player'
 			}
 			if (this.state.get('DEVICE/device/audio/inputList/items/' + input + '/status/pp/isAvailable')){
-				for (const channel of this.state.get('DEVICE/device/audio/inputList/items/' + input + '/channelList/itemKeys')) {
+				for (const channel of this.state.get('DEVICE/device/audio/inputList/items/' + input + '/channelList/itemKeys') ?? []) {
 					if (this.state.get('DEVICE/device/audio/inputList/items/' + input + '/channelList/items/' + channel + '/status/pp/isAvailable')) {
 						if (inputtype === 'Dante') {
 							ret.push({
@@ -470,12 +470,14 @@ export default class ChoicesMidra extends Choices {
 	/**
 	 * Returns the actual preset (UP or DOWN) representing program or preview of the given input or of the selection
 	 * @param screen S1-S... or A1-A...
-	 * @param preset can be UP or DOWN or PGM or PVW or 'sel', UP and DOWN are returned unchanged
+	 * @param preset can be UP or DOWN or PGM or PVW/PRW or 'sel', UP and DOWN are returned unchanged
 	 * @returns UP or DOWN, whichever is the actual preset for program or preview, during fades the preset is changed only at the end of the fade
 	 */
 	public getPreset(screen: string, preset: string): string {
 		if (screen.match(/^S|A\d+$/) === null) return ''
-		if (preset.match(/^UP|DOWN|PGM|PVW|SEL$/i) === null) return ''
+		// PVW and PRV are accepted for backwards compatibility / typo-tolerance alongside the current PRW -
+		// never remove them
+		if (preset.match(/^UP|DOWN|PGM|PVW|PRW|PRV|SEL$/i) === null) return ''
 		if (preset.toLowerCase() === 'sel') {
 			preset = this.getPresetSelection()
 		}
@@ -483,7 +485,9 @@ export default class ChoicesMidra extends Choices {
 		if (preset.match(/^UP|DOWN$/i)) {
 			ret = preset.toUpperCase()
 		} else {
-			ret = this.state.get(`LOCAL/screens/${screen}/${preset.toLowerCase()}/preset`)
+			// the internal state key is always 'pvw', regardless of whether the user typed PVW, PRW or PRV
+			const presetSegment = ['PRW', 'PRV'].includes(preset.toUpperCase()) ? 'pvw' : preset.toLowerCase()
+			ret = this.state.get(`LOCAL/screens/${screen}/${presetSegment}/preset`)
 		}
 		return ret
 	}
@@ -546,10 +550,10 @@ export default class ChoicesMidra extends Choices {
 	/** Returns selected screens in LP format */
 	public getSelectedScreens(): string[] {
 		if (this.instance.state.syncSelection) {
-			return [...this.state.get('REMOTE/live/screens/screenAuxSelection/keys')]
+			return [...(this.state.get('REMOTE/live/screens/screenAuxSelection/keys') ?? [])]
 				.map(scr => scr.replace(/CREEN_|UX_/, ''))
-		}		
-		return [...this.state.get('LOCAL/screenAuxSelection/keys')]
+		}
+		return [...(this.state.get('LOCAL/screenAuxSelection/keys') ?? [])]
 	}
 
 }
