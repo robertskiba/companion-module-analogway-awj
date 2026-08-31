@@ -30,8 +30,10 @@ export default class FeedbacksMidra extends Feedbacks  {
 		'syncselection',
 		'presetToggle',
 		'globalAnchorPoint',
+		'deviceLayerPropertyStatus',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
+		'deviceScreenMemorySlotStatus',
 		'deviceAuxMemory',
 		'deviceSourceTally',
 		'deviceTake',
@@ -41,15 +43,24 @@ export default class FeedbacksMidra extends Feedbacks  {
 		'remoteLayerSelection',
 		'remoteWidgetSelection',
 		'deviceInputFreeze',
+		'deviceInputSignalStatus',
+		'deviceLayerSignalStatus',
+		'deviceHealthStatus',
 		'deviceLayerFreeze',
 		'deviceScreenFreeze',
 		'timerState',
 		// 'deviceGpioOut',
 		// 'deviceGpioIn',
 		'deviceStreaming',
+		'deviceStreamAudioMuteStatus',
+		'deviceInputPlugStatus',
+		'deviceAudioRouteChannelsStatus',
+		'deviceAudioRouteBlockStatus',
 		'deviceTestpatternActive',
 		'deviceCustom',
 		'deviceThumbnail',
+		// 'deviceBackupSetSourceStatus', // Backup does not exist on Midra/Alta, same as the corresponding actions
+		// 'deviceBackupAutoModeStatus',
 	]
 
 	constructor (instance: AWJinstance) {
@@ -102,16 +113,16 @@ export default class FeedbacksMidra extends Feedbacks  {
 						const presetpath = [...screenpath, 'presetList', 'items', preset]
 						
 						// check if source is used in background set on a screen
-						if (layer.id === 'NATIVE') {
+						if (layer.id === 'BG' && screeninfo.isScreen) {
 							const set = this.state.get([...presetpath, 'background', 'source', 'pp', 'set'])
 							if (set === 'NONE') continue
 							const setinput = this.state.get([...screenpath, 'backgroundSetList', 'items', set, 'control', 'pp', 'singleContent']) // TODO: check input format
 							if (setinput === feedback.options.source) return true
 							else continue
 						}
-	
+
 						// check if source is used in background layer on a aux
-						else if (layer.id === 'BKG') {
+						else if (layer.id === 'BG' && screeninfo.isAux) {
 							const bkginput = this.state.get([...presetpath, 'background', 'source', 'pp', 'content'])
 							if (bkginput === feedback.options.source) return true
 							else continue
@@ -245,7 +256,8 @@ export default class FeedbacksMidra extends Feedbacks  {
 		
 		const deviceStreaming: AWJfeedback<{state: string}> = {
 			type: 'boolean',
-			name: 'Stream Runnning State',
+			name: 'LIVE - Stream Running State (Midra only)',
+			sortName: '01 LIVE - 11 Stream Running State',
 			description: 'Shows status of streaming',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -278,6 +290,33 @@ export default class FeedbacksMidra extends Feedbacks  {
 		}
 
 		return deviceStreaming
+	}
+
+	/**
+	 * MARK: deviceStreamAudioMuteStatus - Midra
+	 * No distinct status path exists for this field (unlike the stream on/off master switch, which has a real
+	 * device/streaming/status/pp/mode) - the deviceStreamAudioMute action's own toggle logic already reads this
+	 * exact control path back to compute its next state, confirming it reflects the live current value.
+	 */
+	get deviceStreamAudioMuteStatus() {
+		type DeviceStreamAudioMuteStatus = { muted: boolean }
+
+		const deviceStreamAudioMuteStatus: AWJfeedback<DeviceStreamAudioMuteStatus> = {
+			type: 'boolean',
+			name: 'LIVE - Stream Audio Mute Status (Midra only)',
+			sortName: '01 LIVE - 14 Stream Audio Mute Status',
+			description: 'Shows whether the streaming output\'s audio is currently muted.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [],
+			callback: () => {
+				return !!this.state.get('DEVICE/device/streaming/control/audio/live/pp/mute')
+			},
+		}
+
+		return deviceStreamAudioMuteStatus
 	}
 
 	/**
@@ -367,6 +406,205 @@ export default class FeedbacksMidra extends Feedbacks  {
 		]
 
 		return this.deviceTestpatternActive_common(options, 'Midra 4K Testpattern Active')
+	}
+
+	/**
+	 * MARK: deviceInputPlugStatus - Midra
+	 * Mirrors deviceInputPlug's own field construction (only inputs with more than one available plug get a
+	 * choice at all). status/pp/plug is already read elsewhere in this module (choices.ts' input-signal-status
+	 * helper) as the input's currently active plug.
+	 */
+	get deviceInputPlugStatus() {
+		type DeviceInputPlugStatus = Record<string, string>
+
+		const multiPlugInputs = this.choices.getLiveInputArray().filter((input) => this.choices.getPlugChoices(input.id).length > 1)
+
+		const deviceInputPlugStatus: AWJfeedback<DeviceInputPlugStatus> = {
+			type: 'boolean',
+			name: 'Preconfig - Input Plug Status (Midra only)',
+			sortName: '07 Preconfig - 02 Input Plug Status',
+			description: 'Shows which physical plug is currently active for an Input.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'input',
+					type: 'dropdown',
+					label: 'Input',
+					choices: multiPlugInputs.map((input) => ({
+						id: input.id,
+						label: 'Input ' + input.index + (input.label.length ? ' - ' + input.label : ''),
+					})),
+					default: multiPlugInputs[0]?.id ?? '',
+					disableAutoExpression: true,
+				},
+				...multiPlugInputs.map((input) => {
+					const plugs = this.choices.getPlugChoices(input.id)
+					return {
+						id: `plugs${input.id}`,
+						type: 'dropdown' as const,
+						label: 'Plug',
+						choices: plugs,
+						default: plugs[0].id,
+						isVisibleExpression: `$(options:input) == '${input.id}'`,
+					}
+				}),
+			],
+			callback: (feedback) => {
+				const input = feedback.options.input
+				const expected = feedback.options[`plugs${input}`]
+				return this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'status', 'pp', 'plug']) === expected
+			},
+		}
+
+		return deviceInputPlugStatus
+	}
+
+	/**
+	 * MARK: Audio - Routing Status - Midra
+	 * Mirrors "Audio - Route (Channels)" (deviceAudioRouteChannels action) - same option layout and target
+	 * resolution, and the same 'IN1C1IN1C2' Expression-Mode shorthand (choices.getChosenAudioInputChannels) for
+	 * checking several channels at once. True only if every selected Input Channel is currently routed to its
+	 * corresponding, consecutive Output Channel starting at the chosen first Output Channel. Unlike LivePremier/
+	 * LivePremier4 (a per-channel 'control/pp/source' field), Midra's audio routing is a single array field per
+	 * Custom Block ('custom/sourceList/items/{block}/control/pp/channelMapping'), so the check reads that array
+	 * and compares the element at the target channel's index (0-based).
+	 */
+	get deviceAudioRouteChannelsStatus() {
+		type DeviceAudioRouteChannelsStatus = {out1: string, in1: string}
+
+		const audioOutputChoices = this.choices.getAudioCustomBlockChoices()
+		const audioInputChoices = this.choices.getAudioInputChoices()
+
+		const deviceAudioRouteChannelsStatus: AWJfeedback<DeviceAudioRouteChannelsStatus> = {
+			type: 'boolean',
+			name: 'Audio - Routing Status',
+			sortName: '06 Audio - 01 Routing Status',
+			description: 'Shows whether one or more Audio Input Channels are currently routed to the corresponding, consecutive Custom Block Output Channels, starting at a given first Output Channel - mirrors "Audio - Route (Channels)".',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'First Output Channel',
+					id: 'out1',
+					choices: audioOutputChoices,
+					default: audioOutputChoices[0]?.id,
+					minChoicesForSearch: 0,
+					allowInvalidValues: true,
+				},
+				{
+					type: 'multidropdown',
+					label: 'Input Channel(s)',
+					id: 'in1',
+					tooltip: 'To check several channels at once via Expression Mode, you can use a format like \'IN1C1IN1C2\' instead of the raw array form.',
+					choices: audioInputChoices,
+					default: ['NONE'],
+					minChoicesForSearch: 0,
+					minSelection: 0,
+					allowInvalidValues: true,
+				},
+			],
+			callback: (feedback) => {
+				const inChannels = this.choices.getChosenAudioInputChannels(feedback.options.in1)
+				if (inChannels.length === 0) return false
+				const outstart = audioOutputChoices.findIndex((item) => item.id === feedback.options.out1)
+				if (outstart === -1 || outstart + inChannels.length > audioOutputChoices.length) return false
+				for (let s = 0; s < inChannels.length; s += 1) {
+					const sink = audioOutputChoices[outstart + s].id.toString()
+					const block = sink.split(':')[0]
+					const channel = parseInt(sink.split(':')[1], 10)
+					const mapping: string[] = this.state.get(['DEVICE', 'device', 'audio', 'custom', 'sourceList', 'items', block, 'control', 'pp', 'channelMapping']) ?? []
+					if (mapping[channel - 1] !== inChannels[s]) return false
+				}
+				return true
+			},
+		}
+
+		return deviceAudioRouteChannelsStatus
+	}
+
+	/**
+	 * MARK: Audio - Block Routing Status - Midra
+	 * Mirrors "Audio - Route (Block)" (deviceAudioRouteBlock action) - same option layout and target resolution,
+	 * including the "first Input Channel = NONE fills the whole Block with NONE" quirk. True only if every
+	 * Output Channel in the Block is currently routed exactly as the block-route action would have set it.
+	 */
+	get deviceAudioRouteBlockStatus() {
+		type DeviceAudioRouteBlockStatus = {out1: string, in1: string, blocksize: number}
+
+		const audioOutputChoices = this.choices.getAudioCustomBlockChoices()
+		const audioInputChoices = this.choices.getAudioInputChoices()
+
+		const deviceAudioRouteBlockStatus: AWJfeedback<DeviceAudioRouteBlockStatus> = {
+			type: 'boolean',
+			name: 'Audio - Block Routing Status',
+			sortName: '06 Audio - 02 Block Routing Status',
+			description: 'Shows whether a contiguous Block of Audio Output Channels (starting at a given first Output Channel, for the configured Block Size) is currently routed exactly to the corresponding, consecutive Input Channels starting at a given first Input Channel - mirrors "Audio - Route (Block)".',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					type: 'dropdown',
+					label: 'First Output Channel',
+					id: 'out1',
+					choices: audioOutputChoices,
+					default: audioOutputChoices[0]?.id,
+					minChoicesForSearch: 0,
+					allowInvalidValues: true,
+				},
+				{
+					type: 'dropdown',
+					label: 'First Input Channel',
+					id: 'in1',
+					tooltip: 'Via Expression Mode you can also use a format like \'IN1C1\' instead of the raw id.',
+					choices: audioInputChoices,
+					default: audioInputChoices[0]?.id,
+					minChoicesForSearch: 0,
+					allowInvalidValues: true,
+				},
+				{
+					type: 'number',
+					label: 'Block Size',
+					id: 'blocksize',
+					tooltip: 'Capped at 8, matching "Audio - Route (Block)" - a block can never validly extend past the end of the 8-channel Custom Block it starts in.',
+					default: 8,
+					min: 1,
+					max: 8,
+					range: true,
+				},
+			],
+			callback: (feedback) => {
+				const inValue = this.choices.getChosenAudioInputChannels(feedback.options.in1)[0]
+				const outstart = audioOutputChoices.findIndex((item) => item.id === feedback.options.out1)
+				const instart = audioInputChoices.findIndex((item) => item.id === inValue)
+				if (outstart === -1 || instart === -1) return false
+				// Same output-block boundary clamp as the matching action - a block can never validly extend
+				// past the end of the 8-channel Custom Block it starts in, each output id is 'CUSTOM_n:channelNum'.
+				const outChannelNum = parseInt(audioOutputChoices[outstart].id.toString().split(':')[1], 10)
+				const remainingInOutputBlock = 8 - outChannelNum + 1
+				const blocksize = Number(feedback.options.blocksize) || 1
+				const max = Math.min(audioOutputChoices.length - outstart, audioInputChoices.length - instart, blocksize, remainingInOutputBlock)
+				if (max < blocksize) return false
+				for (let s = 0; s < max; s += 1) {
+					const sink = audioOutputChoices[outstart + s].id.toString()
+					const block = sink.split(':')[0]
+					const channel = parseInt(sink.split(':')[1], 10)
+					const mapping: string[] = this.state.get(['DEVICE', 'device', 'audio', 'custom', 'sourceList', 'items', block, 'control', 'pp', 'channelMapping']) ?? []
+					const expected = instart === 0 ? audioInputChoices[0]?.id : audioInputChoices[instart + s]?.id
+					if (mapping[channel - 1] !== expected) return false
+				}
+				return true
+			},
+		}
+
+		return deviceAudioRouteBlockStatus
 	}
 
 }

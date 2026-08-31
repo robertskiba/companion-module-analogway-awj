@@ -26,6 +26,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		'selectedLayerSourceSignalChange',
 		'selectedLayerOpacityChange',
 		'selectedLayerCroppingChange',
+		'layerPropertyStatusChange',
 		'selectedScreenChange',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
@@ -81,6 +82,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		'deviceIdentity',
 		'deviceHealth',
 		'shutdown',
+		'audioRouteChange',
 		// Midra
 		// 'presetToggle',
 		// 'screenPreset',
@@ -388,6 +390,13 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		return {
 			pat: 'device/screenGroupList/items/S1/control/pp/copyMode',
 			fbk: 'presetToggle'
+		}
+	}
+
+	get audioRouteChange(): Subscription {
+		return {
+			pat: 'device/audio/control/txList/items/\\w+/channelList/items/\\d+/control/pp/source',
+			fbk: ['deviceAudioRouteChannelsStatus', 'deviceAudioRouteBlockStatus'],
 		}
 	}
 

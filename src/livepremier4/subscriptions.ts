@@ -28,6 +28,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'selectedLayerSourceSignalChange',
 		'selectedLayerOpacityChange',
 		'selectedLayerCroppingChange',
+		'layerPropertyStatusChange',
 		'selectedScreenChange',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
@@ -102,6 +103,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		// 'streamStatus',
 		// 'standby',
 		// 'shutdown',
+		'audioRouteChange',
 	]
 
 	constructor(instance: AWJinstance) {
@@ -559,6 +561,17 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 
 				return false
 			}
+		}
+	}
+
+	/** Any Audio channel's routed source changes - immediate check of the two Audio status feedbacks
+	 * (Routing Status / Block Routing Status), same reasoning as the Backup feedbacks' subscriptions: without
+	 * this, those feedbacks only ever get evaluated once (whenever Companion happens to check them) and never
+	 * live-update when a routing change actually happens, whether from a Companion action or WebRCS. */
+	get audioRouteChange(): Subscription {
+		return {
+			pat: 'device/audio/control/deviceList/items/\\d+/txList/items/\\w+/channelList/items/\\d+/control/pp/source',
+			fbk: ['deviceAudioRouteChannelsStatus', 'deviceAudioRouteBlockStatus'],
 		}
 	}
 

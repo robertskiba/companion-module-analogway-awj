@@ -2,6 +2,41 @@ This is a fork of the original companion-module-analogway-awj repository. It is 
 
 # Changelog
 
+# v3.0.0 Beta 5 – Changes (2026-08-31)
+
+This release closes a large batch of the "action has no matching feedback" gaps found by an audit of the whole module, rounds out Layer Properties with a combined on/off Property Status feedback (now including Aspect Override and the Transition "Allow Cross" flags), extends Audio Routing Status coverage to LivePremier and Midra, and fixes a real connection-reliability bug where the module could keep showing "connected" after the host PC woke from sleep even though the WebSocket was already dead.
+
+## New Actions
+
+- **"Audio - Dante Functions"** – Reboot, Factory Reset, or bulk-rename up to 64 Dante Receiver and 64 Transmitter channels in one action, gated behind a mandatory safety confirmation checkbox (no confirmation, no action – including Reboot). Rename fields are pre-filled with each channel's current name and only send a change for channels you actually edit. **Known limitation**: Reboot and Factory Reset work correctly; Dante channel renaming does not currently take effect on the device, even though the exact same message sequence sent from WebRCS itself succeeds – root cause not found despite extensive live investigation, see the action's own description for details.
+
+## New Feedbacks
+
+- **"Backups - Active Backup Source Status"** and **"Backups - Auto Mode Status"** – live boolean status for both Input and Background Set backups.
+- **"Audio - Routing Status"** and **"Audio - Block Routing Status"** – mirrors "Audio - Route (Channels)"/"Audio - Route (Block)", showing whether the routing they describe is currently in effect. Available on LivePremier4, LivePremier, and Midra.
+- **"Device - Input Signal Present"** and **"Device - Layer Signal Present"** – whether a physical Input (or the Input currently shown on a given Layer) has a valid incoming signal.
+- **"Device - Health Alarm"** – whether the device currently has a Temperature or Fan alarm active.
+- **"LIVE - Screen Memory Slot Occupied"** – whether a given Screen Memory slot currently holds a saved memory.
+- **"Layer Properties - Property Status"** – one combined feedback with a Property dropdown covering every on/off-style Layer Property: Border (Edge/Shadow Enabled/Rounded/Smoothed), Effects (Filters, Flip H/V, Strobe), Keying Enabled (firmware V6+), Mask Active (inferred from whether any of the four crop values is non-zero, since Mask has no dedicated flag in the protocol), Aspect Override (1:1/Centered/Fullscreen/Cropped), and Transition "Allow Cross Effect"/"Allow Cross Depth" (mapping not yet verified live – see the feedback's description).
+- **Midra only**: **"Preconfig - Input Plug Status"** and **"LIVE - Stream Audio Mute Status"**.
+
+## Changed
+
+- **"Live Thumbnail"'s Source field** collapsed from a two-step category-then-item picker into a single flat dropdown. This changes the option's stored shape – existing buttons using this feedback will need their Source re-selected once. Only affects buttons built during the V3 beta cycle; no automatic upgrade is provided since this feedback didn't exist before Beta 3.
+- **"Audio - Route (Block)"/"Audio - Route (Channels)"**: Block Size is now capped at 8, and a block can no longer extend past the end of the 8-channel output module it starts in regardless of the configured Block Size (e.g. starting at Output 1 Channel 7 only ever reaches channels 7-8) – a safety measure against accidentally routing into the wrong output module with a mistyped value. The matching new "Audio - Block Routing Status" feedback uses the identical clamp.
+
+## Reliability
+
+- **The WebSocket connection now sends a periodic ping (every 15s) and forces a reconnect if two are missed in a row.** Previously, the connection had no way to detect a "zombie" connection – e.g. after the host PC wakes from sleep/standby, the status could keep showing green/connected while the underlying socket was already dead, with no automatic recovery until something else (a send failure) happened to notice.
+- **"Backups - Active Backup Source Status" and its underlying variable now read the device's actual live state** (`status.pp.activeSlot`) instead of the last-requested command value (`control.pp.xSelectSlot`) – previously a manual backup source change could show the wrong result, and a real (automatic) backup failover wasn't reflected promptly or at all.
+- **Several newly-added feedbacks (Backup status, Audio Routing status) now actually live-update.** They were missing subscription wiring and previously only evaluated once, at the moment they were first placed on a button.
+
+## Fixed
+
+- **"Audio - Source Tally"** could incorrectly report "true" for a "No Source"/Background Set source due to an operator-precedence bug in the check.
+- **Midra's "Screen Freeze Status"** feedback queried Auxscreens through the Screen path instead of the Auxscreen path, always reporting the wrong live state on an Aux.
+- **"LIVE - Screen Lock Status"** was missing its default color style (only had an icon), making the button's state much harder to read at a glance.
+
 # v3.0.0 Beta 4 – Changes (2026-08-28)
 
 This release completes the "Layer Properties" action family (now covering nearly every WebRCS layer panel), adds the long-requested "Save to Screen Memory"/"Save-Revert" workflow, extends Backup support to Background Sets, and closes out a large batch of reliability fixes so buttons behave correctly in tight action-list sequences and while the device is offline.

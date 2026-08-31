@@ -27,6 +27,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'selectedLayerSourceSignalChange',
 		'selectedLayerOpacityChange',
 		'selectedLayerCroppingChange',
+		'layerPropertyStatusChange',
 		'selectedScreenChange',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
@@ -95,6 +96,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'backgroundLayerFreeze',
 		'screenFreeze',
 		'streamStatus',
+		'streamAudioMuteStatus',
+		'inputPlugStatus',
+		'audioRouteChange',
 		'standby',
 		// 'shutdown',
 	]
@@ -682,6 +686,27 @@ export default class SubscriptionsMidra extends Subscriptions {
 		return {
 			pat: 'DEVICE/device/streaming/status/pp/mode',
 			fbk: 'deviceStreaming'
+		}
+	}
+
+	get streamAudioMuteStatus(): Subscription {
+		return {
+			pat: 'DEVICE/device/streaming/control/audio/live/pp/mute',
+			fbk: 'deviceStreamAudioMuteStatus'
+		}
+	}
+
+	get inputPlugStatus(): Subscription {
+		return {
+			pat: 'DEVICE/device/inputList/items/IN_\\d+/status/pp/plug',
+			fbk: 'deviceInputPlugStatus'
+		}
+	}
+
+	get audioRouteChange(): Subscription {
+		return {
+			pat: 'DEVICE/device/audio/custom/sourceList/items/\\w+/control/pp/channelMapping',
+			fbk: ['deviceAudioRouteChannelsStatus', 'deviceAudioRouteBlockStatus'],
 		}
 	}
 

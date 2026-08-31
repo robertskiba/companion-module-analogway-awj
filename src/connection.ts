@@ -24,6 +24,16 @@ class AWJconnection {
 	private readonly reconnectmax = 10_000
 	private reconnectinterval = this.reconnectmin
 	private countdownTimer: ReturnType<typeof setInterval> | undefined
+	// Detects a "zombie" connection - most commonly after the host PC wakes from sleep/standby, where the
+	// underlying TCP socket is dead on the wire but the OS/JS side never fires a 'close'/'error' event on its
+	// own, so Companion keeps showing green indefinitely. A regular WebSocket ping/pong exchange is the
+	// standard way to catch this (see the 'ws' library's own docs on detecting broken connections): if two
+	// pings in a row go unanswered, the socket is force-terminated, which does emit 'close' and lets the
+	// existing reconnect logic take over normally.
+	private readonly heartbeatIntervalMs = 15_000
+	private readonly heartbeatMaxMissed = 2
+	private heartbeatInterval: ReturnType<typeof setInterval> | undefined
+	private heartbeatMissed = 0
 	private readonly delimiter = '!' // '\x04'
 	private readonly bufferMaxLength = 64_000
 	private buffer = ''
@@ -356,10 +366,31 @@ class AWJconnection {
 					this.websocket.on('open', async () => {
 						this.reconnectinterval = this.reconnectmin
 						this.instance.log('debug', 'Websocket opened')
+
+						this.heartbeatMissed = 0
+						if (this.heartbeatInterval) clearInterval(this.heartbeatInterval)
+						this.heartbeatInterval = setInterval(() => {
+							if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return
+							if (this.heartbeatMissed >= this.heartbeatMaxMissed) {
+								this.instance.log('warn', 'No response to WebSocket ping (connection likely went stale, e.g. after system sleep/standby) - forcing reconnect')
+								this.websocket.terminate()
+								return
+							}
+							this.heartbeatMissed += 1
+							this.websocket.ping()
+						}, this.heartbeatIntervalMs)
+					})
+
+					this.websocket.on('pong', () => {
+						this.heartbeatMissed = 0
 					})
 
 					this.websocket.on('close', () => {
 						// console.log('ws closed', ev.toString(), this.shouldBeConnected ? 'should be connected' : 'should not be connected')
+						if (this.heartbeatInterval) {
+							clearInterval(this.heartbeatInterval)
+							this.heartbeatInterval = undefined
+						}
 						if (this.shouldBeConnected) {
 							this.hadError = true
 							this.scheduleRetryWithCountdown(
