@@ -209,13 +209,13 @@ export default class ChoicesLivepremier4 extends Choices {
 	public getLayersAsArray(param: string | number, bkg?: boolean): Choicemeta[] {
 		const ret: Choicemeta[] = []
 		if (typeof param === 'number') {
-			if (bkg === undefined || bkg === true) ret.push({ id: 'NATIVE', label: 'Background', longname: 'BKG' })
+			if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background', longname: 'BKG' })
 			for (let i = 1; i <= param; i += 1) {
 				ret.push({ id: `${i}`, label: `Layer ${i}`, longname:`L${i}` })
 			}
 			return ret
 		} else if (typeof param === 'string') {
-			if (bkg === undefined || bkg === true) ret.push({ id: 'NATIVE', label: 'Background', longname: 'BKG' })
+			if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background', longname: 'BKG' })
 			const screeninfo = this.getScreenInfo(param)
 			const screenlist = screeninfo.isAux ? 'auxiliaryList' : 'screenList'
 			let layercount = this.state.get(`DEVICE/device/${screenlist}/items/${screeninfo.id}/status/pp/layerCount`) ?? 1

@@ -377,6 +377,17 @@ export default class Subscriptions {
 		}
 	}
 
+	/** Any of the on/off-style Layer Properties fields deviceLayerPropertyStatus checks (Border Edge/Shadow
+	 * style flags, Effects flags, Keying enable, Mask crop values) - same Layer-path prefix convention as
+	 * selectedLayerCroppingChange above, covering every platform's screenList/auxiliaryScreenList/auxiliaryList
+	 * and layerList/liveLayerList naming. */
+	get layerPropertyStatusChange():Subscription {
+		return {
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(?:border/(?:edge|shadow)/pp/style|effects/pp/flags|keying/pp/enable|cropping/mask/pp/(?:top|bottom|left|right)|cropping/classic/pp/aspectOverride|transition/pp/flags)',
+			fbk: 'deviceLayerPropertyStatus',
+		}
+	}
+
 	/**
 	 * Refreshes the SelectedScreen.number/.numberOfLayers/.tbarPosition/.TransitionTime.Pgm/.Pvw variables for
 	 * whichever screen/aux is currently selected (the first one, if several are). Same "just the selection, not
@@ -733,10 +744,15 @@ export default class Subscriptions {
 
 	/** Anything under an input's Backup config/status changes - refreshes every backups.setX.* variable and
 	 * the group-membership-driven appear/disappear behavior, see refreshBackupVariables. Debounced (see
-	 * debounce()'s own comment) so a burst of related changes coalesces into a single rebuild. */
+	 * debounce()'s own comment) so a burst of related changes coalesces into a single rebuild. `fbk` is
+	 * separate from `fun`'s debounce - it triggers an immediate check of the two Backup status feedbacks
+	 * (Active Backup Source / Auto Mode Status) on the same xSelectSlot/enableAutoSelect fields, so pressing
+	 * "Set Backup Set to Source"/"Set Auto Mode" reflects on a button right away instead of only updating
+	 * whenever something else happens to trigger it. */
 	get backupSetChange():Subscription {
 		return {
 			pat: 'device/inputList/items/IN_\\d+/backup',
+			fbk: ['deviceBackupSetSourceStatus', 'deviceBackupAutoModeStatus'],
 			fun: () => {
 				this.debounce('backupVariables', 1000, this.refreshBackupVariables)
 				return false
@@ -750,10 +766,12 @@ export default class Subscriptions {
 	 * backgroundSetList/items/{1-8}/backup). Kept as its own subscription rather than folding into
 	 * backupSetChange's pattern since the path shapes are structurally unrelated (per-input list vs.
 	 * per-screen-per-slot), but shares the same debounce key so a burst touching both kinds still coalesces
-	 * into one rebuild. */
+	 * into one rebuild. Also carries `fbk` for the same reason as backupSetChange - BGSET targets are one of
+	 * the three kinds getBackupControlPath()/getBackupSetChoices() support. */
 	get backupBackgroundSetChange():Subscription {
 		return {
 			pat: 'device/preconfig/backgrounds/screenList/items/\\w+/backgroundSetList/items/\\d+/backup',
+			fbk: ['deviceBackupSetSourceStatus', 'deviceBackupAutoModeStatus'],
 			fun: () => {
 				this.debounce('backupVariables', 1000, this.refreshBackupVariables)
 				return false
@@ -782,10 +800,12 @@ export default class Subscriptions {
 	}
 
 	/** Anything under a Backup Group's config/status changes - refreshes every backups.groupX.* variable, see
-	 * refreshBackupVariables. Debounced like backupSetChange above. */
+	 * refreshBackupVariables. Debounced like backupSetChange above. Also carries `fbk`, same reason as
+	 * backupSetChange - GROUP targets are one of the three kinds getBackupControlPath() supports. */
 	get backupGroupChange():Subscription {
 		return {
 			pat: 'device/backup/groupList/items/GROUP_\\d+',
+			fbk: ['deviceBackupSetSourceStatus', 'deviceBackupAutoModeStatus'],
 			fun: () => {
 				this.debounce('backupVariables', 1000, this.refreshBackupVariables)
 				return false
@@ -1076,6 +1096,7 @@ export default class Subscriptions {
 	get screenMemoriesChange():Subscription {
 		return {
 			pat: 'DEVICE/device/presetBank/bankList/items/(\\d{1,4})/status/pp/isValid',
+			fbk: 'deviceScreenMemorySlotStatus',
 			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
 				return true
 			},
@@ -1167,6 +1188,7 @@ export default class Subscriptions {
 
 		return {
 			pat: 'device/inputList/items/IN_(\\d+)/plugList/items/\\w+/status/signal/pp/isValid',
+			fbk: 'deviceInputSignalStatus',
 			ini: () => {
 				this.instance.removeVariable('inputStatus')
 				for (let i = 1; i <= this.constants.maxInputs; i += 1) {
@@ -1835,6 +1857,7 @@ export default class Subscriptions {
 
 		return {
 			pat: 'device/system/(?:deviceList/items/\\d+/)?(?:temperature/device/pp/alarm|fan/.*alarm)',
+			fbk: 'deviceHealthStatus',
 			ini: () => {
 				this.instance.removeVariable('deviceHealth')
 				this.instance.addVariable({ id: 'deviceHealth', variableId: 'Device.Status.Temperature', name: 'Device temperature alarm status' })

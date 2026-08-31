@@ -92,11 +92,13 @@ export default class ActionsMidra extends Actions {
 		'lockScreen',
 		'selectPreset',
 		'selectLayer',
+		'selectLayerV3',
 		'remoteSync',
 		'deviceStreamControl',
 		'deviceStreamAudioMute',
 		'deviceAudioRouteBlock',
 		'deviceAudioRouteChannels',
+		'deviceAudioDanteFunctions',
 		'deviceTimerSetup',
 		'deviceTimerAdjust',
 		'deviceTimerTransport',
@@ -562,14 +564,17 @@ export default class ActionsMidra extends Actions {
 
 		// don't build a dropdown for aux on midra
 		this.choices.getScreensArray().forEach((screen) => {
-			
+
 			deviceSelectSource.options.push({
 				id: `layer${screen.id}`,
 				type: 'multidropdown',
 				label: 'Layer ' + screen.id,
-				choices: this.choices.getLayerChoices(screen.id),
+				// frozen deprecated V2 choice list - not sourced from getLayerChoices() anymore, which now
+				// emits 'BG' for Background (see the module-wide 'BG' rename) - this action keeps 'NATIVE' forever
+				choices: [{ id: 'NATIVE', label: 'Background' }, ...this.choices.getLayerChoices(screen.id, false)],
 				default: ['1'],
 				isVisibleExpression: `$(options:method) == 'spec' && arrayIncludes($(options:screen), '${screen.id}')`,
+				disableAutoExpression: true,
 			})
 		})
 		deviceSelectSource.options.push(
@@ -585,6 +590,7 @@ export default class ActionsMidra extends Actions {
 				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
 				// silently hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceLayer',
@@ -598,6 +604,7 @@ export default class ActionsMidra extends Actions {
 				// be expressed generically in Companion's expression language. Falling back to always-visible to avoid
 				// silently hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceFront',
@@ -611,6 +618,7 @@ export default class ActionsMidra extends Actions {
 				// generically in Companion's expression language. Falling back to always-visible to avoid silently
 				// hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceBack',
@@ -624,6 +632,7 @@ export default class ActionsMidra extends Actions {
 				// generically in Companion's expression language. Falling back to always-visible to avoid silently
 				// hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 		)
 
@@ -692,7 +701,7 @@ export default class ActionsMidra extends Actions {
 			if (opt.layer === 'sel') {
 				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			}
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layer}))
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(opt.layer)}))
 		}
 
 		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
@@ -893,7 +902,7 @@ export default class ActionsMidra extends Actions {
 
 		const deviceInputPlug: AWJaction<DeviceInputPlug> = {
 			name: 'Preconfig - Set Input Plug',
-			sortName: '08 Preconfig - Set Input Plug',
+			sortName: '07 Preconfig - Set Input Plug',
 			description: 'Assigns which physical plug an Input uses (Midra only).',
 			options: [
 				{
@@ -1172,6 +1181,107 @@ export default class ActionsMidra extends Actions {
 		return selectLayer
 	}
 
+	/**
+	 * MARK: Layer Selection (V3) - Midra
+	 */
+	get selectLayerV3() {
+		const selectLayerV3 = super.selectLayerV3
+
+		selectLayerV3.callback = (action) => {
+			if (action.options.preset !== 'sel') {
+				if (this.state.syncSelection) {
+					switch (action.options.preset) {
+						case 'pgm':
+							this.connection.sendWSdata('REMOTE', 'set', '/live/screens/presetModeSelection', ['PROGRAM'])
+							break
+						case 'prw':
+						case 'pvw':
+							this.connection.sendWSdata('REMOTE', 'set', '/live/screens/presetModeSelection', ['PREVIEW'])
+							break
+						case 'tgl':
+							this.connection.sendWSdata('REMOTE', 'toggle', '/live/screens/presetModeSelection', [])
+							break
+					}
+				} else {
+					switch (action.options.preset) {
+						case 'pgm':
+							this.state.set('LOCAL/presetMode', 'PROGRAM')
+							this.instance.setVariableValues({ selectedPreset: 'PGM' })
+							break
+						case 'prw':
+						case 'pvw':
+							this.state.set('LOCAL/presetMode', 'PREVIEW')
+							this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+							break
+						case 'tgl':
+							if (this.state.get('LOCAL/presetMode') === 'PREVIEW') {
+								this.state.set('LOCAL/presetMode', 'PROGRAM')
+								this.instance.setVariableValues({ selectedPreset: 'PGM' })
+							} else {
+								this.state.set('LOCAL/presetMode', 'PREVIEW')
+								this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+							}
+							break
+					}
+					this.instance.checkFeedbacks('livePresetSelection')
+				}
+			}
+
+			type Key = Record<'screenAuxKey' | 'layerKey', string>
+			let ret: Key[] = []
+			if (action.options.mode !== 'exclusive') {
+				if (this.state.syncSelection) {
+					ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+						.map((key: Key) => {
+							return {
+								screenAuxKey: key.screenAuxKey.replace(/(?<!^)\D/g, ''),
+								layerKey: key.layerKey.replace(/LIVE_/, '').replace(/BKG/, 'NATIVE')
+							}
+						})
+				} else {
+					ret = this.state.get('LOCAL/layerIds')
+				}
+			}
+			const screens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			const layers = this.choices.getChosenLayers(action.options.layers)
+			for (const screen of screens) {
+				for (const layer of layers) {
+					const idx = ret.findIndex((lay) => {
+						return lay['screenAuxKey'] === screen && lay['layerKey'] === layer
+					})
+					if (action.options.mode === 'deselect') {
+						if (idx !== -1) ret.splice(idx, 1)
+					} else if (action.options.mode === 'toggle') {
+						if (idx === -1) ret.push({ screenAuxKey: screen, layerKey: layer })
+						else ret.splice(idx, 1)
+					} else {
+						// exclusive or add
+						if (idx === -1) ret.push({ screenAuxKey: screen, layerKey: layer })
+					}
+				}
+			}
+			if (this.state.syncSelection) {
+				// {"channel":"REMOTE","data":{"name":"replace","path":"/live/screens/layerSelection","args":[[{"screenAuxKey":"SCREEN_2","layerKey":"LIVE_1"}]]}}
+				this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/layerSelection', [
+					ret.map((key: Key) => {
+						return {
+							screenAuxKey: this.choices.getScreenInfo(key.screenAuxKey).platformLongId,
+							layerKey: key.layerKey == 'NATIVE' ? 'BKG' : key.layerKey.replace(/(\d+)/, 'LIVE_$1')
+						}
+					})
+				])
+			} else {
+				this.state.set('LOCAL/layerIds', ret)
+				this.instance.checkFeedbacks('remoteLayerSelection')
+			}
+			this.instance.checkFeedbacks('liveScreenSelection', 'remoteLayerSelection')
+		}
+
+		return selectLayerV3
+	}
+
 	// MARK: Stream Control - Midra
 	get deviceStreamControl() {
 		type DeviceStreamControl = {stream: string}
@@ -1221,7 +1331,7 @@ export default class ActionsMidra extends Actions {
 		
 		const deviceStreamAudioMute: AWJaction<DeviceStreamAudioMute> = {
 			name: 'Audio - Mute Stream',
-			sortName: '07 Audio - Mute Stream',
+			sortName: '06 Audio - Mute Stream',
 			description: 'Mutes, unmutes, or toggles the audio of the device\'s streaming output.',
 			options: [
 				{
@@ -1261,7 +1371,7 @@ export default class ActionsMidra extends Actions {
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '07 Audio - Route (Block)',
+			sortName: '06 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
@@ -1293,9 +1403,10 @@ export default class ActionsMidra extends Actions {
 					type: 'number',
 					label: 'Block Size',
 					id: 'blocksize',
+					tooltip: 'Capped at 8, and the block is additionally always clamped to end at the latest at the end of the 8-channel Custom Block it starts in (e.g. starting at Custom Block 1 Channel 7 only ever reaches channels 7-8, regardless of this setting) - a safety measure against accidentally spilling into the next Custom Block with a wrong setting. Use a second action for anything beyond that.',
 					default: 8,
 					min: 1,
-					max: audioInputChoices.length,
+					max: 8,
 					range: true,
 				},
 			],
@@ -1307,10 +1418,15 @@ export default class ActionsMidra extends Actions {
 					return item.id === action.options.in1
 				})
 				if (outstart > -1 && instart > -1) {
+					// Never let the block spill past the end of the 8-channel Custom Block it starts in, no
+					// matter what Block Size is set to - each output id is 'CUSTOM_n:channelNum' (1-8).
+					const outChannelNum = parseInt(audioOutputChoices[outstart].id.toString().split(':')[1], 10)
+					const remainingInOutputBlock = 8 - outChannelNum + 1
 					const max = Math.min(
 						audioOutputChoices.length - outstart,
 						audioInputChoices.length - instart,
-						action.options.blocksize
+						action.options.blocksize,
+						remainingInOutputBlock
 					) // since 'None' is input at index 0 no extra test is needed, it is possible to fill all outputs with none
 					const routings: Record<string, string[]> = {}
 					for (let s = 0; s < max; s += 1) {
@@ -1358,7 +1474,7 @@ export default class ActionsMidra extends Actions {
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '07 Audio - Route (Channels)',
+			sortName: '06 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
@@ -1570,7 +1686,7 @@ export default class ActionsMidra extends Actions {
 		
 		const devicePower: AWJaction<DevicePower> = {
 			name: 'Device - Power',
-			sortName: '09 Device - Power',
+			sortName: '08 Device - Power',
 			description: 'Switches the device on (Wake on LAN), off, or reboots it.',
 			options: [
 				{
@@ -1619,7 +1735,7 @@ export default class ActionsMidra extends Actions {
 
 		const deviceAssignImageLibraryToFrame: AWJaction<DeviceAssignImageLibraryToFrame> = {
 			name: 'Preconfig - Assign Image from Library to Foreground/Background Frame',
-			sortName: '08 Preconfig - Assign Image from Library to Foreground/Background Frame',
+			sortName: '07 Preconfig - Assign Image from Library to Foreground/Background Frame',
 			description: 'Assigns an image from the Image Library to the Foreground or Background Frame (Midra only), so it becomes available as a Layer source.',
 			options: [
 				{

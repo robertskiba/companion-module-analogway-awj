@@ -30,8 +30,10 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'syncselection',
 		'presetToggle',
 		'globalAnchorPoint',
+		'deviceLayerPropertyStatus',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
+		'deviceScreenMemorySlotStatus',
 		// 'deviceAuxMemory',
 		'deviceSourceTally',
 		'deviceTake',
@@ -41,6 +43,9 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'remoteLayerSelection',
 		'remoteWidgetSelection',
 		'deviceInputFreeze',
+		'deviceInputSignalStatus',
+		'deviceLayerSignalStatus',
+		'deviceHealthStatus',
 		// 'deviceLayerFreeze',
 		// 'deviceScreenFreeze',
 		'timerState',
@@ -51,6 +56,10 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'deviceTestpatternRasterBoxActive',
 		'deviceCustom',
 		'deviceThumbnail',
+		'deviceBackupSetSourceStatus',
+		'deviceBackupAutoModeStatus',
+		'deviceAudioRouteChannelsStatus',
+		'deviceAudioRouteBlockStatus',
 	]
 
 	constructor (instance: AWJinstance) {
@@ -139,7 +148,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 
 		const deviceGpioOut: AWJfeedback<{gpo: number, state: number }> = {
 			type: 'boolean',
-			name: 'GPO State',
+			name: 'Device - GPO State (LivePremier(≤V3)/LivePremier only)',
+			sortName: '08 Device - 01 GPO State',
 			description: 'Shows whether a general purpose output is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -199,7 +209,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		} 
 		const deviceGpioIn: AWJfeedback<{gpi: number, state: number }> = {
 			type: 'boolean',
-			name: 'GPI State',
+			name: 'Device - GPI State (LivePremier(≤V3)/LivePremier only)',
+			sortName: '08 Device - 02 GPI State',
 			description: 'Shows whether a general purpose input is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -384,6 +395,191 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 	 */
 	get deviceTestpatternRasterBoxActive() {
 		return this.deviceTestpatternRasterBoxActive_common('LivePremier Testpattern Raster Box Active')
+	}
+
+	/**
+	 * MARK: Audio - Routing Status - LivePremier4
+	 * Mirrors "Audio - Route (Channels)" (deviceAudioRouteChannels action) - same option layout, same target
+	 * resolution, and the same 'IN1C1IN1C2' Expression-Mode shorthand (choices.getChosenAudioInputChannels) for
+	 * checking several channels at once. True only if every selected Input Channel is currently routed to its
+	 * corresponding, consecutive Output Channel starting at the chosen first Output Channel. First draft:
+	 * LivePremier4 only (Audio Routing's real id scheme/multi-device model is LP4-specific).
+	 */
+	get deviceAudioRouteChannelsStatus() {
+		type DeviceAudioRouteChannelsStatus = {device: number, out1: string, in1: string}
+
+		const devices = this.choices.getLinkedDevicesChoices().length
+		const audioOutputChoices = Array.from({length: devices}, (_v, i) => this.choices.getAudioOutputChoices(i + 1))
+		const audioInputChoices = Array.from({length: devices}, (_v, i) => this.choices.getAudioInputChoices(i + 1))
+
+		const deviceAudioRouteChannelsStatus: AWJfeedback<DeviceAudioRouteChannelsStatus> = {
+			type: 'boolean',
+			name: 'Audio - Routing Status',
+			sortName: '06 Audio - 01 Routing Status',
+			description: 'Shows whether one or more Audio Input Channels are currently routed to the corresponding, consecutive Output Channels, starting at a given first Output Channel - mirrors "Audio - Route (Channels)".',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				...(devices > 1 ? [{
+					type: 'dropdown' as const,
+					label: 'Device',
+					id: 'device',
+					choices: this.choices.getLinkedDevicesChoices(),
+					default: 1,
+					minChoicesForSearch: 3,
+				}] : []),
+				...audioOutputChoices.map((choices, i) => {
+					return {
+						type: 'dropdown' as const,
+						label: 'First Output Channel',
+						id: `out${i+1}`,
+						choices: choices,
+						default: choices[0]?.id,
+						minChoicesForSearch: 0,
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
+					}
+				}),
+				...audioInputChoices.map((choices, i) => {
+					return {
+						type: 'multidropdown' as const,
+						label: 'Input Channel(s)',
+						id: `in${i+1}`,
+						tooltip: 'To check several channels at once via Expression Mode, you can use a format like \'IN1C1IN1C2\' instead of the raw array form.',
+						choices: choices,
+						default: ['NONE'],
+						minChoicesForSearch: 0,
+						minSelection: 0,
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
+					}
+				}),
+			],
+			callback: (feedback) => {
+				const device = Number(feedback.options.device) || 1
+				const inChannels = this.choices.getChosenAudioInputChannels(feedback.options[`in${device}`])
+				if (inChannels.length === 0) return false
+				const outChoices = audioOutputChoices[device - 1] ?? []
+				const outstart = outChoices.findIndex((item) => item.id === feedback.options[`out${device}`])
+				if (outstart === -1 || outstart + inChannels.length > outChoices.length) return false
+				for (let s = 0; s < inChannels.length; s += 1) {
+					const path = [
+						'DEVICE', 'device', 'audio', 'control',
+						'deviceList', 'items', device.toString(),
+						'txList', 'items', outChoices[outstart + s].id.toString().split(':')[0],
+						'channelList', 'items', outChoices[outstart + s].id.toString().split(':')[1],
+						'control', 'pp', 'source',
+					]
+					if (this.state.get(path) !== inChannels[s]) return false
+				}
+				return true
+			},
+		}
+
+		return deviceAudioRouteChannelsStatus
+	}
+
+	/**
+	 * MARK: Audio - Block Routing Status - LivePremier4
+	 * Mirrors "Audio - Route (Block)" (deviceAudioRouteBlock action) - same option layout and target resolution,
+	 * including the "first Input Channel = NONE fills the whole Block with NONE" quirk. True only if every
+	 * Output Channel in the Block is currently routed exactly as the block-route action would have set it.
+	 * First draft: LivePremier4 only.
+	 */
+	get deviceAudioRouteBlockStatus() {
+		type DeviceAudioRouteBlockStatus = {device: number, out1: string, in1: string, blocksize: number}
+
+		const devices = this.choices.getLinkedDevicesChoices().length
+		const audioOutputChoices = Array.from({length: devices}, (_v, i) => this.choices.getAudioOutputChoices(i + 1))
+		const audioInputChoices = Array.from({length: devices}, (_v, i) => this.choices.getAudioInputChoices(i + 1))
+
+		const deviceAudioRouteBlockStatus: AWJfeedback<DeviceAudioRouteBlockStatus> = {
+			type: 'boolean',
+			name: 'Audio - Block Routing Status',
+			sortName: '06 Audio - 02 Block Routing Status',
+			description: 'Shows whether a contiguous Block of Audio Output Channels (starting at a given first Output Channel, for the configured Block Size) is currently routed exactly to the corresponding, consecutive Input Channels starting at a given first Input Channel - mirrors "Audio - Route (Block)".',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				...(devices > 1 ? [{
+					type: 'dropdown' as const,
+					label: 'Device',
+					id: 'device',
+					choices: this.choices.getLinkedDevicesChoices(),
+					default: 1,
+					minChoicesForSearch: 3,
+				}] : []),
+				...audioOutputChoices.map((choices, i) => {
+					return {
+						type: 'dropdown' as const,
+						label: 'First Output Channel',
+						id: `out${i+1}`,
+						choices: choices,
+						default: choices[0]?.id,
+						minChoicesForSearch: 0,
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
+					}
+				}),
+				...audioInputChoices.map((choices, i) => {
+					return {
+						type: 'dropdown' as const,
+						label: 'First Input Channel',
+						id: `in${i+1}`,
+						tooltip: 'Via Expression Mode you can also use a format like \'IN1C1\' instead of the raw id.',
+						choices: choices,
+						default: choices[0]?.id,
+						minChoicesForSearch: 0,
+						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
+					}
+				}),
+				{
+					type: 'number',
+					label: 'Block Size',
+					id: 'blocksize',
+					tooltip: 'Capped at 8, matching "Audio - Route (Block)" - a block can never validly extend past the end of the 8-channel output block it starts in.',
+					default: 8,
+					min: 1,
+					max: 8,
+					range: true,
+				},
+			],
+			callback: (feedback) => {
+				const device = Number(feedback.options.device) || 1
+				const outChoices = audioOutputChoices[device - 1] ?? []
+				const inChoices = audioInputChoices[device - 1] ?? []
+				const inValue = this.choices.getChosenAudioInputChannels(feedback.options[`in${device}`])[0]
+				const outstart = outChoices.findIndex((item) => item.id === feedback.options[`out${device}`])
+				const instart = inChoices.findIndex((item) => item.id === inValue)
+				if (outstart === -1 || instart === -1) return false
+				// Same output-block boundary clamp as the matching action - a block can never validly extend
+				// past the end of the 8-channel output block it starts in, each output id is 'moduleId:channelNum'.
+				const outChannelNum = parseInt(outChoices[outstart].id.toString().split(':')[1], 10)
+				const remainingInOutputBlock = 8 - outChannelNum + 1
+				const blocksize = Number(feedback.options.blocksize) || 1
+				const max = Math.min(outChoices.length - outstart, inChoices.length - instart, blocksize, remainingInOutputBlock)
+				if (max < blocksize) return false
+				for (let s = 0; s < max; s += 1) {
+					const path = [
+						'DEVICE', 'device', 'audio', 'control',
+						'deviceList', 'items', device.toString(),
+						'txList', 'items', outChoices[outstart + s].id.toString().split(':')[0],
+						'channelList', 'items', outChoices[outstart + s].id.toString().split(':')[1],
+						'control', 'pp', 'source',
+					]
+					const expected = instart === 0 ? inChoices[0]?.id : inChoices[instart + s]?.id
+					if (this.state.get(path) !== expected) return false
+				}
+				return true
+			},
+		}
+
+		return deviceAudioRouteBlockStatus
 	}
 
 }

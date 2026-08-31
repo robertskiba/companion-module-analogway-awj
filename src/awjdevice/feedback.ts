@@ -79,8 +79,10 @@ export default class Feedbacks {
 		'syncselection',
 		'presetToggle',
 		'globalAnchorPoint',
+		'deviceLayerPropertyStatus',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
+		'deviceScreenMemorySlotStatus',
 		// 'deviceAuxMemory',
 		'deviceSourceTally',
 		'deviceTake',
@@ -90,6 +92,9 @@ export default class Feedbacks {
 		'remoteLayerSelection',
 		'remoteWidgetSelection',
 		'deviceInputFreeze',
+		'deviceInputSignalStatus',
+		'deviceLayerSignalStatus',
+		'deviceHealthStatus',
 		// 'deviceLayerFreeze',
 		// 'deviceScreenFreeze',
 		'timerState',
@@ -124,7 +129,8 @@ export default class Feedbacks {
 		
 		const syncselection: CompanionBooleanFeedbackDefinition = {
 			type: 'boolean',
-			name: 'Synchronization of the selection',
+			name: 'Device - Synchronization of the selection',
+			sortName: '08 Device - 05 Synchronization of the selection',
 			description: 'Shows whether this client synchronizes its selection to the device',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -158,7 +164,8 @@ export default class Feedbacks {
 		
 		const presetToggle: CompanionBooleanFeedbackDefinition = {
 			type: 'boolean',
-			name: 'Preset Toggle Status (Program/Preview)',
+			name: 'LIVE - Preset Toggle Status (Program/Preview)',
+			sortName: '01 LIVE - 01 Preset Toggle Status (Program/Preview)',
 			description: 'Shows whether preset toggle is on or off',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -178,7 +185,8 @@ export default class Feedbacks {
 
 		const globalAnchorPoint: CompanionBooleanFeedbackDefinition = {
 			type: 'boolean',
-			name: 'Global Anchor Point',
+			name: 'Layer Properties - Global Anchor Point',
+			sortName: '03 Layer Properties - Global Anchor Point',
 			description: 'Shows whether the given Anchor Point is the currently globally selected one (the same value WebRCS uses)',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -201,12 +209,135 @@ export default class Feedbacks {
 		return globalAnchorPoint
 	}
 
+	/**
+	 * MARK: deviceLayerPropertyStatus
+	 * One combined feedback (dropdown-selected property) for every on/off-style Layer Properties setting, per
+	 * explicit user request rather than a separate feedback per property. Covers Border (Edge/Shadow enable +
+	 * Round/Smooth), Effects (Filter/Transform/Strobe flags), Keying enable, and Mask - Mask has no real on/off
+	 * flag in the protocol (purely 4 continuous crop fraction values, 0 = no crop), so "Mask Active" is inferred
+	 * as "any of the 4 crop values is non-zero", per explicit user request. All paths/flag vocabularies confirmed
+	 * from the corresponding V3 actions' own `learn` (Get current values) handlers, which already read these
+	 * exact same fields live.
+	 */
+	get deviceLayerPropertyStatus() {
+		type DeviceLayerPropertyStatus = { screen: string, preset: string, layer: string, property: string }
+
+		const deviceLayerPropertyStatus: AWJfeedback<DeviceLayerPropertyStatus> = {
+			type: 'boolean',
+			name: 'Layer Properties - Property Status',
+			sortName: '03 Layer Properties - 10 Property Status',
+			description: 'Shows whether a given on/off-style Layer Property (Border, Effects/Filter/Transform/Strobe, Keying, Mask, Aspect Override, Transitions) is currently active on a Layer. The two "Allow Cross Effect/Depth" properties mirror an action whose flags mapping is not yet confirmed live - see that action\'s own description.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen / Aux',
+					choices: this.choices.getScreenAuxChoices(),
+					default: this.choices.getScreenAuxChoices()[0]?.id,
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
+					allowInvalidValues: true,
+					default: 'sel',
+				},
+				{
+					id: 'layer',
+					type: 'dropdown',
+					label: 'Layer',
+					choices: this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), false),
+					default: '1',
+				},
+				{
+					id: 'property',
+					type: 'dropdown',
+					label: 'Property',
+					choices: [
+						{ id: 'edgeEnable', label: 'Border - Edge Enabled' },
+						{ id: 'edgeRound', label: 'Border - Edge Rounded' },
+						{ id: 'edgeSmooth', label: 'Border - Edge Smoothed' },
+						{ id: 'shadowEnable', label: 'Border - Shadow Enabled' },
+						{ id: 'shadowRound', label: 'Border - Shadow Rounded' },
+						{ id: 'shadowSmooth', label: 'Border - Shadow Smoothed' },
+						{ id: 'filterBlackWhite', label: 'Effects - Filter Black & White' },
+						{ id: 'filterNegative', label: 'Effects - Filter Negative' },
+						{ id: 'filterSepia', label: 'Effects - Filter Sepia' },
+						{ id: 'filterSolar', label: 'Effects - Filter Solarize' },
+						{ id: 'transformFlipH', label: 'Effects - Transform Flip Horizontal' },
+						{ id: 'transformFlipV', label: 'Effects - Transform Flip Vertical' },
+						{ id: 'strobeEnable', label: 'Effects - Strobe Active' },
+						{ id: 'keyingEnable', label: 'Keying Enabled (firmware V6+)' },
+						{ id: 'maskActive', label: 'Mask Active' },
+						{ id: 'aspect1_1', label: 'Aspect Override - 1:1' },
+						{ id: 'aspectCentered', label: 'Aspect Override - Centered' },
+						{ id: 'aspectFullscreen', label: 'Aspect Override - Fullscreen' },
+						{ id: 'aspectCropped', label: 'Aspect Override - Cropped' },
+						{ id: 'allowCrossEffect', label: 'Transitions - Allow Cross Effect (not verified live)' },
+						{ id: 'allowCrossDepth', label: 'Transitions - Allow Cross Depth (not verified live)' },
+					],
+					default: 'edgeEnable',
+				},
+			],
+			callback: (feedback) => {
+				const screeninfo = this.choices.getScreenInfo(feedback.options.screen)
+				const preset = this.choices.getPreset(feedback.options.screen, feedback.options.preset)
+				const path = [
+					'DEVICE',
+					...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+					'items', feedback.options.screen,
+					'presetList', 'items', preset,
+					...this.choices.getLayerPath(feedback.options.layer),
+				]
+				switch (feedback.options.property) {
+					case 'edgeEnable': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('EDGE')
+					case 'edgeRound': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('ROUNDED')
+					case 'edgeSmooth': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('SMOOTH')
+					case 'shadowEnable': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('EDGE')
+					case 'shadowRound': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('ROUNDED')
+					case 'shadowSmooth': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('SMOOTH')
+					case 'filterBlackWhite': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('BLACK_N_WHITE')
+					case 'filterNegative': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('NEGATIVE')
+					case 'filterSepia': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('SEPIA')
+					case 'filterSolar': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('SOLAR')
+					case 'transformFlipH': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('FLIP_H')
+					case 'transformFlipV': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('FLIP_V')
+					case 'strobeEnable': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('STROBE')
+					case 'keyingEnable': return !!this.state.get([...path, 'keying', 'pp', 'enable'])
+					case 'maskActive': {
+						const top = this.state.get([...path, 'cropping', 'mask', 'pp', 'top']) ?? 0
+						const bottom = this.state.get([...path, 'cropping', 'mask', 'pp', 'bottom']) ?? 0
+						const left = this.state.get([...path, 'cropping', 'mask', 'pp', 'left']) ?? 0
+						const right = this.state.get([...path, 'cropping', 'mask', 'pp', 'right']) ?? 0
+						return top !== 0 || bottom !== 0 || left !== 0 || right !== 0
+					}
+					case 'aspect1_1': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === '1_1'
+					case 'aspectCentered': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CENTERED'
+					case 'aspectFullscreen': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'FULLSCREEN'
+					case 'aspectCropped': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CROPPED'
+					case 'allowCrossEffect': return (this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).includes('FORCE_CROSS')
+					case 'allowCrossDepth': return !(this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).some((f: string) => f.startsWith('DEPTH_CUT_'))
+					default: return false
+				}
+			},
+		}
+
+		return deviceLayerPropertyStatus
+	}
+
 	// MARK: Master Memory
 	get deviceMasterMemory() {
 		
 		const deviceMasterMemory: CompanionBooleanFeedbackDefinition = {
 			type: 'boolean',
-			name: 'Master Memory',
+			name: 'LIVE - Master Memory',
+			sortName: '01 LIVE - 02 Master Memory',
 			description: 'Indicates the last used master memory',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -251,7 +382,8 @@ export default class Feedbacks {
 		
 		const deviceScreenMemory = {
 			type: 'boolean',
-			name: 'Screen Memory',
+			name: 'LIVE - Screen Memory',
+			sortName: '01 LIVE - 03 Screen Memory',
 			description: 'Shows whether a screen Memory is loaded on a screen',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -343,12 +475,49 @@ export default class Feedbacks {
 		return deviceScreenMemory
 	}
 
+	/**
+	 * MARK: deviceScreenMemorySlotStatus
+	 * Shows whether a Screen Memory slot currently has content, independent of whether it's the slot loaded on
+	 * any specific screen - same status.pp.isValid field getAllScreenMemorySlotChoices() already uses to label
+	 * a slot "(overwrite)" vs "(empty)" for "Save Screen Memory to Slot".
+	 */
+	get deviceScreenMemorySlotStatus() {
+		type DeviceScreenMemorySlotStatus = { memory: string }
+
+		const deviceScreenMemorySlotStatus: AWJfeedback<DeviceScreenMemorySlotStatus> = {
+			type: 'boolean',
+			name: 'LIVE - Screen Memory Slot Occupied',
+			sortName: '01 LIVE - 13 Screen Memory Slot Occupied',
+			description: 'Shows whether a Screen Memory slot currently has content saved (as opposed to still being empty) - helps avoid accidentally overwriting an existing memory, or find a free slot, when using "Save Screen Memory to Slot".',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'memory',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen Memory Slot',
+					choices: this.choices.getAllScreenMemorySlotChoices(),
+					default: this.choices.getAllScreenMemorySlotChoices()[0]?.id,
+				},
+			],
+			callback: (feedback) => {
+				return !!this.state.get(['DEVICE', ...this.constants.screenMemoryPath, 'items', feedback.options.memory, 'status', 'pp', 'isValid'])
+			},
+		}
+
+		return deviceScreenMemorySlotStatus
+	}
+
 	// MARK: Aux Memory - Midra
 	get deviceAuxMemory() {
 		
 		const deviceAuxMemory: AWJfeedback<{ screens: string[], preset: string, memory: string, unmodified: number }> = {
 			type: 'boolean',
-			name: 'Aux Memory',
+			name: 'LIVE - Aux Memory (Midra only)',
+			sortName: '01 LIVE - 04 Aux Memory',
 			description: 'Shows whether a Aux Memory is loaded on a auxscreen',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -436,7 +605,8 @@ export default class Feedbacks {
 		
 		const deviceSourceTally: AWJfeedback<{ screens: string[], preset: string, source: string }> = {
 			type: 'boolean',
-			name: 'Source Tally',
+			name: 'LIVE - Source Tally',
+			sortName: '01 LIVE - 05 Source Tally',
 			description: 'Shows whether a source is visible on program or preview in a screen',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -496,11 +666,11 @@ export default class Feedbacks {
 								screen
 							]
 							const presetpath = [...screenpath, 'presetList', 'items', preset]
-							const layerpath = [...presetpath, 'layerList', 'items', layer.id]
+							const layerpath = [...presetpath, ...this.choices.getLayerPath(layer.id)]
 							
 							if (
-								(feedback.options.source === 'NONE' || feedback.options.source?.toString().startsWith('BACKGROUND')
-								&& this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === feedback.options.source)
+								(feedback.options.source === 'NONE' || feedback.options.source?.toString().startsWith('BACKGROUND'))
+								&& this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === feedback.options.source
 							) {
 								return true
 							}
@@ -559,7 +729,8 @@ export default class Feedbacks {
 		
 		const deviceTake: AWJfeedback<{screens: string}> = {
 			type: 'boolean',
-			name: 'Transition active',
+			name: 'LIVE - Transition active',
+			sortName: '01 LIVE - 06 Transition active',
 			description: 'Shows whether a screen is currently in a take/fade transition',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -591,7 +762,8 @@ export default class Feedbacks {
 		
 		const liveScreenSelection: AWJfeedback<{screen: string}> = {
 			type: 'boolean',
-			name: 'Screen Selection',
+			name: 'LIVE - Screen Selection',
+			sortName: '01 LIVE - 07 Screen Selection',
 			description: 'Shows whether a screen is currently selected',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -620,9 +792,12 @@ export default class Feedbacks {
 		
 		const liveScreenLock: AWJfeedback<{screen: string, preset: string }> = {
 			type: 'boolean',
-			name: 'Screen Lock',
+			name: 'LIVE - Screen Lock',
+			sortName: '01 LIVE - 08 Screen Lock',
 			description: 'Shows whether a screen currently is locked',
 			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
 				png64:
 					'iVBORw0KGgoAAAANSUhEUgAAADcAAAA3CAYAAACo29JGAAABSklEQVRoge2a2w7DIAhAZdl3N60/zp5MjBNLBdwknKe19cIZLdVlKTkGrCc4jgOpazln0/lNBh8JUViIqg44I9WiKaky0J0UwHgaxO/uAADXdYnieol6J7lYacNp9xSxHMVMwHV77KXzaQySzlTWmiB5gRB9JM+geuZKkIjIFivt2zHEscx27GWtFmvOd+fp3Xq9MWazp565JgNAiZXr2vPXqMm1cXIDb9uVL0fD26xa/gMhtyshtyshtyshtyshtyuu5YarU40ffKwZbYdcZ+7NbWi89WKBiAkA2Dt815kLuV1hP3NSzvOE6vOSKrwkc7VY79gKczlKZIWgqdydgLWg64IScrPcVUXrqrmioHQFVrwOVr0KcHRsRbzndiXkJLhdofyakJsl1paGuJYz3YmvWolQuM6cazn2banwPzMVnsThOnOu5VzzARnBeIM8tq0ZAAAAAElFTkSuQmCC',
 			},
@@ -660,7 +835,8 @@ export default class Feedbacks {
 		
 		const livePresetSelection: AWJfeedback<{preset: string }> = {
 			type: 'boolean',
-			name: 'Preset Selection (Program/Preview)',
+			name: 'LIVE - Preset Selection (Program/Preview)',
+			sortName: '01 LIVE - 09 Preset Selection (Program/Preview)',
 			description: 'Shows whether program or preview is currently selected',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -702,7 +878,8 @@ export default class Feedbacks {
 		
 		const remoteLayerSelection: AWJfeedback<{screen: string, layer: string, preset: string }> = {
 			type: 'boolean',
-			name: 'Layer Selection',
+			name: 'LIVE - Layer Selection',
+			sortName: '01 LIVE - 10 Layer Selection',
 			description: 'Shows whether a layer is currently selected',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -749,15 +926,16 @@ export default class Feedbacks {
 						pst = false
 					}
 				}
-				if (feedback.options.layer === 'all' && feedback.options.screen === 'all') {
+				const layer = feedback.options.layer === 'all' ? 'all' : this.choices.normalizeLayerId(feedback.options.layer)
+				if (layer === 'all' && feedback.options.screen === 'all') {
 					return this.choices.getSelectedLayers().length > 0 && pst
 				} else if (feedback.options.screen === 'all') {
 					return (
 						JSON.stringify(this.choices.getSelectedLayers()).includes(
-							`"layerKey":"${feedback.options.layer}"`
+							`"layerKey":"${layer}"`
 						) && pst
 					)
-				} else if (feedback.options.layer === 'all') {
+				} else if (layer === 'all') {
 					return (
 						JSON.stringify(this.choices.getSelectedLayers()).includes(
 							`{"screenAuxKey":"${this.choices.getScreenInfo(feedback.options.screen).id}","layerKey":"`
@@ -766,7 +944,7 @@ export default class Feedbacks {
 				} else {
 					return (
 						JSON.stringify(this.choices.getSelectedLayers()).includes(
-							`{"screenAuxKey":"${this.choices.getScreenInfo(feedback.options.screen).id}","layerKey":"${feedback.options.layer}"}`
+							`{"screenAuxKey":"${this.choices.getScreenInfo(feedback.options.screen).id}","layerKey":"${layer}"}`
 						) && pst
 					)
 				}
@@ -781,7 +959,8 @@ export default class Feedbacks {
 		
 		const remoteWidgetSelection: AWJfeedback<{widget: string }> = {
 			type: 'boolean',
-			name: 'Widget Selection',
+			name: 'Multiviewer - Widget Selection',
+			sortName: '02 Multiviewer - Widget Selection',
 			description: 'Shows whether a multiviewer widget is currently selected',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -817,7 +996,8 @@ export default class Feedbacks {
 		
 		const deviceInputFreeze: AWJfeedback<{input: string}> = {
 			type: 'boolean',
-			name: 'Input Freeze',
+			name: 'Freeze - Input',
+			sortName: '05 Freeze - 01 Input',
 			description: 'Shows whether an input currently is frozen',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -849,13 +1029,163 @@ export default class Feedbacks {
 		return deviceInputFreeze
 	}
 
+	// MARK: deviceInputSignalStatus
+	get deviceInputSignalStatus() {
+
+		const deviceInputSignalStatus: AWJfeedback<{input: string}> = {
+			type: 'boolean',
+			name: 'Device - Input Signal Present',
+			sortName: '08 Device - 06 Input Signal Present',
+			description: 'Shows whether a live signal is currently present on an Input (based on its currently active plug).',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'input',
+					type: 'dropdown',
+					label: 'Input',
+					choices: this.choices.getLiveInputChoices(),
+					default: this.choices.getLiveInputChoices()[0]?.id,
+				},
+			],
+			callback: (feedback) => {
+				const input = feedback.options.input?.toString().replace('LIVE', 'IN') || ''
+				const activePlug = this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'status', 'pp', 'plug']) ?? '1'
+				return !!this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', activePlug, 'status', 'signal', 'pp', 'isValid'])
+			},
+		}
+
+		return deviceInputSignalStatus
+	}
+
+	/**
+	 * MARK: deviceLayerSignalStatus
+	 * Mirrors the computed logic subscriptions.ts already uses for a Layer's own signal-status variable: a
+	 * Layer showing a live Input delegates to that Input's own signal presence (deviceInputSignalStatus above);
+	 * any other source type (Still/Color/Timer/Screen re-insertion) has no "signal" concept and always counts
+	 * as present.
+	 */
+	get deviceLayerSignalStatus() {
+		type DeviceLayerSignalStatus = { screen: string, layer: string, preset: string }
+
+		const deviceLayerSignalStatus: AWJfeedback<DeviceLayerSignalStatus> = {
+			type: 'boolean',
+			name: 'Device - Layer Signal Present',
+			sortName: '08 Device - 07 Layer Signal Present',
+			description: 'Shows whether the source currently shown by a Layer has a live signal - always true unless the Layer shows a live Input that has lost its signal.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen / Aux',
+					choices: this.choices.getScreenAuxChoices(),
+					default: this.choices.getScreenAuxChoices()[0]?.id,
+				},
+				{
+					id: 'layer',
+					type: 'dropdown',
+					label: 'Layer',
+					choices: this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), false),
+					default: '1',
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
+					allowInvalidValues: true,
+					default: 'sel',
+				},
+			],
+			callback: (feedback) => {
+				const screeninfo = this.choices.getScreenInfo(feedback.options.screen)
+				const preset = this.choices.getPreset(feedback.options.screen, feedback.options.preset)
+				const layerpath = [
+					'DEVICE',
+					...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+					'items', feedback.options.screen,
+					'presetList', 'items', preset,
+					'layerList', 'items', feedback.options.layer,
+				]
+				const source = this.state.get([...layerpath, 'source', 'pp', 'inputNum'])
+				const liveMatch = typeof source === 'string' ? source.match(/^(?:LIVE|IN)_(\d+)$/) : null
+				if (!liveMatch) return true
+				const inputKey = `IN_${liveMatch[1]}`
+				const activePlug = this.state.get(['DEVICE', 'device', 'inputList', 'items', inputKey, 'status', 'pp', 'plug']) ?? '1'
+				return !!this.state.get(['DEVICE', 'device', 'inputList', 'items', inputKey, 'plugList', 'items', activePlug, 'status', 'signal', 'pp', 'isValid'])
+			},
+		}
+
+		return deviceLayerSignalStatus
+	}
+
+	/**
+	 * MARK: deviceHealthStatus
+	 * Mirrors subscriptions.ts's deviceHealth logic (same paths/deviceListPrefix auto-probe and recursive
+	 * fan-alarm scan) as a checkable boolean instead of only a Device.Status.Temperature/Fans text variable.
+	 */
+	get deviceHealthStatus() {
+		type DeviceHealthStatus = { aspect: string }
+
+		const anyAlarm = (obj: any): boolean => {
+			if (obj === null || typeof obj !== 'object') return false
+			for (const key in obj) {
+				if (key === 'alarm' && obj[key] === true) return true
+				if (anyAlarm(obj[key])) return true
+			}
+			return false
+		}
+
+		const deviceHealthStatus: AWJfeedback<DeviceHealthStatus> = {
+			type: 'boolean',
+			name: 'Device - Health Alarm',
+			sortName: '08 Device - 08 Health Alarm',
+			description: 'Shows whether the device currently reports a Temperature or Fan alarm/warning.',
+			defaultStyle: {
+				color: this.config.color_bright,
+				bgcolor: combineRgb(200, 0, 0),
+			},
+			options: [
+				{
+					id: 'aspect',
+					type: 'dropdown',
+					label: 'Check',
+					choices: [
+						{ id: 'temperature', label: 'Temperature Alarm' },
+						{ id: 'fans', label: 'Fan Alarm' },
+					],
+					default: 'temperature',
+				},
+			],
+			callback: (feedback) => {
+				const deviceListPrefix = this.state.get('DEVICE/device/system/temperature/device/pp/alarm') !== undefined ? '' : 'deviceList/items/1/'
+				if (feedback.options.aspect === 'temperature') {
+					const alarm = this.state.get(`DEVICE/device/system/${deviceListPrefix}temperature/device/pp/alarm`)
+					return alarm !== undefined && alarm !== 'NONE'
+				} else {
+					return anyAlarm(this.state.get(`DEVICE/device/system/${deviceListPrefix}fan`))
+				}
+			},
+		}
+
+		return deviceHealthStatus
+	}
+
 	// MARK: deviceLayerFreeze
 	// Midra only
 	get deviceLayerFreeze() {
 		
 		const deviceLayerFreeze: AWJfeedback<{screen: string}> = {
 			type: 'boolean',
-			name: 'Layer Freeze',
+			name: 'Freeze - Layer (Midra only)',
+			sortName: '05 Freeze - 02 Layer',
 			description: 'Shows whether a layer currently is frozen',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -939,7 +1269,8 @@ export default class Feedbacks {
 		
 		const deviceScreenFreeze: AWJfeedback<{screen: string}> = {
 			type: 'boolean',
-			name: 'Screen Freeze',
+			name: 'Freeze - Screen (Midra only)',
+			sortName: '05 Freeze - 03 Screen',
 			description: 'Shows whether a screen currently is frozen',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -958,16 +1289,16 @@ export default class Feedbacks {
 				}
 			],
 			callback: (feedback) => {
-				//const screen = feedback.options.screen.substring(1)
 				let retval = false
-				let screens: string[]  
+				let screens: string[]
 				if (feedback.options.screen === 'any') {
-					screens = this.choices.getScreensAuxArray().map(scr => scr.index || scr.id.replace(/\D/g, ''))
+					screens = this.choices.getScreensAuxArray().map(scr => scr.id)
 				} else {
-					screens = [feedback.options.screen.replace(/\D/g, '')]
+					screens = [feedback.options.screen]
 				}
 				for (const screen of screens) {
-					const path = ['DEVICE', 'device', 'screenList', 'items', screen, 'control', 'pp', 'freeze']
+					const screeninfo = this.choices.getScreenInfo(screen)
+					const path = ['DEVICE', 'device', screeninfo.prefixverylong + 'List', 'items', screeninfo.numstr, 'control', 'pp', 'freeze']
 					if (this.state.get(path)) retval = true
 				}
 				return retval
@@ -982,7 +1313,8 @@ export default class Feedbacks {
 		
 		const timerState: AWJfeedback<{timer: string, state: string }> = {
 			type: 'boolean',
-			name: 'Timer State',
+			name: 'Timers - State',
+			sortName: '04 Timers - State',
 			description: 'Shows whether a timer is currently stopped or running',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1026,7 +1358,8 @@ export default class Feedbacks {
 		
 		const deviceGpioOut: AWJfeedback<{gpo: number, state: number }> = {
 			type: 'boolean',
-			name: 'GPO State',
+			name: 'Device - GPO State (LivePremier(≤V3)/LivePremier only)',
+			sortName: '08 Device - 01 GPO State',
 			description: 'Shows whether a general purpose output is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1068,7 +1401,8 @@ export default class Feedbacks {
 		
 		const deviceGpioIn: AWJfeedback<{gpi: number, state: number }> = {
 			type: 'boolean',
-			name: 'GPI State',
+			name: 'Device - GPI State (LivePremier(≤V3)/LivePremier only)',
+			sortName: '08 Device - 02 GPI State',
 			description: 'Shows whether a general purpose input is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1120,6 +1454,7 @@ export default class Feedbacks {
 		const deviceCustom: AWJfeedback<FeedbackDeviceCustomOptions> = {
 			type: 'boolean',
 			name: 'Custom Feedback',
+			sortName: '10 Custom Feedback',
 			description: 'Generates feedback and a variable from a custom AWJ path',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1403,7 +1738,8 @@ export default class Feedbacks {
 
 		const deviceTestpatternActive: AWJfeedback<DeviceTestpatternActive> = {
 			type: 'boolean',
-			name,
+			name: `Device - ${name}`,
+			sortName: `08 Device - 03 ${name}`,
 			description: 'Shows whether the selected Testpattern is currently active on the selected screen/output/input',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1435,7 +1771,8 @@ export default class Feedbacks {
 
 		const deviceTestpatternRasterBoxActive: AWJfeedback<DeviceTestpatternRasterBoxActive> = {
 			type: 'boolean',
-			name,
+			name: `Device - ${name}`,
+			sortName: `08 Device - 04 ${name}`,
 			description: 'Shows whether the selected Raster Box (Format/AOI) is currently enabled on the selected output',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1493,13 +1830,6 @@ export default class Feedbacks {
 		// Built fresh every time this getter runs (updateInstance(), e.g. on connect and on relevant live
 		// isAvailable changes - same refresh mechanism every other live-state-driven choice list in this module
 		// already relies on, see e.g. deviceTestpatterns_common's screenList/outputList/inputList).
-		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({
-			id: inp.index ?? inp.id.replace(/^\D+/, ''),
-			label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}`,
-		}))
-		const outputChoices = this.choices.getOutputArray()
-			.filter((o) => !this.choices.getMultiviewerOutputListKeys().includes(o.id))
-			.map((o) => ({ id: o.id, label: `Output ${o.id}${o.label ? ' - ' + o.label : ''}` }))
 		// Live-confirmed on a real Aquilon (192.168.20.112): despite the protocol doc's "images" range reading
 		// 1-192 (matching the Library's own capacity), the snapshot endpoint actually only ever returns real
 		// content for indices within the Image *Store*'s range (~24, whatever is actually loaded/usable as a
@@ -1508,73 +1838,40 @@ export default class Feedbacks {
 		// several such indices and getting byte-for-byte identical tiny responses. There is no way to snapshot
 		// an arbitrary Library image this way, only what's actually live in a Store slot - so "Still Image
 		// (Library)" was removed entirely rather than silently showing black for most of its own choice list.
+		// All four categories are pooled into one flat "Source" dropdown (id prefixed with its category, e.g.
+		// 'outputs:1') instead of a "pick category, then pick item" two-step - avoids the same kind of
+		// method-style indirection already removed elsewhere in this module.
+		const outputChoices = this.choices.getOutputArray()
+			.filter((o) => !this.choices.getMultiviewerOutputListKeys().includes(o.id))
+			.map((o) => ({ id: `outputs:${o.id}`, label: `Output ${o.id}${o.label ? ' - ' + o.label : ''}` }))
+		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({
+			id: `inputs:${inp.index ?? inp.id.replace(/^\D+/, '')}`,
+			label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}`,
+		}))
 		const storeChoices = this.choices.getStillsArray().map((s) => ({
-			id: s.id,
+			id: `imagesStore:${s.id}`,
 			label: `Store ${s.id}${s.label ? ' - ' + s.label : ''}`,
 		}))
 		const timerChoices = this.choices.getTimerArray().map((t) => ({
-			id: t.index ?? t.id.replace(/^\w+_/, ''),
+			id: `timers:${t.index ?? t.id.replace(/^\w+_/, '')}`,
 			label: `Timer ${t.index}${t.label ? ' - ' + t.label : ''}`,
 		}))
+		const sourceChoices = [...outputChoices, ...inputChoices, ...storeChoices, ...timerChoices]
 
 		const deviceThumbnail: CompanionAdvancedFeedbackDefinition = {
 			type: 'advanced',
-			name: 'Show Thumbnail',
-			description: 'Shows a live preview image of an input, output, still image (Store) or timer. Only images actually loaded into an Image Store slot can be shown - the device does not provide live previews of Library images that are not currently loaded into a Store slot. Warning: using this feedback extensively (many buttons/short Refresh Rates) can significantly increase CPU load, depending on the Companion device it runs on.',
+			name: 'LIVE - Show Thumbnail',
+			sortName: '01 LIVE - 12 Show Thumbnail',
+			description: 'Shows a live preview image of an input, output or still image. Warning: using this feedback extensively (many buttons/short Refresh Rates) may significantly increase CPU load, depending on the Companion device it runs on.',
 			affectedProperties: ['png64'],
 			options: [
 				{
 					id: 'source',
 					type: 'dropdown',
 					label: 'Source',
-					choices: [
-						{ id: 'inputs', label: 'Input' },
-						{ id: 'outputs', label: 'Output' },
-						{ id: 'imagesStore', label: 'Still Image (Store)' },
-						{ id: 'timers', label: 'Timer' },
-					],
-					default: 'inputs',
-					// referenced by the four item dropdowns' isVisibleExpression below - Companion requires this
-					// on any field referenced that way, see the "Set Testpattern" fix earlier for why this must
-					// NOT also be added to the dependent (item) fields themselves, which need to stay expression-
-					// capable for per-button templating.
-					disableAutoExpression: true,
-				},
-				{
-					id: 'inputItem',
-					type: 'dropdown',
-					label: 'Input',
-					choices: inputChoices,
-					default: inputChoices[0]?.id,
+					choices: sourceChoices,
+					default: sourceChoices[0]?.id,
 					allowInvalidValues: true,
-					isVisibleExpression: "$(options:source) == 'inputs'",
-				},
-				{
-					id: 'outputItem',
-					type: 'dropdown',
-					label: 'Output',
-					choices: outputChoices,
-					default: outputChoices[0]?.id,
-					allowInvalidValues: true,
-					isVisibleExpression: "$(options:source) == 'outputs'",
-				},
-				{
-					id: 'storeItem',
-					type: 'dropdown',
-					label: 'Still Image (Store)',
-					choices: storeChoices,
-					default: storeChoices[0]?.id,
-					allowInvalidValues: true,
-					isVisibleExpression: "$(options:source) == 'imagesStore'",
-				},
-				{
-					id: 'timerItem',
-					type: 'dropdown',
-					label: 'Timer',
-					choices: timerChoices,
-					default: timerChoices[0]?.id,
-					allowInvalidValues: true,
-					isVisibleExpression: "$(options:source) == 'timers'",
 				},
 				{
 					id: 'refreshRate',
@@ -1588,12 +1885,13 @@ export default class Feedbacks {
 			callback: (feedback): CompanionAdvancedFeedbackResult => {
 				if (!parseBoolean(this.config.allowLiveThumbnails)) return {}
 
-				const source = String(feedback.options.source) as 'inputs' | 'outputs' | 'imagesStore' | 'timers'
-				const itemFieldId = { inputs: 'inputItem', outputs: 'outputItem', imagesStore: 'storeItem', timers: 'timerItem' }[source] ?? 'inputItem'
-				const item = feedback.options[itemFieldId]
+				const raw = String(feedback.options.source ?? '')
+				const sepIdx = raw.indexOf(':')
+				if (sepIdx === -1) return {}
+				const source = raw.slice(0, sepIdx) as 'inputs' | 'outputs' | 'imagesStore' | 'timers'
+				const itemId = raw.slice(sepIdx + 1)
 				const requestedRate = Math.min(120, Math.max(1, Math.round(Number(feedback.options.refreshRate)) || 5))
-				if (item === undefined || item === null || item === '') return {}
-				const itemId = String(item)
+				if (itemId === '') return {}
 				const key = `${source}:${itemId}`
 
 				const prevKey = this.thumbnailFeedbackKey.get(feedback.id)
@@ -1715,5 +2013,138 @@ export default class Feedbacks {
 			this.thumbnailPollers.delete(key)
 			this.thumbnailCache.delete(key)
 		}
+	}
+
+	/**
+	 * MARK: Backups - Active Backup Source
+	 * Mirrors "Backups - Set Backup Set to Source" (deviceBackupSetSource action) - same target resolution
+	 * (choices.getBackupControlPath) and the same underlying xSelectSlot state field. First draft: LivePremier/
+	 * LivePremier4 only (Backup does not exist on Midra), firmware V6+ (see choices.isFirmwareAtLeast).
+	 */
+	get deviceBackupSetSourceStatus() {
+		type DeviceBackupSetSourceStatus = { target: string, source: string }
+
+		if (!this.choices.isFirmwareAtLeast(6)) {
+			const deviceBackupSetSourceStatus: CompanionBooleanFeedbackDefinition = {
+				type: 'boolean',
+				name: 'Backups - Active Backup Source',
+				sortName: '09 Backups - 01 Active Backup Source',
+				description: 'Shows which source (Primary/Backup1/Backup2) is currently active for a Backup Set (or every Set in a Backup Group). Requires device firmware V6 or newer.',
+				defaultStyle: {
+					color: this.config.color_dark,
+					bgcolor: this.config.color_highlight,
+				},
+				options: [],
+				callback: () => false,
+			}
+			return deviceBackupSetSourceStatus
+		}
+
+		const deviceBackupSetSourceStatus: AWJfeedback<DeviceBackupSetSourceStatus> = {
+			type: 'boolean',
+			name: 'Backups - Active Backup Source',
+			sortName: '09 Backups - 01 Active Backup Source',
+			description: 'Shows which source (Primary/Backup1/Backup2) is currently active for a Backup Set (or every Set in a Backup Group).',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'target',
+					type: 'dropdown',
+					label: 'Backup Set / Group',
+					choices: this.choices.getBackupSetChoices(),
+					default: this.choices.getBackupSetChoices()[0]?.id,
+					allowInvalidValues: true,
+				},
+				{
+					id: 'source',
+					type: 'dropdown',
+					label: 'Source',
+					choices: [
+						{ id: 'NONE', label: 'Primary' },
+						{ id: '1', label: 'Backup 1' },
+						{ id: '2', label: 'Backup 2' },
+					],
+					default: 'NONE',
+				},
+			],
+			callback: (feedback) => {
+				const path = this.choices.getBackupControlPath(feedback.options.target)
+				if (!path) return false
+				// Reads status.pp.activeSlot (the actual current state, confirmed correct via the already-live
+				// backups.setX.activeslot variable in refreshBackupVariables) - NOT control.pp.xSelectSlot,
+				// which is only the last-requested switch command and does not track Auto Mode failovers.
+				const statusPath = [...path.slice(0, -2), 'status', 'pp', 'activeSlot']
+				return this.state.get(['DEVICE', ...statusPath]) === feedback.options.source
+			},
+		}
+
+		return deviceBackupSetSourceStatus
+	}
+
+	/**
+	 * MARK: Backups - Auto Mode Status
+	 * Mirrors "Backups - Set Auto Mode" (deviceBackupAutoMode action) - same target resolution and the same
+	 * underlying enableAutoSelect state field. First draft: LivePremier/LivePremier4 only, firmware V6+.
+	 */
+	get deviceBackupAutoModeStatus() {
+		type DeviceBackupAutoModeStatus = { target: string, mode: string }
+
+		if (!this.choices.isFirmwareAtLeast(6)) {
+			const deviceBackupAutoModeStatus: CompanionBooleanFeedbackDefinition = {
+				type: 'boolean',
+				name: 'Backups - Auto Mode Status',
+				sortName: '09 Backups - 02 Auto Mode Status',
+				description: 'Shows whether Auto Mode is currently on or off for a Backup Set (or every Set in a Backup Group). Requires device firmware V6 or newer.',
+				defaultStyle: {
+					color: this.config.color_dark,
+					bgcolor: this.config.color_highlight,
+				},
+				options: [],
+				callback: () => false,
+			}
+			return deviceBackupAutoModeStatus
+		}
+
+		const deviceBackupAutoModeStatus: AWJfeedback<DeviceBackupAutoModeStatus> = {
+			type: 'boolean',
+			name: 'Backups - Auto Mode Status',
+			sortName: '09 Backups - 02 Auto Mode Status',
+			description: 'Shows whether Auto Mode is currently on or off for a Backup Set (or every Set in a Backup Group) - when on, the device automatically switches to a Backup source if the Primary signal is lost.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'target',
+					type: 'dropdown',
+					label: 'Backup Set / Group',
+					choices: this.choices.getBackupSetChoices(),
+					default: this.choices.getBackupSetChoices()[0]?.id,
+					allowInvalidValues: true,
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Auto Mode',
+					choices: [
+						{ id: 'on', label: 'On' },
+						{ id: 'off', label: 'Off' },
+					],
+					default: 'on',
+				},
+			],
+			callback: (feedback) => {
+				const path = this.choices.getBackupControlPath(feedback.options.target)
+				if (!path) return false
+				const enabled = this.state.get(['DEVICE', ...path, 'enableAutoSelect'])
+				return (feedback.options.mode === 'on') === !!enabled
+			},
+		}
+
+		return deviceBackupAutoModeStatus
 	}
 }

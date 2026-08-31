@@ -54,6 +54,7 @@ export default class ActionsLivepremier extends Actions {
 		// 'deviceAuxMemory',
 		'deviceMasterMemory',
 		'deviceLayerMemory',
+		'deviceLayerMemoryV3',
 		'deviceMultiviewerMemory',
 		'deviceTakeScreen',
 		'deviceCutScreen',
@@ -88,11 +89,13 @@ export default class ActionsLivepremier extends Actions {
 		'lockScreen',
 		'selectPreset',
 		'selectLayer',
+		'selectLayerV3',
 		'remoteSync',
 		// 'deviceStreamControl',
 		// 'deviceStreamAudioMute',
 		'deviceAudioRouteBlock',
 		'deviceAudioRouteChannels',
+		'deviceAudioDanteFunctions',
 		'deviceTimerSetup',
 		'deviceTimerAdjust',
 		'deviceTimerTransport',
@@ -367,14 +370,17 @@ export default class ActionsLivepremier extends Actions {
 
 		this.screens.forEach((screen) => {
 			const isScreen = screen.id.startsWith('S')
-			
+
 			deviceSelectSource.options.push({
 				id: `layer${screen.id}`,
 				type: 'multidropdown',
 				label: 'Layer ' + screen.id,
-				choices: this.choices.getLayerChoices(screen.id, isScreen),
+				// frozen deprecated V2 choice list - not sourced from getLayerChoices() anymore, which now
+				// emits 'BG' for Background (see the module-wide 'BG' rename) - this action keeps 'NATIVE' forever
+				choices: isScreen ? [{ id: 'NATIVE', label: 'Background' }, ...this.choices.getLayerChoices(screen.id, false)] : this.choices.getLayerChoices(screen.id, false),
 				default: ['1'],
 				isVisibleExpression: `$(options:method) == 'spec' && arrayIncludes($(options:screen), '${screen.id}')`,
+				disableAutoExpression: true,
 			})
 		})
 		deviceSelectSource.options.push(
@@ -390,6 +396,7 @@ export default class ActionsLivepremier extends Actions {
 				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
 				// silently hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceNative',
@@ -403,6 +410,7 @@ export default class ActionsLivepremier extends Actions {
 				// generically in Companion's expression language. Falling back to always-visible to avoid silently
 				// hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceBack',
@@ -416,9 +424,10 @@ export default class ActionsLivepremier extends Actions {
 				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
 				// silently hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 		)
-		
+
 		return deviceSelectSource
 	}
 
@@ -441,7 +450,7 @@ export default class ActionsLivepremier extends Actions {
 			if (opt.layer === 'sel') {
 				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			}
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layer}))
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(opt.layer)}))
 		}
 
 		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
@@ -657,7 +666,7 @@ export default class ActionsLivepremier extends Actions {
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '07 Audio - Route (Block)',
+			sortName: '06 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
@@ -689,9 +698,10 @@ export default class ActionsLivepremier extends Actions {
 					type: 'number',
 					label: 'Block Size',
 					id: 'blocksize',
-					default: Math.min( 8, audioInputChoices.length),
+					tooltip: 'Capped at 8, and the block is additionally always clamped to end at the latest at the end of the 8-channel output block it starts in (e.g. starting at Output 1 Channel 7 only ever reaches channels 7-8, regardless of this setting) - a safety measure against accidentally spilling into the next output block with a wrong setting. Use a second action for anything beyond that.',
+					default: 8,
 					min: 1,
-					max: audioInputChoices.length,
+					max: 8,
 					range: true,
 				},
 			],
@@ -703,10 +713,15 @@ export default class ActionsLivepremier extends Actions {
 					return item.id === action.options.in1
 				})
 				if (outstart > -1 && instart > -1) {
+					// Never let the block spill past the end of the 8-channel output block it starts in, no
+					// matter what Block Size is set to - each output id is 'moduleId:channelNum' (1-8).
+					const outChannelNum = parseInt(audioOutputChoices[outstart].id.toString().split(':')[1], 10)
+					const remainingInOutputBlock = 8 - outChannelNum + 1
 					const max = Math.min(
 						audioOutputChoices.length - outstart,
 						audioInputChoices.length - instart,
-						action.options.blocksize
+						action.options.blocksize,
+						remainingInOutputBlock
 					) // since 'None' is input at index 0 no extra test is needed, it is possible to fill all outputs with none
 					for (let s = 0; s < max; s += 1) {
 						const path = [
@@ -743,7 +758,7 @@ export default class ActionsLivepremier extends Actions {
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '07 Audio - Route (Channels)',
+			sortName: '06 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
@@ -1039,7 +1054,7 @@ export default class ActionsLivepremier extends Actions {
 		
 		const deviceGPO: AWJaction<DeviceGPO> = {
 			name: 'Device - Set GPO',
-			sortName: '09 Device - Set GPO',
+			sortName: '08 Device - Set GPO',
 			description: 'Turns a General Purpose Output (GPO) on, off, or toggles it.',
 			options: [
 				{

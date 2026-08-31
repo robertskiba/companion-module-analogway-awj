@@ -67,6 +67,7 @@ export default class Actions {
 		'deviceMasterMemory',
 		'deviceMultiviewerMemory',
 		'deviceLayerMemory',
+		'deviceLayerMemoryV3',
 		'deviceTakeScreen',
 		'deviceCutScreen',
 		'deviceTbar',
@@ -101,11 +102,13 @@ export default class Actions {
 		'lockScreen',
 		'selectPreset',
 		'selectLayer',
+		'selectLayerV3',
 		'remoteSync',
 		'deviceStreamControl',
 		'deviceStreamAudioMute',
 		'deviceAudioRouteBlock',
 		'deviceAudioRouteChannels',
+		'deviceAudioDanteFunctions',
 		'deviceTimerSetup',
 		'deviceTimerAdjust',
 		'deviceTimerTransport',
@@ -345,9 +348,9 @@ export default class Actions {
 		type DeviceLayerMemory = { method: string, screen: string[], preset: string, layer: string[], memory: string, unlockIfLocked: boolean, relockAfterChange: boolean }
 
 		const returnAction: AWJaction<DeviceLayerMemory> = {
-			name: 'LIVE - Recall Layer Memory',
-			sortName: '01 LIVE - 03 Recall Layer Memory',
-			description: 'Recalls a Layer Memory into one or more specific Layers, loading only that Layer\'s saved source/position/properties without affecting the rest of the Screen or Preset. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
+			name: 'Deprecated from V2 - Recall Layer Memory (please upgrade to new action V3)',
+			sortName: '11 Deprecated from V2 - Recall Layer Memory',
+			description: 'Deprecated - replaced by "LIVE - Recall Layer Memory" (V3). Recalls a Layer Memory into one or more specific Layers, loading only that Layer\'s saved source/position/properties without affecting the rest of the Screen or Preset. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
 				{
 					id: 'method',
@@ -362,37 +365,41 @@ export default class Actions {
 				},
 				{
 					id: 'screen',
-					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen / Aux',
 					choices: this.choices.getScreenAuxChoices(),
 					default: [this.choices.getScreenAuxChoices()[0]?.id],
 					isVisibleExpression: "$(options:method) == 'spec'",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
-				allowInvalidValues: true,
 					default: 'prw',
 					isVisibleExpression: "$(options:method) == 'spec'",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'layer',
 					type: 'multidropdown',
 					label: 'Layer',
-					choices: this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true),
+					// frozen deprecated V2 choice list - deliberately NOT sourced from getLayerChoices() anymore,
+					// which now emits 'BG' for the Background choice (see selectLayerV3/'BG' rename) - this action
+					// stays on the original 'NATIVE' id forever, matching its original V2 behavior exactly
+					choices: [{ id: 'NATIVE', label: 'Background' }, ...this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), false)],
 					default: ['1'],
 					isVisibleExpression: "$(options:method) == 'spec'",
+					disableAutoExpression: true,
 				},
 				{
 					id: 'memory',
-					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer Memory',
 					choices: this.choices.getLayerMemoryChoices(),
 					default: this.choices.getLayerMemoryChoices()[0]?.id,
+					disableAutoExpression: true,
 				},
 				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
 				{
@@ -476,6 +483,146 @@ export default class Actions {
 		}
 
 		return returnAction
+	}
+
+	/**
+	 * MARK: Recall Layer Memory (V3)
+	 * Rebuilt from the deprecated "Recall Layer Memory" (V2) around a "Use Currently Selected Layers" checkbox
+	 * instead of the "method" dropdown - the 'sel' mode is a genuinely distinct, atomic alternative (recall into
+	 * whatever Layers are currently selected, each keeping its own screen) rather than an independent screen/layer
+	 * choice axis, so unlike selectLayerV3 there's no "Selected Screens" option to fold into the Screens field.
+	 */
+	get deviceLayerMemoryV3() {
+		type DeviceLayerMemoryV3 = { useSelectedLayers: boolean, screens: string[], preset: string, layers: string[], memory: string, unlockIfLocked: boolean, relockAfterChange: boolean }
+
+		const deviceLayerMemoryV3: AWJaction<DeviceLayerMemoryV3> = {
+			name: 'LIVE - Recall Layer Memory',
+			sortName: '01 LIVE - 03 Recall Layer Memory',
+			description: 'Recalls a Layer Memory into one or more specific Layers, loading only that Layer\'s saved source/position/properties without affecting the rest of the Screen or Preset. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
+			options: [
+				{
+					id: 'useSelectedLayers',
+					type: 'checkbox',
+					label: 'Use Currently Selected Layers',
+					tooltip: 'If checked, ignores the Screen/Preset/Layer fields below and recalls the Layer Memory into whichever Layers are currently selected (each keeping its own current Screen), using the currently selected Preset.',
+					default: false,
+				},
+				{
+					id: 'screens',
+					allowInvalidValues: true,
+					type: 'multidropdown',
+					label: 'Screen / Aux',
+					choices: this.choices.getScreenAuxChoices(),
+					default: [this.choices.getScreenAuxChoices()[0]?.id],
+					isVisibleExpression: '$(options:useSelectedLayers) == false',
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
+				allowInvalidValues: true,
+					default: 'prw',
+					isVisibleExpression: '$(options:useSelectedLayers) == false',
+				},
+				{
+					id: 'layers',
+					type: 'multidropdown',
+					label: 'Layer',
+					choices: this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true),
+					default: ['1'],
+					isVisibleExpression: '$(options:useSelectedLayers) == false',
+				},
+				{
+					id: 'memory',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Layer Memory',
+					choices: this.choices.getLayerMemoryChoices(),
+					default: this.choices.getLayerMemoryChoices()[0]?.id,
+				},
+				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
+				{
+					id: 'unlockIfLocked',
+					type: 'checkbox',
+					label: 'Unlock Screen if locked?',
+					tooltip: 'Unlocks all affected screens before execution if they are locked.',
+					default: false,
+				},
+				{
+					id: 'relockAfterChange',
+					type: 'checkbox',
+					label: 'Relock after change',
+					tooltip: 'Locks all affected screens after execution if they were previously locked.',
+					default: false,
+					isVisibleExpression: '$(options:unlockIfLocked) == true',
+				},
+			],
+			callback: (action) => {
+				let layers: { screenAuxKey: string; layerKey: string }[] = []
+				let preset: string
+				if (parseBoolean(action.options.useSelectedLayers)) {
+					layers = this.choices.getSelectedLayers() ?? []
+					preset = this.choices.getPresetSelection('sel', true)
+				} else {
+					for (const screen of action.options.screens) {
+						for (const layer of action.options.layers) {
+							layers.push({ screenAuxKey: screen, layerKey: this.choices.normalizeLayerId(layer) })
+						}
+					}
+					preset = this.choices.getPresetSelection(action.options.preset, true)
+				}
+				// serialize() keyed by the actual target screens - see its own doc comment for why this must
+				// never be a single fixed key: an unrelated screen's action must never wait on this one.
+				return this.instance.serialize(layers.map((layer) => layer.screenAuxKey), async () => {
+				const unlockedScreens = new Set<string>()
+				layers = layers.filter((layer) => {
+					if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+						if (!parseBoolean(action.options.unlockIfLocked)) return false
+						if (!unlockedScreens.has(layer.screenAuxKey)) {
+							this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+							unlockedScreens.add(layer.screenAuxKey)
+						}
+					}
+					return true
+				})
+				const waitPromises: Promise<void>[] = []
+				for (const layer of layers) {
+					const listKey = layer.screenAuxKey.charAt(0) === 'A' ? this.constants.auxPath[1] : this.constants.screenPath[1]
+					const layerPath = [
+						'device',
+						'layerBank',
+						'control',
+						'load',
+						'slotList',
+						'items',
+						action.options.memory,
+						listKey,
+						'items',
+						layer.screenAuxKey,
+						'presetList',
+						'items',
+						preset,
+						'layerList',
+						'items',
+						layer.layerKey,
+						'pp',
+					]
+					this.connection.sendWSmessage([...layerPath, 'xRequest'], false, true)
+					waitPromises.push(this.waitForPulseComplete(['DEVICE', ...layerPath, 'isLoading']))
+				}
+				if (parseBoolean(action.options.relockAfterChange)) {
+					for (const screenAuxKey of unlockedScreens) {
+						this.choices.setScreenLock(screenAuxKey, preset, true)
+					}
+				}
+				this.instance.sendXupdate()
+				await Promise.all(waitPromises)
+				})
+			},
+		}
+
+		return deviceLayerMemoryV3
 	}
 
 	// MARK: recall Aux memory
@@ -587,7 +734,7 @@ export default class Actions {
 		
 		const deviceMultiviewerMemory: AWJaction<{memory: string, multiviewer: string[]}> = {
 			name: 'Multiviewer - Recall Memory',
-			sortName: '03 Multiviewer - Recall Memory',
+			sortName: '02 Multiviewer - Recall Memory',
 			description: 'Recalls a Multiviewer Memory, loading its saved widget layout onto the chosen Multiviewer(s).',
 			options: [
 				{
@@ -661,7 +808,7 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
-					tooltip: 'To target multiple screens other than "All Screens" or "All Selected Screens", switch to Expression Mode and use a format like S1S2A1.',
+					tooltip: 'To target multiple screens other than "All Screens" or "All Selected Screens", switch to Expression Mode and use a format like \'S1S2A1\' (in quotes, so it is recognized as text).',
 					choices: [
 						{ id: 'first', label: 'First/Only Selected Screen' },
 						{ id: 'all', label: 'All Screens' },
@@ -700,7 +847,7 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
-					tooltip: 'To target multiple screens other than "All Screens" or "All Selected Screens", switch to Expression Mode and use a format like S1S2A1.',
+					tooltip: 'To target multiple screens other than "All Screens" or "All Selected Screens", switch to Expression Mode and use a format like \'S1S2A1\' (in quotes, so it is recognized as text).',
 					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: 'sel',
 				},
@@ -1018,7 +1165,7 @@ export default class Actions {
 		
 		const deviceSelectSource: AWJaction<DeviceSelectSource> = {
 			name: 'Deprecated from V2 - Select Layer Source (please upgrade to new action V3)',
-			sortName: '12 Deprecated from V2 - Select Layer Source',
+			sortName: '11 Deprecated from V2 - Select Layer Source',
 			description: 'Deprecated - replaced by "Layer Properties - Source". Sets which source (Input, Image Store, Color, etc.) is shown by a Layer.',
 			options: [
 				{
@@ -1034,7 +1181,6 @@ export default class Actions {
 				},
 				{
 					id: 'screen',
-					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen / Aux',
 					choices: this.choices.getScreenAuxChoices(),
@@ -1047,9 +1193,9 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: this.choices.choicesPreset,
-					allowInvalidValues: true,
 					default: 'prw',
 					isVisibleExpression: "$(options:method) == 'spec'",
+					disableAutoExpression: true,
 				},
 			],
 			callback: () => {},
@@ -1073,7 +1219,7 @@ export default class Actions {
 
 		const deviceSelectSourceV3: AWJaction<DeviceSelectSourceV3> = {
 			name: 'Layer Properties - Source',
-			sortName: '04 Layer Properties - 01 Source',
+			sortName: '03 Layer Properties - 01 Source',
 			description: 'Sets which source (Input, Image Store, Color, Screen PGM reinsertion, or - for a background layer - a Background Set) a Layer shows.',
 			options: [
 				{
@@ -1155,7 +1301,7 @@ export default class Actions {
 		
 		const deviceInputKeying: AWJaction<DeviceInputKeying> = {
 			name: 'Preconfig - Set Input Keying',
-			sortName: '08 Preconfig - Set Input Keying',
+			sortName: '07 Preconfig - Set Input Keying',
 			description: 'Sets an Input\'s own Chroma/Luma keying mode. This is the input-level keying setting, not the same as assigning a Keying preset to a Layer (see "Layer Properties - Keying").',
 			options: [
 				{
@@ -1210,7 +1356,7 @@ export default class Actions {
 		
 		const deviceInputFreeze: AWJaction<DeviceInputFreeze> = {
 			name: 'Freeze - Input',
-			sortName: '06 Freeze - Input',
+			sortName: '05 Freeze - Input',
 			description: 'Freezes, unfreezes, or toggles the freeze state of an Input\'s live signal.',
 			options: [
 				{
@@ -1255,7 +1401,7 @@ export default class Actions {
 		
 		const deviceLayerFreeze: AWJaction<DeviceLayerFreeze> = {
 			name: 'Freeze - Layer',
-			sortName: '06 Freeze - Layer',
+			sortName: '05 Freeze - Layer',
 			description: 'Freezes, unfreezes, or toggles the freeze state of one or more Layers (Midra only).',
 			options: [
 				{
@@ -1326,7 +1472,7 @@ export default class Actions {
 		
 		const deviceScreenFreeze: AWJaction<DeviceScreenFreeze> = {
 			name: 'Freeze - Screen',
-			sortName: '06 Freeze - Screen',
+			sortName: '05 Freeze - Screen',
 			description: 'Freezes, unfreezes, or toggles the freeze state of one or more Screens/Auxscreens (Midra only).',
 			options: [
 				{
@@ -1380,7 +1526,7 @@ export default class Actions {
 
 		const deviceAssignImageLibraryToStore: AWJaction<DeviceAssignImageLibraryToStore> = {
 			name: 'Preconfig - Assign Image from Library to Image Store',
-			sortName: '08 Preconfig - Assign Image from Library to Image Store',
+			sortName: '07 Preconfig - Assign Image from Library to Image Store',
 			description: 'Assigns an image from the Image Library (or a Timer) to an Image Store slot, so it becomes available as a Layer source.',
 			options: [
 				{
@@ -1485,7 +1631,7 @@ export default class Actions {
 
 		const devicePositionSizeV3: AWJaction<DevicePositionSizeV3> = {
 			name: 'Layer Properties - Position & Size',
-			sortName: '04 Layer Properties - 02 Position & Size',
+			sortName: '03 Layer Properties - 02 Position & Size',
 			description: 'Sets a Layer\'s position and/or size in raw device units. An empty X/Y/Width/Height field leaves that value untouched. No aspect-ratio locking or anchor-relative math beyond the Anchor Point field itself.',
 			options: [
 				{
@@ -1805,7 +1951,7 @@ export default class Actions {
 
 		const deviceLayerTransitionsV3: AWJaction<DeviceLayerTransitionsV3> = {
 			name: 'Layer Properties - Transitions',
-			sortName: '04 Layer Properties - 03 Transitions',
+			sortName: '03 Layer Properties - 03 Transitions',
 			description: 'Sets a Layer\'s Opening/Closing transition - the type, direction and Flying Curve used when it animates in or out.',
 			options: [
 				{
@@ -2015,10 +2161,10 @@ export default class Actions {
 	get deviceLayerKeyingV3() {
 		type DeviceLayerKeyingV3 = {screen: string, preset: string, layersel: string, enable: string, keyingPreset: string, unlockIfLocked: boolean, relockAfterChange: boolean}
 
-		if (!this.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast(6)) {
 			return {
 				name: 'Layer Properties - Keying',
-				sortName: '04 Layer Properties - 04 Keying',
+				sortName: '03 Layer Properties - 04 Keying',
 				description: 'Applies an existing Keying preset (from the Keyer Bank) to a layer. Creating/editing the presets themselves is done in WebRCS, not here.',
 				options: this.firmwareGateOptions('V6'),
 				callback: () => {},
@@ -2039,7 +2185,7 @@ export default class Actions {
 
 		const deviceLayerKeyingV3: AWJaction<DeviceLayerKeyingV3> = {
 			name: 'Layer Properties - Keying',
-			sortName: '04 Layer Properties - 04 Keying',
+			sortName: '03 Layer Properties - 04 Keying',
 			description: 'Applies an existing Keying preset (from the Keyer Bank) to a layer. Creating/editing the presets themselves is done in WebRCS, not here.',
 			options: [
 				{
@@ -2188,7 +2334,7 @@ export default class Actions {
 
 		const deviceLayerOpacityV3: AWJaction<DeviceLayerOpacityV3> = {
 			name: 'Layer Properties - Opacity',
-			sortName: '04 Layer Properties - 05 Opacity',
+			sortName: '03 Layer Properties - 05 Opacity',
 			description: 'Sets a Layer\'s opacity, on the raw 0-256 scale WebRCS itself uses (256 = fully opaque).',
 			options: [
 				{
@@ -2351,7 +2497,7 @@ export default class Actions {
 
 		const deviceLayerAspectCropV3: AWJaction<DeviceLayerAspectCropV3> = {
 			name: 'Layer Properties - Aspect & Crop',
-			sortName: '04 Layer Properties - 06 Aspect & Crop',
+			sortName: '03 Layer Properties - 06 Aspect & Crop',
 			description: 'Only covers "Classic" cropping - the separate "mask" crop values found in the protocol are likely the same thing backing "Layer Properties - Mask" instead. Crop values are entered in pixels of the source\'s native resolution (confirmed live: the device stores cropping as a 16-bit fraction, 0-65536, of the source width/height - not the layer\'s current on-screen size), so a field has no effect if the source\'s resolution isn\'t known (e.g. Color, Timer, no signal detected).',
 			options: [
 				{
@@ -2621,7 +2767,7 @@ export default class Actions {
 
 		const deviceLayerMaskV3: AWJaction<DeviceLayerMaskV3> = {
 			name: 'Layer Properties - Mask',
-			sortName: '04 Layer Properties - 07 Mask',
+			sortName: '03 Layer Properties - 07 Mask',
 			description: 'Masks (hides) part of the layer without changing its position or size - the separate "Aspect & Crop" action\'s crop instead removes part of the image and rescales the rest to fill the box. Same pixel/percent input pattern as Aspect & Crop, but pixel values here are relative to the layer\'s own current on-screen size, not the source\'s native resolution (confirmed live).',
 			options: [
 				{
@@ -2892,7 +3038,7 @@ export default class Actions {
 
 		const deviceLayerBorderV3: AWJaction<DeviceLayerBorderV3> = {
 			name: 'Layer Properties - Border',
-			sortName: '04 Layer Properties - 08 Border',
+			sortName: '03 Layer Properties - 08 Border',
 			description: 'Covers both of WebRCS\'s Border sub-panels - "Edge" (the border itself) and "Shadow" (a drop shadow). All numeric fields are raw 0-255 device values, confirmed live, with -1 meaning "don\'t change".',
 			options: [
 				{
@@ -3336,7 +3482,7 @@ export default class Actions {
 
 		const deviceLayerEffectsV3: AWJaction<DeviceLayerEffectsV3> = {
 			name: 'Layer Properties - Effects',
-			sortName: '04 Layer Properties - 09 Effects',
+			sortName: '03 Layer Properties - 09 Effects',
 			description: 'Covers WebRCS\'s Filter, Transform and Strobe sub-panels. Strobe\'s "Hold" is the real device value; "FPM" is WebRCS\'s own alternate unit for the exact same value, converted live using the layer\'s screen\'s current output rate (confirmed live) - takes priority if both are set, since Hold needs no extra lookup to apply.',
 			options: [
 				{
@@ -3530,7 +3676,7 @@ export default class Actions {
 
 		const deviceLayerSpeedV3: AWJaction<DeviceLayerSpeedV3> = {
 			name: 'Layer Properties - Speed',
-			sortName: '04 Layer Properties - 10 Speed',
+			sortName: '03 Layer Properties - 10 Speed',
 			description: 'Confirmed live. Pt1/Pt2 only visibly affect the speed ramp while Linear is off, but can still be sent while Linear is on (matching WebRCS\'s own device behavior).',
 			options: [
 				{
@@ -3739,7 +3885,7 @@ export default class Actions {
 
 		const deviceLayerEncoderAdjustV3: AWJaction<DeviceLayerEncoderAdjustV3> = {
 			name: 'Layer Properties - Encoder Adjust',
-			sortName: '04 Layer Properties - 12 Encoder Adjust',
+			sortName: '03 Layer Properties - 12 Encoder Adjust',
 			description: 'Increments/decrements a chosen property by a step amount - built for rotary encoders, so you don\'t need to hand-write an expression for relative adjustments. Raw/Percent/Pixel are tried in that order (first one filled in wins); which apply depends on the chosen property - see each field\'s tooltip. Percent defaults to 1 (a sensible fine step for every property in the list) if left untouched.',
 			options: [
 				{
@@ -3992,7 +4138,7 @@ export default class Actions {
 
 		const deviceLayerTimingV3: AWJaction<DeviceLayerTimingV3> = {
 			name: 'Layer Properties - Timing',
-			sortName: '04 Layer Properties - 11 Timing',
+			sortName: '03 Layer Properties - 11 Timing',
 			description: 'Covers WebRCS\'s Layer Properties "Timing" panel (Opening/Closing Start/End, shown in WebRCS as milliseconds).',
 			options: [
 				{
@@ -4150,7 +4296,7 @@ export default class Actions {
 
 		const deviceSetAnchorPoint: AWJaction<DeviceSetAnchorPoint> = {
 			name: 'Layer Properties - Set Anchor Point',
-			sortName: '04 Layer Properties - 15 Set Anchor Point',
+			sortName: '03 Layer Properties - 13 Set Anchor Point',
 			description: 'Sets the global Anchor Point (the same WebRCS-wide setting shown in WebRCS), which determines the reference corner/edge/center used by Position & Size actions and variables.',
 			options: [
 				{
@@ -4229,7 +4375,7 @@ export default class Actions {
 
 		const deviceResetLayerSize: AWJaction<DeviceResetLayerSize> = {
 			name: 'Layer Properties - Reset Size or Ratio',
-			sortName: '04 Layer Properties - 16 Reset Size or Ratio',
+			sortName: '03 Layer Properties - 14 Reset Size or Ratio',
 			description: 'Mirrors WebRCS\'s own layer-toolbar buttons: resizes a Layer to its source\'s aspect ratio, to the source\'s exact pixel resolution, or to fill the whole Screen/Aux - keeping the chosen Anchor Point fixed while it resizes.',
 			options: [
 				{
@@ -4592,12 +4738,11 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const devicePositionSize: AWJaction<DevicePositionSize> = {
 			name: 'Deprecated from V2 - Set Position and Size (please upgrade to new action V3)',
-			sortName: '12 Deprecated from V2 - Set Position and Size',
+			sortName: '11 Deprecated from V2 - Set Position and Size',
 			description: 'Deprecated - replaced by "Layer Properties - Position & Size". Sets a Layer\'s position and/or size.',
 			options: [
 				{
 					id: 'screen',
-					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screen / Aux',
 					choices: [{ id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
@@ -4609,7 +4754,6 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
-				allowInvalidValues: true,
 					default: 'prw',
 					disableAutoExpression: true,
 				},
@@ -4987,7 +5131,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const remoteMultiviewerSelectWidget: AWJaction<RemoteMultiviewerSelectWidget> = {
 			name: 'Multiviewer - Widget Selection',
-			sortName: '03 Multiviewer - Widget Selection',
+			sortName: '02 Multiviewer - Widget Selection',
 			description: 'Selects, deselects, or toggles selection of a Multiviewer widget, for other Multiviewer actions/feedbacks that target the "selected" widget(s).',
 			options: [
 				{
@@ -5036,7 +5180,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const deviceMultiviewerSource: AWJaction<DeviceMultiviewerSource> = {
 			name: 'Multiviewer - Select Source in Widget',
-			sortName: '03 Multiviewer - Select Source in Widget',
+			sortName: '02 Multiviewer - Select Source in Widget',
 			description: 'Assigns a source to a Multiviewer widget.',
 			options: [
 				{
@@ -5417,9 +5561,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		type SelectLayer = {method: string, screen: string[], layersel: string[]}
 		
 		const selectLayer: AWJaction<SelectLayer> = {
-			name: 'LIVE - Layer Selection',
-			sortName: '01 LIVE - 07 Layer Selection',
-			description: 'Selects (or toggles) which Layer(s) are currently selected, for other actions/feedbacks that target the "selected" Layer(s). Does not change which Preset is active.',
+			name: 'Deprecated from V2 - Layer Selection (please upgrade to new action V3)',
+			sortName: '11 Deprecated from V2 - Layer Selection',
+			description: 'Deprecated - replaced by "LIVE - Layer Selection" (V3). Selects (or toggles) which Layer(s) are currently selected, for other actions/feedbacks that target the "selected" Layer(s). Does not change which Preset is active.',
 					options: [
 				{
 					id: 'method',
@@ -5436,7 +5580,6 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 				{
 					id: 'screen',
-					allowInvalidValues: true,
 					type: 'multidropdown',
 					label: 'Screen / Aux',
 					choices: this.choices.getScreenAuxChoices(),
@@ -5450,9 +5593,12 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					label: 'Layer',
 					tooltip:
 						'Choose all the layers you want to be selected, every other layer on any screen will be deselected. This action does not change the preset, if you want a specific preset, add the according action.',
-					choices: this.choices.getLayerChoices(48, true),
+					// frozen deprecated V2 choice list - see the per-screen 'layer${screen.id}' fields below for
+					// why this stays 'NATIVE' instead of getLayerChoices()'s now-'BG' Background entry
+					choices: [{ id: 'NATIVE', label: 'Background' }, ...this.choices.getLayerChoices(48, false)],
 					default: ['1'],
 					isVisibleExpression: "indexOf($(options:method), 'sel') == 0",
+					disableAutoExpression: true,
 				},
 			],
 			callback: (action) => {
@@ -5505,7 +5651,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			},
 		}
 		for (const screen of this.screens) {
-			const layerChoices = this.choices.getLayerChoices(screen.id, true)
+			// frozen deprecated V2 choice list - not sourced from getLayerChoices()'s own Background entry
+			// anymore, which now emits 'BG' (see the module-wide 'BG' rename) - this action keeps 'NATIVE' forever
+			const layerChoices = [{ id: 'NATIVE', label: 'Background' }, ...this.choices.getLayerChoices(screen.id, false)]
 			let defaultChoice: string | number
 			if (layerChoices.find((choice: DropdownChoice) => choice.id === '1')) defaultChoice = '1'
 			else defaultChoice = layerChoices[0]?.id ?? '1'
@@ -5517,10 +5665,160 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				choices: layerChoices,
 				default: [defaultChoice],
 				isVisibleExpression: `indexOf($(options:method), 'spec') == 0 && arrayIncludes($(options:screen), '${screen.id}')`,
+				disableAutoExpression: true,
 			})
 		}
 
 		return selectLayer
+	}
+
+	/**
+	 * MARK: Layer Selection (V3)
+	 * Rebuilt from the deprecated "Layer Selection" (V2) around single-select "Screens / Auxscreens" and "Layer"
+	 * fields instead of V2's "method" toggle plus multidropdowns and the per-screen "layer${screen.id}" field
+	 * set - same collapsing fix as "Layer Properties - Source" (V3), avoiding the isVisibleExpression reliability
+	 * bug tied to per-screen fields that grow/shrink as screens are enabled/disabled. Both fields stay batch-
+	 * capable via Expression Mode only (S1S2A1 for Screens, L1L2L3 for Layers - see getChosenLayers), on purpose:
+	 * a regular multi-select dropdown was considered confusing here, matching the same choice already made for
+	 * deviceTakeScreen/deviceCutScreen's "screens" field. The "Mode" dropdown replaces the old method's "tgl"
+	 * suffix with four explicit choices. Bundles a "Preset" field that also sets the globally active Preset
+	 * (same effect as running "selectPreset" alongside), since selecting a Layer to work on and picking which
+	 * side to edit go together often enough in practice to warrant combining them in one button.
+	 */
+	get selectLayerV3() {
+		type SelectLayerV3 = {screens: string, preset: string, layers: string, mode: string}
+
+		const selectLayerV3: AWJaction<SelectLayerV3> = {
+			name: 'LIVE - Layer Selection',
+			sortName: '01 LIVE - 07 Layer Selection',
+			description: 'Selects, deselects, or toggles which Layer(s) are currently selected, for other actions/feedbacks that target the "selected" Layer(s). Also sets which side (Program or Preview) is currently active for editing/targeting, or toggles between them.',
+			options: [
+				{
+					id: 'screens',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screens / Auxscreens',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, ...this.choices.getScreenAuxChoices()],
+					default: 'first',
+					tooltip: 'To target several Screens/Auxscreens (or literally all of them) at once, switch to Expression Mode and use a format like \'S1S2A1\' (in quotes, so it is recognized as text).',
+				},
+				{
+					id: 'preset',
+					label: 'Preset (Program/Preview)',
+					type: 'dropdown',
+					choices: [
+						{ id: 'sel', label: "Selected (don't change)" },
+						{ id: 'pgm', label: 'Program' },
+						{ id: 'prw', label: 'Preview' },
+						{ id: 'tgl', label: 'Toggle' },
+					],
+					allowInvalidValues: true,
+					default: 'prw',
+				},
+				{
+					id: 'layers',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Layer',
+					tooltip: 'The Layer to select (or toggle) on every chosen Screen/Auxscreen above - type as L1, or BG for the Background Layer. To target several Layers at once, switch to Expression Mode and use a format like \'L1L2L3\' (in quotes, so it is recognized as text; BG can be included too, e.g. \'L1BG\').',
+					choices: [
+						{ id: 'BG', label: 'Background Layer' },
+						...Array.from({ length: this.choices.getMaxConfiguredLayerCount() }, (_, i) => ({ id: `L${i + 1}`, label: `Layer ${i + 1}` })),
+					],
+					default: 'L1',
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: [
+						{ id: 'exclusive', label: 'Select Exclusive' },
+						{ id: 'add', label: 'Add to Selection' },
+						{ id: 'deselect', label: 'Deselect' },
+						{ id: 'toggle', label: 'Toggle' },
+					],
+					default: 'exclusive',
+				},
+			],
+			callback: (action) => {
+				if (action.options.preset !== 'sel') {
+					if (this.state.syncSelection) {
+						switch (action.options.preset) {
+							case 'pgm':
+								this.connection.sendWSdata('REMOTE', 'set', '/live/screens/presetModeSelection', ['PROGRAM'])
+								break
+							case 'prw':
+							case 'pvw':
+								this.connection.sendWSdata('REMOTE', 'set', '/live/screens/presetModeSelection', ['PREVIEW'])
+								break
+							case 'tgl':
+								this.connection.sendWSdata('REMOTE', 'toggle', '/live/screens/presetModeSelection', [])
+								break
+						}
+					} else {
+						switch (action.options.preset) {
+							case 'pgm':
+								this.state.set('LOCAL/presetMode', 'PROGRAM')
+								this.instance.setVariableValues({ selectedPreset: 'PGM' })
+								break
+							case 'prw':
+							case 'pvw':
+								this.state.set('LOCAL/presetMode', 'PREVIEW')
+								this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+								break
+							case 'tgl':
+								if (this.state.get('LOCAL/presetMode') === 'PREVIEW') {
+									this.state.set('LOCAL/presetMode', 'PROGRAM')
+									this.instance.setVariableValues({ selectedPreset: 'PGM' })
+								} else {
+									this.state.set('LOCAL/presetMode', 'PREVIEW')
+									this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+								}
+								break
+						}
+						this.instance.checkFeedbacks('livePresetSelection')
+					}
+				}
+
+				const screens = action.options.screens === 'first'
+					? this.choices.getSelectedScreens().slice(0, 1)
+					: this.choices.getChosenScreenAuxes(action.options.screens)
+				const layers = this.choices.getChosenLayers(action.options.layers)
+				let ret: Record<'screenAuxKey' | 'layerKey', string>[] = []
+				if (action.options.mode !== 'exclusive') {
+					if (this.state.syncSelection) {
+						ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+					} else {
+						ret = this.state.get('LOCAL/layerIds')
+					}
+				}
+				for (const screen of screens) {
+					for (const layer of layers) {
+						const idx = ret.findIndex((lay) => {
+							return lay['screenAuxKey'] === screen && lay['layerKey'].replace('NATIVE', 'BKG') === layer.replace('NATIVE', 'BKG')
+						})
+						if (action.options.mode === 'deselect') {
+							if (idx !== -1) ret.splice(idx, 1)
+						} else if (action.options.mode === 'toggle') {
+							if (idx === -1) ret.push({ screenAuxKey: screen, layerKey: layer })
+							else ret.splice(idx, 1)
+						} else {
+							// exclusive or add
+							if (idx === -1) ret.push({ screenAuxKey: screen, layerKey: layer })
+						}
+					}
+				}
+				if (this.state.syncSelection) {
+					this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/layerSelection', [ret])
+				} else {
+					this.state.set('LOCAL/layerIds', ret)
+					this.instance.checkFeedbacks('remoteLayerSelection')
+				}
+				this.instance.checkFeedbacks('liveScreenSelection', 'remoteLayerSelection')
+			},
+		}
+
+		return selectLayerV3
 	}
 
 	/**
@@ -5531,7 +5829,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const remoteSync: AWJaction<RemoteSync> = {
 			name: 'Device - Sync Selection',
-			sortName: '09 Device - Sync Selection',
+			sortName: '08 Device - Sync Selection',
 			description: 'Turns on/off/toggles whether this Companion connection\'s Screen/Layer selection is synchronized with WebRCS and other connected clients (the same "Sync" setting shown in WebRCS).',
 			options: [
 				{
@@ -5654,7 +5952,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const deviceStreamAudioMute: AWJaction<DeviceStreamAudioMute> = {
 			name: 'Audio - Mute Stream',
-			sortName: '07 Audio - Mute Stream',
+			sortName: '06 Audio - Mute Stream',
 			description: 'Mutes, unmutes, or toggles the audio of the device\'s streaming output (Midra only).',
 			options: [
 				{
@@ -5691,7 +5989,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '07 Audio - Route (Block)',
+			sortName: '06 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				// TODO(isVisible-migration): build-time-only visibility (based on number of linked devices at field-construction time, not a live option); field is only included when there is more than one linked device
@@ -5724,14 +6022,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					type: 'number',
 					label: 'Block Size',
 					id: 'blocksize',
+					tooltip: 'Capped at 8, and the block is additionally always clamped to end at the latest at the end of the 8-channel output block it starts in (e.g. starting at Output 1 Channel 7 only ever reaches channels 7-8, regardless of this setting) - a safety measure against accidentally spilling into the next output block with a wrong setting. Use a second action for anything beyond that.',
 					default: 8,
 					min: 1,
-					max: this.choices.getAudioInputChoices().length,
+					max: 8,
 					range: true,
 				},
 			],
 		}
-		
+
 		return deviceAudioRouteBlock
 	}
 
@@ -5746,7 +6045,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '07 Audio - Route (Channels)',
+			sortName: '06 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				// TODO(isVisible-migration): build-time-only visibility (based on number of linked devices at field-construction time, not a live option); field is only included when there is more than one linked device
@@ -5782,6 +6081,219 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	}
 
 	/**
+	 * MARK: Dante Functions
+	 * Bundles Dante Reboot, Dante Factory Reset, and bulk-renaming Receiver/Transmitter channels into one
+	 * action (deliberately not split into several actions - a small, occasional-use "service" action, per
+	 * explicit user request). Renaming uses up to 64 per-channel text fields, each shown only when the
+	 * corresponding Count field is high enough (isVisibleExpression) - an explicit experiment requested by the
+	 * user despite this module's own prior experience with this exact pattern being unreliable at smaller
+	 * scales (devicePositionSizeV3/deviceSelectSourceV3 were rebuilt specifically to remove it) - kept as
+	 * separate per-channel fields here rather than the safer single-multiline-textarea alternative that was
+	 * also offered, to directly test whether it holds up at this larger (64-field) scale.
+	 * Reboot (device/system/deviceList/items/{n}/dante/control/pp/xReboot, true x2) and Factory Reset (same
+	 * path family, .../pp/xReset, false/true/false/true) are live-confirmed AND live-confirmed WORKING when
+	 * sent from this module.
+	 *
+	 * KNOWN LIMITATION (2026-08-29), renaming does NOT work from this module and is left in only as a UI/field-
+	 * structure experiment: set .../source/cmd/pp/label (Receiver) or .../transmitter/cmd/pp/label
+	 * (Transmitter), then pulse the sibling .../cmd/pp/xRequest to commit - the exact byte-for-byte message
+	 * sequence WebRCS itself sends (captured live from its own raw WebSocket traffic, including the repeated
+	 * label+pulse and the final xRequest false/true/false/true) was replicated exactly, including adding the
+	 * `sendXupdate()` global commit pulse this module calls after most other actions (initially missing here -
+	 * a real bug, now fixed, but did not resolve this), and even spacing every individual message 1000ms apart
+	 * in case of a timing/processing requirement. None of it made renaming stick, while the exact same messages
+	 * sent from a real WebRCS browser tab succeed within a few seconds (the Dante card is a logically separate
+	 * module the Aquilon proxies to - live-observed: a successful rename triggers a delayed status.pp.label
+	 * confirmation push a few seconds later, consistent with the Aquilon negotiating the new name with the
+	 * Dante card's own network-level naming, e.g. checking for conflicts - but even accounting for that delay,
+	 * this module's identical outgoing messages are simply never acted upon). Reboot/Factory Reset use a
+	 * different path family (dante/control/pp/..., the same "control" convention used everywhere else in this
+	 * module) and work fine, so this is not a blanket "Dante commands are blocked" issue - it is specific to
+	 * the channel-level "cmd" object family used only for renaming. Root cause not identified - suspected to be
+	 * something at the connection/session level (this module connects like a plain WebRCS browser client, same
+	 * REST auth flow, same WebSocket upgrade, no custom headers) rather than message content, since content/
+	 * order/timing were all confirmed identical to a working WebRCS capture. Needs input from Analog Way on
+	 * whether third-party AWJ clients face additional restrictions specifically for Dante channel renaming.
+	 * The 64-per-function isVisibleExpression field pattern itself (the actual point of this experiment) held
+	 * up fine in testing - no field-visibility glitches observed, unlike this module's earlier, smaller-scale
+	 * experience with the same pattern.
+	 */
+	get deviceAudioDanteFunctions() {
+		type DeviceAudioDanteFunctions = {
+			device: number
+			function: string
+			safetyConfirm: boolean
+			receiverCount: number
+			transmitterCount: number
+		}
+
+		const devices = this.choices.getLinkedDevicesChoices().length
+
+		// A flat 1-64 channel number maps to the device's own DANTE_{module}_CHANNEL_{c} addressing, 8 channels
+		// per module (same "8 reserved per module" convention as Audio Routing's INPUT_x_CHANNEL_c/OUTPUT_x
+		// addresses). Current-name hints below are read for device 1 only - the 'Device' field's own selection
+		// isn't reflected live in another field's static label text, a known Companion limitation (a field's
+		// `label` is fixed at options-construction time), so on a multi-device system the hint may not match
+		// whichever device is actually selected. Not live-confirmed to matter in practice yet (single-device
+		// Dante setups are the common case) - worth revisiting if a real multi-device Dante rig surfaces this.
+		const danteChannelId = (n: number): string => {
+			const module = Math.ceil(n / 8)
+			const channel = ((n - 1) % 8) + 1
+			return `DANTE_${module}_CHANNEL_${channel}`
+		}
+		const currentReceiverName = (n: number): string =>
+			this.state.get(['DEVICE', 'device', 'system', 'deviceList', 'items', '1', 'dante', 'channelList', 'items', danteChannelId(n), 'source', 'status', 'pp', 'label']) ?? ''
+		const currentTransmitterName = (n: number): string =>
+			this.state.get(['DEVICE', 'device', 'system', 'deviceList', 'items', '1', 'dante', 'channelList', 'items', danteChannelId(n), 'transmitter', 'status', 'pp', 'label']) ?? ''
+
+		const deviceAudioDanteFunctions: AWJaction<DeviceAudioDanteFunctions> = {
+			name: 'Audio - Dante Functions',
+			sortName: '06 Audio - 03 Dante Functions',
+			description: 'Reboots or factory-resets the Dante card, or bulk-renames Receiver/Transmitter channels. Reboot and Factory Reset can cause temporary Dante connection loss - only do this in a live situation if you know what you are doing; it is best suited for setting up a personal default preset ahead of time. KNOWN LIMITATION: renaming does not currently take effect on the device - kept here as a field-structure experiment only, not yet usable.',
+			options: [
+				...(devices > 1 ? [{
+					type: 'dropdown' as const,
+					label: 'Device',
+					id: 'device',
+					choices: this.choices.getLinkedDevicesChoices(),
+					default: 1,
+					minChoicesForSearch: 3,
+				}] : []),
+				{
+					id: 'function',
+					type: 'dropdown',
+					label: 'Function',
+					choices: [
+						{ id: 'reboot', label: 'Dante Reboot' },
+						{ id: 'factoryReset', label: 'Dante Factory Reset' },
+						{ id: 'renameReceivers', label: 'Rename Receiver Channels (not yet working, see description)' },
+						{ id: 'renameTransmitters', label: 'Rename Transmitter Channels (not yet working, see description)' },
+					],
+					default: 'reboot',
+					disableAutoExpression: true,
+				},
+				{
+					id: 'safetyConfirm',
+					type: 'checkbox',
+					label: 'I understand that all of these functions may cause a temporary or permanent loss of connection to other Dante® devices, and that the sound engineer may no longer be my friend.',
+					tooltip: 'Safety guard: while unchecked, this action does nothing at all. Rebooting, factory-resetting, or renaming Dante channels can briefly or permanently interrupt Dante audio - avoid doing this during a live situation unless you know exactly what you are doing. Well suited for preparing a personal default preset ahead of time, though.',
+					default: false,
+					disableAutoExpression: true,
+				},
+				{
+					id: 'receiverCount',
+					type: 'number',
+					label: 'Number of Receiver Channels to Rename',
+					min: 1,
+					max: 64,
+					default: 1,
+					range: true,
+					isVisibleExpression: "$(options:function) == 'renameReceivers'",
+					disableAutoExpression: true,
+				},
+				{
+					id: 'transmitterCount',
+					type: 'number',
+					label: 'Number of Transmitter Channels to Rename',
+					min: 1,
+					max: 64,
+					default: 1,
+					range: true,
+					isVisibleExpression: "$(options:function) == 'renameTransmitters'",
+					disableAutoExpression: true,
+				},
+				...Array.from({ length: 64 }, (_v, i) => {
+					const n = i + 1
+					const current = currentReceiverName(n)
+					return {
+						id: `receiverName${n}`,
+						type: 'textinput' as const,
+						label: `Receiver ${n} Name${current ? ` (currently: ${current})` : ''}`,
+						tooltip: 'Pre-filled with the channel\'s current name. Only channels whose name you actually change get a rename command sent - leaving this untouched (or restoring it to the same text) does nothing.',
+						default: current,
+						useVariables: true,
+						isVisibleExpression: `$(options:function) == 'renameReceivers' && $(options:receiverCount) >= ${n}`,
+					}
+				}),
+				...Array.from({ length: 64 }, (_v, i) => {
+					const n = i + 1
+					const current = currentTransmitterName(n)
+					return {
+						id: `transmitterName${n}`,
+						type: 'textinput' as const,
+						label: `Transmitter ${n} Name${current ? ` (currently: ${current})` : ''}`,
+						tooltip: 'Pre-filled with the channel\'s current name. Only channels whose name you actually change get a rename command sent - leaving this untouched (or restoring it to the same text) does nothing.',
+						default: current,
+						useVariables: true,
+						isVisibleExpression: `$(options:function) == 'renameTransmitters' && $(options:transmitterCount) >= ${n}`,
+					}
+				}),
+			],
+			callback: async (action) => {
+				if (!parseBoolean(action.options.safetyConfirm)) {
+					this.instance.log('warn', 'Dante Functions: safetyConfirm not checked, doing nothing')
+					return
+				}
+				const device = Number(action.options.device) || 1
+
+				if (action.options.function === 'renameReceivers') {
+					this.instance.log('warn', `Dante Functions: renameReceivers, count=${action.options.receiverCount}`)
+					for (let n = 1; n <= Number(action.options.receiverCount); n += 1) {
+						const name = action.options[`receiverName${n}`]
+						const current = currentReceiverName(n)
+						// Compared against the live current name (not the field's own pre-filled default, which
+						// could be stale by the time the button is actually pressed) - only an actual change
+						// gets a rename command sent, so restoring/leaving a field untouched is a safe no-op.
+						if (name === current) continue
+						this.instance.log('warn', `Dante Functions: renaming receiver ${n} (${danteChannelId(n)}) from "${current}" to "${name}"`)
+						const path = ['device', 'system', 'deviceList', 'items', device.toString(), 'dante', 'channelList', 'items', danteChannelId(n), 'source', 'cmd']
+						// TEST: every individual message spaced 1000ms apart, in case the device genuinely needs
+						// more processing time between each step than the earlier 250ms-before-the-pulse version
+						// allowed for - same exact message content/order as the live-captured WebRCS sequence.
+						for (const [prop, value] of [
+							['label', name], ['xRequest', false], ['xRequest', true],
+							['label', name], ['xRequest', false], ['xRequest', true], ['xRequest', false], ['xRequest', true],
+						] as [string, string | boolean][]) {
+							this.connection.sendWSmessage([...path, prop], value)
+							await this.delay(1000)
+						}
+					}
+				} else if (action.options.function === 'renameTransmitters') {
+					// Live-confirmed: .../transmitter/cmd/{label,xRequest}, symmetric to the Receiver path above.
+					for (let n = 1; n <= Number(action.options.transmitterCount); n += 1) {
+						const name = action.options[`transmitterName${n}`]
+						if (name === currentTransmitterName(n)) continue
+						const path = ['device', 'system', 'deviceList', 'items', device.toString(), 'dante', 'channelList', 'items', danteChannelId(n), 'transmitter', 'cmd']
+						for (const [prop, value] of [
+							['label', name], ['xRequest', false], ['xRequest', true],
+							['label', name], ['xRequest', false], ['xRequest', true], ['xRequest', false], ['xRequest', true],
+						] as [string, string | boolean][]) {
+							this.connection.sendWSmessage([...path, prop], value)
+							await this.delay(1000)
+						}
+					}
+				} else if (action.options.function === 'reboot') {
+					// Live-confirmed: device/system/deviceList/items/{device}/dante/control/pp/xReboot, true (x2).
+					this.instance.log('warn', 'Dante Functions: reboot')
+					const path = ['device', 'system', 'deviceList', 'items', device.toString(), 'dante', 'control', 'pp', 'xReboot']
+					this.connection.sendWSmessage(path, true, true)
+				} else if (action.options.function === 'factoryReset') {
+					// Live-confirmed: device/system/deviceList/items/{device}/dante/control/pp/xReset, false/true/false/true.
+					this.instance.log('warn', 'Dante Functions: factory reset')
+					const path = ['device', 'system', 'deviceList', 'items', device.toString(), 'dante', 'control', 'pp', 'xReset']
+					this.connection.sendWSmessage(path, false, true, false, true)
+				}
+				// Missing this was very likely why renaming never stuck despite byte-identical messages to
+				// WebRCS's own confirmed-working traffic - almost every other action in this module calls this
+				// global commit pulse after sending its changes, and it was overlooked here.
+				this.instance.sendXupdate()
+			},
+		}
+
+		return deviceAudioDanteFunctions
+	}
+
+	/**
 	 * MARK: Setup timer
 	 */
 	get deviceTimerSetup() {
@@ -5790,7 +6302,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		const deviceTimerSetup: AWJaction<DeviceTimerSetup> = {
 			name: 'Timers - Setup',
 			description: 'Configures a Timer\'s display appearance (type, unit, colors) as an on-screen widget. To start/stop/adjust the Timer\'s value, use "Timers - Transport"/"Timers - Adjust Time" instead.',
-			sortName: '05 Timers - Setup',
+			sortName: '04 Timers - Setup',
 			options: [
 				{
 					id: 'timer',
@@ -5865,7 +6377,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const deviceTimerAdjust: AWJaction<DeviceTimerAdjust> = {
 			name: 'Timers - Adjust Time',
-			sortName: '05 Timers - Adjust Time',
+			sortName: '04 Timers - Adjust Time',
 			description: 'Sets, adds to, or subtracts from a Timer\'s current value.',
 			options: [
 				{
@@ -5929,7 +6441,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const deviceTimerTransport: AWJaction<DeviceTimerTransport> = {
 			name: 'Timers - Transport',
-			sortName: '05 Timers - Transport',
+			sortName: '04 Timers - Transport',
 			description: 'Starts, stops, pauses, or toggles a Timer.',
 			options: [
 				{
@@ -6405,7 +6917,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const cstawjcmd: AWJaction<Cstawjcmd> = {
 			name: 'Custom Commands - Send custom AWJ replace command',
-			sortName: '11 Custom Commands - Send custom AWJ replace command',
+			sortName: '10 Custom Commands - Send custom AWJ replace command',
 			description:
 				'Sends a command directly to the device using its own internal protocol - for advanced setups that the built-in actions don\'t cover. Nothing you enter here is checked, so a typo in Path or Value simply does nothing (or the wrong thing) without any warning. Tip: the T-Bar side ("A"/"B") swaps between Program and Preview with every Take - if you want your command to always affect whichever side is currently Program or Preview instead of a fixed side, type "PGM" or "PRW" (the earlier "PVW" still works too) in the Path instead of "A"/"B".',
 			options: [
@@ -6532,7 +7044,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const cstawjgetcmd: AWJaction<Cstawjgetcmd> = {
 			name: 'Custom Commands - Send custom AWJ get command',
-			sortName: '11 Custom Commands - Send custom AWJ get command',
+			sortName: '10 Custom Commands - Send custom AWJ get command',
 			description:
 				'Reads a single value directly from the device using its own internal protocol - for advanced setups that the built-in feedbacks/variables don\'t cover. The Path is not checked, so a typo simply returns nothing without any warning. Tip: the T-Bar side ("A"/"B") swaps between Program and Preview with every Take - if you want to always read whichever side is currently Program or Preview instead of a fixed side, type "PGM" or "PRW" (the earlier "PVW" still works too) in the Path instead of "A"/"B".',
 			options: [
@@ -6597,21 +7109,6 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	}
 
 	/**
-	 * Resolves a "Backup Set" dropdown value (as produced by choices.getBackupSetChoices(), "INPUT:IN_n" or
-	 * "GROUP:GROUP_n") to the AWJ path of its control.pp object (without the leading "device" - matches
-	 * connection.sendWSmessage()'s own path convention, callers prepend 'DEVICE' themselves for state reads).
-	 */
-	private getBackupControlPath(target: string): string[] | undefined {
-		const [kind, ...rest] = (target ?? '').split(':')
-		if (kind === 'INPUT' && rest[0]) return ['device', 'inputList', 'items', rest[0], 'backup', 'control', 'pp']
-		if (kind === 'GROUP' && rest[0]) return ['device', 'backup', 'groupList', 'items', rest[0], 'control', 'pp']
-		if (kind === 'BGSET' && rest[0] && rest[1]) {
-			return ['device', 'preconfig', 'backgrounds', 'screenList', 'items', rest[0], 'backgroundSetList', 'items', rest[1], 'backup', 'control', 'pp']
-		}
-		return undefined
-	}
-
-	/**
 	 * Shared firmware-version gate for features that exist on this same Aquilon hardware line (LivePremier/
 	 * LivePremier4) but only from a certain firmware generation onward - Backup (V6+) and Layer Properties -
 	 * Keying (V6+, same threshold - both live-confirmed together on a real V6.2.73 Aquilon, never confirmed
@@ -6625,14 +7122,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	 * concept. Where the concept is structurally absent on a whole different platform (Backup and Keying are
 	 * BOTH also missing on Midra/Alta entirely, live-confirmed 2026-08-28 against a Zenith 200 simulator, fw
 	 * 1.3.7) that platform instead removes the action from its own actionsToUse entirely - this check is never
-	 * reached there.
+	 * reached there. isFirmwareAtLeast itself moved to choices.ts (public) so feedbacks can share the same gate.
 	 */
-	private isFirmwareAtLeast(minMajor: number): boolean {
-		const fwGen: string = this.instance.state.get('LOCAL/deviceFirmwareGeneration') ?? ''
-		const fwMajor = parseInt(fwGen.replace('V', ''))
-		return !isNaN(fwMajor) && fwMajor >= minMajor
-	}
-
 	private firmwareGateOptions(minVersion: string): SomeAWJactionInputfield<any>[] {
 		return [
 			{
@@ -6741,10 +7232,10 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	get deviceBackupSetSource() {
 		type DeviceBackupSetSource = { target: string, source: string }
 
-		if (!this.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast(6)) {
 			return {
 				name: 'Backups - Set Backup Set to Source',
-				sortName: '10 Backups - Set Backup Set to Source',
+				sortName: '09 Backups - Set Backup Set to Source',
 				description: 'Switches a Backup Set (or every Set in a Backup Group) to show its Primary source, Backup 1, or Backup 2 - the same manual override WebRCS offers per Backup Set.',
 				options: this.firmwareGateOptions('V6'),
 				callback: () => {},
@@ -6753,7 +7244,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceBackupSetSource: AWJaction<DeviceBackupSetSource> = {
 			name: 'Backups - Set Backup Set to Source',
-			sortName: '10 Backups - Set Backup Set to Source',
+			sortName: '09 Backups - Set Backup Set to Source',
 			description: 'Switches a Backup Set (or every Set in a Backup Group) to show its Primary source, Backup 1, or Backup 2 - the same manual override WebRCS offers per Backup Set.',
 			options: [
 				{
@@ -6777,14 +7268,14 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 			],
 			learn: (action) => {
-				const path = this.getBackupControlPath(action.options.target)
+				const path = this.choices.getBackupControlPath(action.options.target)
 				if (!path) return undefined
 				const source = this.state.get(['DEVICE', ...path, 'xSelectSlot'])
 				if (typeof source !== 'string') return undefined
 				return { target: action.options.target, source }
 			},
 			callback: (action) => {
-				const path = this.getBackupControlPath(action.options.target)
+				const path = this.choices.getBackupControlPath(action.options.target)
 				if (!path) return
 				this.connection.sendWSmessage([...path, 'xSelectSlot'], action.options.source)
 				this.instance.sendXupdate()
@@ -6801,10 +7292,10 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	get deviceBackupAutoMode() {
 		type DeviceBackupAutoMode = { target: string, mode: string }
 
-		if (!this.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast(6)) {
 			return {
 				name: 'Backups - Set Auto Mode',
-				sortName: '10 Backups - Set Auto Mode',
+				sortName: '09 Backups - Set Auto Mode',
 				description: 'Turns Auto Mode on, off, or toggles it for a Backup Set (or every Set in a Backup Group) - when on, the device automatically switches to a Backup source if the Primary signal is lost.',
 				options: this.firmwareGateOptions('V6'),
 				callback: () => {},
@@ -6813,7 +7304,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceBackupAutoMode: AWJaction<DeviceBackupAutoMode> = {
 			name: 'Backups - Set Auto Mode',
-			sortName: '10 Backups - Set Auto Mode',
+			sortName: '09 Backups - Set Auto Mode',
 			description: 'Turns Auto Mode on, off, or toggles it for a Backup Set (or every Set in a Backup Group) - when on, the device automatically switches to a Backup source if the Primary signal is lost.',
 			options: [
 				{
@@ -6837,14 +7328,14 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 			],
 			learn: (action) => {
-				const path = this.getBackupControlPath(action.options.target)
+				const path = this.choices.getBackupControlPath(action.options.target)
 				if (!path) return undefined
 				const enabled = this.state.get(['DEVICE', ...path, 'enableAutoSelect'])
 				if (typeof enabled !== 'boolean') return undefined
 				return { target: action.options.target, mode: enabled ? 'on' : 'off' }
 			},
 			callback: (action) => {
-				const path = this.getBackupControlPath(action.options.target)
+				const path = this.choices.getBackupControlPath(action.options.target)
 				if (!path) return
 				let newstate = action.options.mode === 'on'
 				if (action.options.mode === 'toggle') {
@@ -6867,7 +7358,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const devicePower: AWJaction<DevicePower> = {
 			name: 'Device - Power',
-			sortName: '09 Device - Power',
+			sortName: '08 Device - Power',
 			description: 'Switches the device on (Wake on LAN), off, or reboots it.',
 			options: [
 				{

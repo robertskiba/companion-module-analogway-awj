@@ -387,6 +387,36 @@ export default class Choices {
 	}
 
 	/**
+	 * Shared firmware-version gate for features that exist on this same Aquilon hardware line (LivePremier/
+	 * LivePremier4) but only from a certain firmware generation onward - Backup and Layer Properties - Keying
+	 * are the first uses (both V6+, live-confirmed together on a real V6.2.73 Aquilon, never confirmed below V6).
+	 * `LOCAL/deviceFirmwareGeneration` is set once per connect in connection.ts as `V${major}` (or '' if
+	 * unparseable) - reads live/fresh here, no separate reactivity mechanism needed. Public/shared (moved from
+	 * actions.ts) so both actions and feedbacks can gate on the same firmware check.
+	 */
+	public isFirmwareAtLeast(minMajor: number): boolean {
+		const fwGen: string = this.instance.state.get('LOCAL/deviceFirmwareGeneration') ?? ''
+		const fwMajor = parseInt(fwGen.replace('V', ''))
+		return !isNaN(fwMajor) && fwMajor >= minMajor
+	}
+
+	/**
+	 * Resolves a "Backup Set" dropdown value (as produced by getBackupSetChoices(), "INPUT:IN_n" or
+	 * "GROUP:GROUP_n") to the AWJ path of its control.pp object (without the leading "device" - matches
+	 * connection.sendWSmessage()'s own path convention, callers prepend 'DEVICE' themselves for state reads).
+	 * Public/shared (moved from actions.ts) so both actions and feedbacks can resolve the same target.
+	 */
+	public getBackupControlPath(target: string): string[] | undefined {
+		const [kind, ...rest] = (target ?? '').split(':')
+		if (kind === 'INPUT' && rest[0]) return ['device', 'inputList', 'items', rest[0], 'backup', 'control', 'pp']
+		if (kind === 'GROUP' && rest[0]) return ['device', 'backup', 'groupList', 'items', rest[0], 'control', 'pp']
+		if (kind === 'BGSET' && rest[0] && rest[1]) {
+			return ['device', 'preconfig', 'backgrounds', 'screenList', 'items', rest[0], 'backgroundSetList', 'items', rest[1], 'backup', 'control', 'pp']
+		}
+		return undefined
+	}
+
+	/**
 	 * Backup Sets (backup-enabled inputs) and Backup Groups, meant as the target for the "Backups" actions.
 	 * An input that is a member of a Group is deliberately left out of this list - per Analog Way's own Backup
 	 * UI, a grouped input's backup only ever gets switched together with its Group, so only the Group appears
@@ -690,15 +720,26 @@ export default class Choices {
 	}
 
 	/**
+	 * Translates a Layer id coming from an option field into the real internal id expected by device paths/state
+	 * comparisons throughout the module. 'BG' (the user-facing choice id for the Background Layer, chosen so
+	 * switching an option to Expression Mode shows something intuitive instead of raw AWJ protocol jargon) is
+	 * translated to 'NATIVE'. 'NATIVE' typed directly is still accepted unchanged, for backward compatibility
+	 * with already-saved configs and for users who already know the protocol term - never remove that.
+	 */
+	public normalizeLayerId(id: string): string {
+		return id === 'BG' ? 'NATIVE' : id
+	}
+
+	/**
 	 * Returns array with some layer choices
 	 * @param param if it is a number that number of layer choices are returned, if it is a string the layers of the screen are returned
-	 * @param bkg whether to include only live layers (false) or also background and eventually foreground layer (true or omitted) 
-	 * @param top whether to include foreground layer if available, follows bkg if omitted 
+	 * @param bkg whether to include only live layers (false) or also background and eventually foreground layer (true or omitted)
+	 * @param top whether to include foreground layer if available, follows bkg if omitted
 	*/
 	public getLayersAsArray(param: string | number, bkg?: boolean, _top?: boolean): Choicemeta[] {
 		if (typeof param === 'number') {
 			const ret: Choicemeta[] = []
-			if (bkg === undefined || bkg === true) ret.push({ id: 'NATIVE', label: 'Background', longname: 'BKG' })
+			if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background', longname: 'BKG' })
 			for (let i = 1; i <= param; i += 1) {
 				ret.push({ id: `${i.toString()}`, label: `Layer ${i.toString()}` })
 			}
@@ -708,7 +749,7 @@ export default class Choices {
 		// yet, so offer the full theoretical-maximum range instead of nothing (see
 		// syntheticRangeIfNeverConnected's own comment) - live-confirmed 2026-08-28 this was showing as
 		// Companion's "??" unresolved-value rendering for a plain empty list with a non-matching default.
-		const bkgEntry: Choicemeta[] = bkg === undefined || bkg === true ? [{ id: 'NATIVE', label: 'Background', longname: 'BKG' }] : []
+		const bkgEntry: Choicemeta[] = bkg === undefined || bkg === true ? [{ id: 'BG', label: 'Background', longname: 'BKG' }] : []
 		return [...bkgEntry, ...this.syntheticRangeIfNeverConnected([], this.constants.maxLayers, (n) => `${n}`).map((l) => ({ ...l, label: `Layer ${l.index}` }))]
 	}
 
@@ -1032,6 +1073,75 @@ export default class Choices {
 	}
 
 	/**
+	 * Splits any array elements that look like multiple concatenated Audio Input Channel tokens (e.g. a value
+	 * like 'IN1C1IN1C2' coming from an expression built without a separator) into their individual internal
+	 * ids ('INPUT_1_CHANNEL_1', 'INPUT_1_CHANNEL_2'), mirroring expandScreenAuxTokens'/expandLayerTokens' own
+	 * concatenation convention. 'IN{n}C{m}' is a direct shorthand for the exact raw AWJ id 'INPUT_{n}_CHANNEL_{m}'
+	 * (the same raw per-card-slot addressing already used as the real option value, not the translated "Input X"
+	 * video-input number shown in the choice label) - so this is a pure string reformat, no lookup needed. Any
+	 * element that doesn't match (a literal raw id already, 'NONE', or a Dante id) passes through unchanged, so
+	 * both notations - and the plain old array-of-raw-ids value shape - keep working side by side.
+	 */
+	private expandAudioInputTokens(input: string[]): string[] {
+		return input.flatMap((el) => {
+			const tokens = el.match(/IN\d+C\d+/gi)
+			if (tokens === null) return [el]
+			return tokens.map((token) => {
+				const m = token.match(/IN(\d+)C(\d+)/i) as RegExpMatchArray
+				return `INPUT_${m[1]}_CHANNEL_${m[2]}`
+			})
+		})
+	}
+
+	/**
+	 * Returns the input Audio Input Channel token(s) ('IN1C1', or a concatenated 'IN1C1IN1C2'), translated and
+	 * expanded into the individual internal ids ('INPUT_1_CHANNEL_1', ...). Also accepts (and passes through
+	 * unchanged) already-raw ids like 'INPUT_1_CHANNEL_1', 'NONE', or a Dante channel id.
+	 * @param input single Audio Input Channel token/expression string, or array of them
+	 * @returns array of individual internal Audio Input Channel ids
+	 */
+	public getChosenAudioInputChannels(input: string | string[] | undefined): string[] {
+		if (input === undefined) return []
+		if (typeof input === 'string') {
+			input = [input]
+		}
+		return this.expandAudioInputTokens(input)
+	}
+
+	/**
+	 * Splits any array elements that look like multiple concatenated Layer tokens (e.g. a value like 'L1L2BG'
+	 * coming from an expression built without a separator) into their individual internal Layer ids ('1', '2',
+	 * 'NATIVE'), mirroring expandScreenAuxTokens' 'S1S2A1' convention for Screens/Auxscreens: numbered Layers
+	 * are typed with an 'L' prefix (L1, L2, ...), the Background Layer is typed as 'BG' - both translated back
+	 * to the real internal ids ('1'/'2'/.../'NATIVE') expected everywhere else in the module. Tokens outside
+	 * the currently configured max layer count are silently dropped, same reasoning as expandScreenAuxTokens.
+	 */
+	private expandLayerTokens(input: string[]): string[] {
+		const maxLayer = this.getMaxConfiguredLayerCount()
+		return input.flatMap((el) => {
+			const tokens = el.match(/L\d+|BG/g)
+			if (tokens === null) return [el]
+			return tokens
+				.map((token) => (token === 'BG' ? 'NATIVE' : token.slice(1)))
+				.filter((id) => id === 'NATIVE' || (parseInt(id) >= 1 && parseInt(id) <= maxLayer))
+		})
+	}
+
+	/**
+	 * Returns the input Layer token(s) ('L1', 'BG', or a concatenated 'L1L2BG'), translated and expanded into
+	 * the individual internal Layer ids ('1', '2', 'NATIVE', ...).
+	 * @param input single Layer token/expression string, or array of them
+	 * @returns array of individual internal Layer ids
+	 */
+	public getChosenLayers(input: string | string[] | undefined): string[] {
+		if (input === undefined) return []
+		if (typeof input === 'string') {
+			input = [input]
+		}
+		return this.expandLayerTokens(input)
+	}
+
+	/**
 	 * Returnes the input array of screens but extends it by all active screens or the selected screens if the input array containes 'all' or 'sel'
 	 * @param input array of strings to check
 	 * @param prefix what to write in front of the screen number, defaults to 'S'
@@ -1181,7 +1291,7 @@ export default class Choices {
 		if (layer.match(/top/i)) {
 			return ['layerList', 'items', '48']
 		}
-		else if (layer.match(/bkg|background|native/i)) {
+		else if (layer.match(/^bg$|bkg|background|native/i)) {
 			return ['layerList', 'items', 'NATIVE']
 		}
 		else {

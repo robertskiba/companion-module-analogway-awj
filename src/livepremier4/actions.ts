@@ -48,6 +48,7 @@ export default class ActionsLivepremier4 extends Actions {
 		// 'deviceAuxMemory',
 		'deviceMasterMemory',
 		'deviceLayerMemory',
+		'deviceLayerMemoryV3',
 		'deviceMultiviewerMemory',
 		'deviceTakeScreen',
 		'deviceCutScreen',
@@ -83,11 +84,13 @@ export default class ActionsLivepremier4 extends Actions {
 		'lockScreen',
 		'selectPreset',
 		'selectLayer',
+		'selectLayerV3',
 		'remoteSync',
 		// 'deviceStreamControl',
 		// 'deviceStreamAudioMute',
 		'deviceAudioRouteBlock',
 		'deviceAudioRouteChannels',
+		'deviceAudioDanteFunctions',
 		'deviceTimerSetup',
 		'deviceTimerAdjust',
 		'deviceTimerTransport',
@@ -555,14 +558,17 @@ export default class ActionsLivepremier4 extends Actions {
 
 		this.choices.getScreensAuxArray().forEach((screen) => {
 			const isScreen = screen.id.startsWith('S')
-			
+
 			deviceSelectSource.options.push({
 				id: `layer${screen.id}`,
 				type: 'multidropdown',
 				label: 'Layer ' + screen.id,
-				choices: this.choices.getLayerChoices(screen.id, isScreen),
+				// frozen deprecated V2 choice list - not sourced from getLayerChoices() anymore, which now
+				// emits 'BG' for Background (see the module-wide 'BG' rename) - this action keeps 'NATIVE' forever
+				choices: isScreen ? [{ id: 'NATIVE', label: 'Background' }, ...this.choices.getLayerChoices(screen.id, false)] : this.choices.getLayerChoices(screen.id, false),
 				default: ['1'],
 				isVisibleExpression: `$(options:method) == 'spec' && arrayIncludes($(options:screen), '${screen.id}')`,
+				disableAutoExpression: true,
 			})
 		})
 		deviceSelectSource.options.push(
@@ -578,6 +584,7 @@ export default class ActionsLivepremier4 extends Actions {
 				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
 				// silently hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceNative',
@@ -591,6 +598,7 @@ export default class ActionsLivepremier4 extends Actions {
 				// generically in Companion's expression language. Falling back to always-visible to avoid silently
 				// hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 			{
 				id: 'sourceBack',
@@ -604,6 +612,7 @@ export default class ActionsLivepremier4 extends Actions {
 				// expressed generically in Companion's expression language. Falling back to always-visible to avoid
 				// silently hiding functionality; needs manual review.
 				isVisibleExpression: 'true',
+				disableAutoExpression: true,
 			},
 		)
 
@@ -629,7 +638,7 @@ export default class ActionsLivepremier4 extends Actions {
 			if (opt.layer === 'sel') {
 				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			}
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layer}))
+			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(opt.layer)}))
 		}
 
 		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
@@ -846,6 +855,133 @@ export default class ActionsLivepremier4 extends Actions {
 	}
 
 	/**
+	 * MARK: Layer Selection (V3) - LivePremier4
+	 */
+	get selectLayerV3() {
+		const selectLayerV3 = super.selectLayerV3
+
+		selectLayerV3.callback = (action) => {
+			if (action.options.preset !== 'sel') {
+				if (this.state.syncSelection) {
+					switch (action.options.preset) {
+						case 'pgm':
+							this.connection.sendWSdata('REMOTE', 'set', '/live/screens/presetModeSelection', ['PROGRAM'])
+							break
+						case 'prw':
+						case 'pvw':
+							this.connection.sendWSdata('REMOTE', 'set', '/live/screens/presetModeSelection', ['PREVIEW'])
+							break
+						case 'tgl':
+							this.connection.sendWSdata('REMOTE', 'toggle', '/live/screens/presetModeSelection', [])
+							break
+					}
+				} else {
+					switch (action.options.preset) {
+						case 'pgm':
+							this.state.set('LOCAL/presetMode', 'PROGRAM')
+							this.instance.setVariableValues({ selectedPreset: 'PGM' })
+							break
+						case 'prw':
+						case 'pvw':
+							this.state.set('LOCAL/presetMode', 'PREVIEW')
+							this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+							break
+						case 'tgl':
+							if (this.state.get('LOCAL/presetMode') === 'PREVIEW') {
+								this.state.set('LOCAL/presetMode', 'PROGRAM')
+								this.instance.setVariableValues({ selectedPreset: 'PGM' })
+							} else {
+								this.state.set('LOCAL/presetMode', 'PREVIEW')
+								this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+							}
+							break
+					}
+					this.instance.checkFeedbacks('livePresetSelection')
+				}
+			}
+
+			let ret: Record<string, string>[] = []
+			if (action.options.mode !== 'exclusive') {
+				if (this.state.syncSelection) {
+					ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+						.map((layer: Record<string, string>) => {
+							if (layer.type === 'SCREEN_LAYER_ID') return {
+								screenAuxKey: layer.screenKey,
+								layerKey: layer.screenLayerKey
+							}
+							else if (layer.type === 'AUX_LAYER_ID') return {
+								screenAuxKey: layer.auxKey,
+								layerKey: layer.auxLayerKey
+							}
+							else {
+								const screenAuxKeyProp = Object.keys(layer).find(key => key.match(/(?<!Layer)Key/))
+								const layerKeyProp = Object.keys(layer).find(key => key.match(/LayerKey/))
+								if (screenAuxKeyProp && layerKeyProp) {
+									return {
+										screenAuxKey: layer[screenAuxKeyProp],
+										layerKey: layer[layerKeyProp]
+									}
+								} else {
+									return {}
+								}
+							}
+						})
+				} else {
+					ret = this.state.get('LOCAL/layerIds')
+				}
+			}
+			const screens = action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: this.choices.getChosenScreenAuxes(action.options.screens)
+			const layers = this.choices.getChosenLayers(action.options.layers)
+			for (const screen of screens) {
+				for (const layer of layers) {
+					if (layer !== 'NATIVE' && isNaN(parseInt(layer))) continue // may be leftover from midra config
+					const idx = ret.findIndex((lay) => {
+						return lay['screenAuxKey'] === screen && lay['layerKey'].replace('NATIVE', 'BKG') === layer.replace('NATIVE', 'BKG')
+					})
+					if (action.options.mode === 'deselect') {
+						if (idx !== -1) ret.splice(idx, 1)
+					} else if (action.options.mode === 'toggle') {
+						if (idx === -1) ret.push({ screenAuxKey: screen, layerKey: layer })
+						else ret.splice(idx, 1)
+					} else {
+						// exclusive or add
+						if (idx === -1) ret.push({ screenAuxKey: screen, layerKey: layer })
+					}
+				}
+			}
+			if (this.state.syncSelection) {
+				this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/layerSelection',
+					[
+						ret.map((layer) => {
+							if (layer.screenAuxKey.charAt(0) === 'A') {
+								return {
+									type: 'AUX_LAYER_ID',
+									auxKey: layer.screenAuxKey,
+									auxLayerKey: layer.layerKey
+								}
+							} else {
+								return {
+									type: 'SCREEN_LAYER_ID',
+									screenKey: layer.screenAuxKey,
+									screenLayerKey: layer.layerKey
+								}
+							}
+						})
+					]
+				)
+			} else {
+				this.state.set('LOCAL/layerIds', ret)
+				this.instance.checkFeedbacks('remoteLayerSelection')
+			}
+			this.instance.checkFeedbacks('liveScreenSelection', 'remoteLayerSelection')
+		}
+
+		return selectLayerV3
+	}
+
+	/**
 	 *MARK:  Select Multiviewer Widget - LivePremier4
 	*/
 	get remoteMultiviewerSelectWidget() {
@@ -943,7 +1079,7 @@ export default class ActionsLivepremier4 extends Actions {
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '07 Audio - Route (Block)',
+			sortName: '06 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
@@ -969,6 +1105,7 @@ export default class ActionsLivepremier4 extends Actions {
 						default: choices[0]?.id,
 						minChoicesForSearch: 0,
 						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
 					}
 				}),
 				...audioInputChoices.map((choices, i) => {
@@ -976,35 +1113,44 @@ export default class ActionsLivepremier4 extends Actions {
 						type: 'dropdown' as const,
 						label: 'First Input Channel',
 						id: `in${i+1}`,
+						tooltip: 'Via Expression Mode you can also use a format like \'IN1C1\' instead of the raw id.',
 						choices: choices,
 						default: choices[0]?.id,
 						minChoicesForSearch: 0,
 						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
 					}
 				}),
 				{
 					type: 'number',
 					label: 'Block Size',
 					id: 'blocksize',
-					default: Math.min( 8, Math.max(...audioInputChoices.map(choice => choice.length)) ),
+					tooltip: 'Capped at 8, and the block is additionally always clamped to end at the latest at the end of the 8-channel output block it starts in (e.g. starting at Output 1 Channel 7 only ever reaches channels 7-8, regardless of this setting) - a safety measure against accidentally spilling into the next output block with a wrong setting. Use a second action for anything beyond that.',
+					default: 8,
 					min: 1,
-					max: Math.max(...audioInputChoices.map(choice => choice.length)),
+					max: 8,
 					range: true,
 				},
 			],
 			callback: (action) => {
 				const device = action.options.device
+				const inValue = this.choices.getChosenAudioInputChannels(action.options[`in${device}`])[0]
 				const outstart = audioOutputChoices[device - 1].findIndex((item) => {
 					return item.id === action.options[`out${device}`]
 				})
 				const instart = audioInputChoices[device - 1].findIndex((item) => {
-					return item.id === action.options[`in${device}`]
+					return item.id === inValue
 				})
 				if (outstart > -1 && instart > -1) {
+					// Never let the block spill past the end of the 8-channel output block it starts in, no
+					// matter what Block Size is set to - each output id is 'moduleId:channelNum' (1-8).
+					const outChannelNum = parseInt(audioOutputChoices[device - 1][outstart].id.toString().split(':')[1], 10)
+					const remainingInOutputBlock = 8 - outChannelNum + 1
 					const max = Math.min(
 						audioOutputChoices[device - 1].length - outstart,
 						audioInputChoices[device - 1].length - instart,
-						action.options.blocksize
+						action.options.blocksize,
+						remainingInOutputBlock
 					) // since 'None' is input at index 0 no extra test is needed, it is possible to fill all outputs with none
 					for (let s = 0; s < max; s += 1) {
 						const path = [
@@ -1041,7 +1187,7 @@ export default class ActionsLivepremier4 extends Actions {
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '07 Audio - Route (Channels)',
+			sortName: '06 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
@@ -1067,6 +1213,7 @@ export default class ActionsLivepremier4 extends Actions {
 						default: choices[0]?.id,
 						minChoicesForSearch: 0,
 						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
 					}
 				}),
 				...audioInputChoices.map((choices, i) => {
@@ -1074,22 +1221,25 @@ export default class ActionsLivepremier4 extends Actions {
 						type: 'multidropdown' as const,
 						label: 'input channel(s)',
 						id: `in${i+1}`,
+						tooltip: 'To target several channels at once via Expression Mode, you can use a format like \'IN1C1IN1C2\' instead of the raw array form.',
 						choices: choices,
 						default: ['NONE'],
 						minChoicesForSearch: 0,
 						minSelection: 0,
 						isVisibleExpression: `$(options:device) == ${i + 1}`,
+						allowInvalidValues: true,
 					}
 				}),
 			],
 			callback: (action) => {
 				const device = action.options.device
-				if (action.options[`in${device}`].length > 0) {
+				const inChannels = this.choices.getChosenAudioInputChannels(action.options[`in${device}`])
+				if (inChannels.length > 0) {
 					const outstart = audioOutputChoices[device -1].findIndex((item) => {
 						return item.id === action.options[`out${device}`]
 					})
 					if (outstart > -1) {
-						const max = Math.min(audioOutputChoices[device -1].length - outstart, action.options[`in${device}`].length)
+						const max = Math.min(audioOutputChoices[device -1].length - outstart, inChannels.length)
 						for (let s = 0; s < max; s += 1) {
 							const path = [
 								'device', 'audio', 'control',
@@ -1100,7 +1250,7 @@ export default class ActionsLivepremier4 extends Actions {
 								'pp',
 								'source',
 							]
-							this.connection.sendWSmessage(path, action.options[`in${device}`][s])
+							this.connection.sendWSmessage(path, inChannels[s])
 						}
 					}
 				} else {
@@ -1369,7 +1519,7 @@ export default class ActionsLivepremier4 extends Actions {
 		
 		const deviceGPO: AWJaction<DeviceGPO> = {
 			name: 'Device - Set GPO',
-			sortName: '09 Device - Set GPO',
+			sortName: '08 Device - Set GPO',
 			description: 'Turns a General Purpose Output (GPO) on, off, or toggles it.',
 			options: [
 				{

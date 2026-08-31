@@ -331,7 +331,7 @@ export default class ChoicesMidra extends Choices {
 	public getLayersAsArray(param: string | number, bkg?: boolean, top?: boolean): Choicemeta[] {
 		const ret: Choicemeta[] = []
 		if (typeof param === 'number') {
-			if (bkg === undefined || bkg === true) ret.push({ id: 'NATIVE', label: 'Background', longname: 'BKG' })
+			if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background', longname: 'BKG' })
 			for (let i = 1; i <= param; i += 1) {
 				ret.push({ id: `${i}`, label: `Layer ${i}`, longname:`L${i}` })
 			}
@@ -339,11 +339,11 @@ export default class ChoicesMidra extends Choices {
 			return ret
 		} else if (typeof param === 'string') {
 			if (param.startsWith('A')) {
-				ret.push({ id: 'BKG', label: 'Background Layer', longname: 'BKG' })
+				ret.push({ id: 'BG', label: 'Background Layer', longname: 'BKG' })
 			}
 			if (param.startsWith('S')) {
 				const layercount = this.state.get(`DEVICE/device/preconfig/status/stateList/items/CURRENT/screenList/items/${param.replace(/\D/g, '')}/pp/layerCount`) ?? 1
-				if (bkg === undefined || bkg === true) ret.push({ id: 'NATIVE', label: 'Background Layer', longname: 'BKG' })
+				if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background Layer', longname: 'BKG' })
 				for (let i = 1; i <= layercount; i += 1) {
 					ret.push({ id: `${i}`, label: `Layer ${i}`, longname:`L${i}` })
 				}
@@ -525,7 +525,7 @@ export default class ChoicesMidra extends Choices {
 		if (layer.match(/top/i)) {
 			return ['top']
 		}
-		else if (layer.match(/bkg|background|native/i)) {
+		else if (layer.match(/^bg$|bkg|background|native/i)) {
 			return ['background']
 		}
 		else {
