@@ -28,6 +28,10 @@ export function initVariables(_instance: AWJinstance): TrackedVariable[] {
 			name: 'Configured Hot Backup Device address - empty while "Enable Hot Backup Device" is unchecked',
 		},
 		{
+			variableId: 'SM.nextavailable',
+			name: 'First currently-empty Screen Memory slot number - safe target for a "Save Screen Memory to Slot" button that should never overwrite an existing memory. Blank if every slot is occupied.',
+		},
+		{
 			variableId: 'selectedPreset',
 			name: 'Selected Preset (Program/Preview)',
 		},

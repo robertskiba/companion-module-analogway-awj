@@ -358,8 +358,11 @@ export default class SubscriptionsMidra extends Subscriptions {
 
 	get screenMemoriesChange():Subscription {
 		return {
-			pat: 'DEVICE/device/preset/bank/slot/List/items/(\\d{1,3})/status/pp/isValid',
+			pat: 'DEVICE/device/preset/bank/slotList/items/(\\d{1,4})/status/pp/isValid',
+			ini: Array.from({ length: this.constants.maxScreenMemories }, (_, i) => (i + 1).toString()),
+			fbk: 'deviceScreenMemorySlotStatus',
 			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
+				this.instance.setVariableValues({ 'SM.nextavailable': this.instance.choices.getNextAvailableScreenMemorySlot() ?? '' })
 				return true
 			},
 		}

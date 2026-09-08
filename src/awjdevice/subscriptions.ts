@@ -1281,12 +1281,15 @@ export default class Subscriptions {
 		}
 	}
 
-	/** A screen memory gets added or removed */
+	/** A screen memory gets added or removed - also keeps SM.nextavailable (first currently-empty slot,
+	 *  used to safely target "Save Screen Memory to Slot" without overwriting anything) up to date. */
 	get screenMemoriesChange():Subscription {
 		return {
 			pat: 'DEVICE/device/presetBank/bankList/items/(\\d{1,4})/status/pp/isValid',
+			ini: Array.from({ length: this.constants.maxScreenMemories }, (_, i) => (i + 1).toString()),
 			fbk: 'deviceScreenMemorySlotStatus',
 			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
+				this.instance.setVariableValues({ 'SM.nextavailable': this.instance.choices.getNextAvailableScreenMemorySlot() ?? '' })
 				return true
 			},
 		}
