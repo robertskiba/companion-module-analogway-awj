@@ -442,6 +442,27 @@ export default class Subscriptions {
 		}
 	}
 
+	/**
+	 * Keeps the Hot Backup Device's own selection in sync with whatever REMOTE/live/screens/screenAuxSelection
+	 * becomes - fires on ANY incoming change to it, regardless of source: this connection's own commands
+	 * (selectScreen/"select screens after load"), which already mirror an optimistically-computed result
+	 * immediately (see mirrorSelectionToBackup()'s call sites), but ALSO an operator directly changing the
+	 * selection in WebRCS itself, which those call sites can never see - only an actual incoming state push
+	 * catches that case. getSelectedScreens() itself falls back to LOCAL when "sync selection" is off, so this
+	 * safely re-mirrors the same (unchanged) value in that mode instead of anything wrong. No corresponding
+	 * subscription is needed for LOCAL-only changes - a plain state.set() never runs through this subscription
+	 * mechanism at all (only incoming DEVICE/REMOTE pushes do), so those call sites mirror directly instead.
+	 */
+	get hotBackupSelectionChange():Subscription {
+		return {
+			pat: 'live/screens/screenAuxSelection',
+			fun: (): boolean => {
+				this.instance.connection.mirrorSelectionToBackup(this.instance.choices.getSelectedScreens())
+				return false
+			},
+		}
+	}
+
 	/** The selected screen's T-Bar position changes - refreshes SelectedScreen.tbarPosition, see refreshSelectedScreen.
 	 * Built from this.constants.screenGroupPath rather than a hardcoded path since it differs per platform
 	 * (confirmed: screenAuxGroupList on LivePremier4, screenGroupList on LivePremier, transition/screenList on
@@ -1072,10 +1093,13 @@ export default class Subscriptions {
 		}
 	}
 
-	/** Input gets enabled or disabled */
+	/** Input gets enabled/disabled (hidden from/shown in WebRCS's source picker) - live-confirmed (2026-09-05)
+	 *  this flag is NOT on the live inputList item itself (that one's own status/pp/isEnabled always reads
+	 *  true) but under the separate, currently-applied preconfig tree. \d{1,3} to also cover 3-digit input
+	 *  numbers (up to 256 on a linked LivePremier4 system) - \d{1,2} would have silently missed IN_100+. */
 	get liveInputsChange():Subscription {
 		return {
-			pat: 'DEVICE/device/inputList/items/IN_(\\d{1,2})/status/pp/isEnabled',
+			pat: 'DEVICE/device/preconfig/inputs/current/inputList/items/IN_(\\d{1,3})/status/pp/isEnabled',
 			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
 				return true
 			},
@@ -1775,9 +1799,14 @@ export default class Subscriptions {
 	 */
 	get deviceIdentity():Subscription {
 		const labelPathFor = (deviceListPrefix: string) => `DEVICE/device/system/${deviceListPrefix}pp/label`
+		const serialPathFor = (deviceListPrefix: string) => `DEVICE/device/system/${deviceListPrefix}serial/pp/serialNumber`
+		// The Leader's own connected IP, confirmed live (2026-09-05) - deliberately the top-level path, not
+		// deviceList/items/{n}'s per-Follower one (that's a different concern, see choices.ts's
+		// getLinkedDeviceInfo() and the config's own Device 2-4 lines).
+		const ipPath = 'DEVICE/device/system/network/ipv4/status/pp/ip'
 
 		return {
-			pat: 'device/system/(?:deviceList/items/\\d+/)?pp/label',
+			pat: 'device/system/(?:deviceList/items/\\d+/)?(?:pp/label|serial/pp/serialNumber|network/ipv4/status/pp/ip)',
 			ini: () => {
 				this.instance.removeVariable('deviceIdentity')
 				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.Series', name: 'Device model series' })
@@ -1785,9 +1814,12 @@ export default class Subscriptions {
 				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.Name', name: 'Device name (label)' })
 				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.FirmwareVersion', name: 'Device firmware version' })
 				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.FirmwareGeneration', name: 'Device firmware generation (e.g. V4)' })
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.IP', name: 'Device IP address' })
+				this.instance.addVariable({ id: 'deviceIdentity', variableId: 'Device.Serial', name: 'Device serial number' })
 
 				const labelPath = this.instance.state.get(labelPathFor('')) !== undefined ? labelPathFor('') : labelPathFor('deviceList/items/1/')
-				return ['LOCAL/deviceModel', 'LOCAL/deviceSeries', 'LOCAL/deviceFirmwareVersion', 'LOCAL/deviceFirmwareGeneration', labelPath]
+				const serialPath = this.instance.state.get(serialPathFor('')) !== undefined ? serialPathFor('') : serialPathFor('deviceList/items/1/')
+				return ['LOCAL/deviceModel', 'LOCAL/deviceSeries', 'LOCAL/deviceFirmwareVersion', 'LOCAL/deviceFirmwareGeneration', labelPath, serialPath, ipPath]
 			},
 			fun: (path) => {
 				if (!path || typeof path !== 'string') return false
@@ -1799,6 +1831,20 @@ export default class Subscriptions {
 					this.instance.setVariableValues({ 'Device.FirmwareVersion': this.instance.state.get(path) ?? '' })
 				} else if (path === 'LOCAL/deviceFirmwareGeneration') {
 					this.instance.setVariableValues({ 'Device.FirmwareGeneration': this.instance.state.get(path) ?? '' })
+				} else if (path === ipPath) {
+					// A simulator doesn't report a meaningful IP of its own here (confirmed live - it always
+					// shows a fixed placeholder regardless of how it's actually reached), so show the address
+					// this connection is actually using instead; a real device's own self-reported IP is the
+					// more authoritative source there (matches what it would show on its own front panel/OSD).
+					if (this.instance.config.simulatedDevice) {
+						const hostname = this.instance.connection.getURLobj(this.instance.config.deviceaddr)?.hostname() ?? ''
+						this.instance.setVariableValues({ 'Device.IP': hostname })
+					} else {
+						const ipBytes = this.instance.state.get(path)
+						this.instance.setVariableValues({ 'Device.IP': Array.isArray(ipBytes) ? ipBytes.join('.') : '' })
+					}
+				} else if (path.includes('serial/pp/serialNumber')) {
+					this.instance.setVariableValues({ 'Device.Serial': this.instance.state.get(path) ?? '' })
 				} else {
 					this.instance.setVariableValues({ 'Device.Name': this.instance.state.get(path) ?? '' })
 				}
@@ -2106,7 +2152,7 @@ export default class Subscriptions {
 					void this.instance.updateInstance()
 					this.instance.checkAllFeedbacks()
 				} catch (error) {
-					this.instance.log('error', 'Cannot update the this.instance. '+ error)
+					this.instance.log('error', 'Cannot update the instance. '+ error)
 				}
 			})()
 		}

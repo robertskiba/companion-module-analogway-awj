@@ -4,6 +4,9 @@ import ky from 'ky'
 import URI from 'urijs'
 import WebSocket from 'ws'
 import { InstanceStatus } from '@companion-module/base'
+import { formatAquilonModel } from './util.js'
+import * as os from 'os'
+import { AWJBackupConnection } from './backupConnection.js'
 
 const fetchDefaultParameters = {
 	retry: 2,
@@ -39,11 +42,37 @@ class AWJconnection {
 	private buffer = ''
 	private shouldBeConnected: boolean
 	private hadError: boolean
+	// Guards the automatic network-scan fallback (see connect()'s catch block) so it fires at most once per
+	// "disconnected episode" - reset on a successful connect, not on every 10s retry - so a prolonged outage
+	// doesn't turn into hours of repeated subnet sweeps.
+	private hasScannedSinceLastFailure = false
+	// Separate from the above: prevents two scans ever running at once, even across episode boundaries (e.g.
+	// a brief reconnect resets hasScannedSinceLastFailure while a prior scan is still in flight, then the
+	// connection drops again immediately) - a scan take a few seconds even on a normal /24, so this matters.
+	private isScanningNetwork = false
+
+	/** The Hot Backup Device's own send-only mirror connection - see backupConnection.ts. Lifecycle (start/
+	 *  stop/restart on address change) is managed by updateBackupConnection(), called from AWJinstance's
+	 *  configUpdated() whenever hotBackupEnabled/hotBackupAddress changes, and once from init(). */
+	readonly backupConnection: AWJBackupConnection
 
 	constructor(instance: AWJinstance) {
 		this.instance = instance
 		this.hadError = false
 		this.shouldBeConnected = false
+		this.backupConnection = new AWJBackupConnection(instance)
+	}
+
+	/** Starts, stops, or restarts the Hot Backup Device's mirror connection to match current config - call
+	 *  whenever hotBackupEnabled/hotBackupAddress may have changed. */
+	updateBackupConnection(): void {
+		const enabled = this.instance.config.hotBackupEnabled
+		const addr = this.instance.config.hotBackupAddress?.trim()
+		if (enabled && addr) {
+			this.backupConnection.start(addr)
+		} else {
+			this.backupConnection.stop()
+		}
 	}
 
 	/**
@@ -93,6 +122,12 @@ class AWJconnection {
 		return null
 	}
 
+	/** True while the main device's WebSocket is actually open (not just configured) - e.g. for the
+	 * "Device - Failover to Hot Backup" action's live device-status info field. */
+	get isConnected(): boolean {
+		return this.websocket?.readyState === 1
+	}
+
 	getURLobj(address: string) {
 		if (address.match(/^https?:\/\//) == null) {
 			address = 'http://' + address
@@ -121,7 +156,168 @@ class AWJconnection {
 	}
 
 	/**
-	 * Connect to a AWJ device
+	 * For the "Simulated Device?" config checkbox: Analog Way simulators always run on plain http, port 3000
+	 * - confirmed live (2026-09-05) that a simulator's https is selectable but doesn't actually work and has
+	 * no upside, so this also forces the protocol back to http:// if it was (mistakenly, or leftover from
+	 * Secure HTTP) set to https://. Returns `addr` unchanged if it's already http:// on port 3000, otherwise
+	 * a corrected address with protocol/port replaced (keeping host/credentials/path intact).
+	 */
+	ensureSimulatorPort(addr: string): string {
+		const withProtocol = addr.match(/^https?:\/\//) ? addr : 'http://' + addr
+		const urlObj = new URI(withProtocol)
+		if (urlObj.protocol() === 'http' && urlObj.port() === '3000') return addr
+		urlObj.protocol('http')
+		urlObj.port('3000')
+		return urlObj.toString()
+	}
+
+	/**
+	 * For the "Connect via Secure HTTP/HTTPS?" config checkbox: forces the protocol to https:// and the port
+	 * to 443 (confirmed live 2026-09-05: even the simulator's HTTPS runs on 443, not its usual plain-HTTP
+	 * 3000). Returns `addr` unchanged if it's already https:// on port 443, otherwise a corrected address
+	 * with protocol/port replaced (keeping host/credentials/path intact).
+	 */
+	ensureSecureHttp(addr: string): string {
+		const withProtocol = addr.match(/^https?:\/\//) ? addr : 'http://' + addr
+		const urlObj = new URI(withProtocol)
+		if (urlObj.protocol() === 'https' && urlObj.port() === '443') return addr
+		urlObj.protocol('https')
+		urlObj.port('443')
+		return urlObj.toString()
+	}
+
+	/**
+	 * True if `addr`'s hostname is 'localhost'/'127.0.0.1'/'::1', or matches one of this machine's own
+	 * current IP addresses on any local interface - a real Aquilon can never be reachable there, so this is
+	 * always a simulator running on this same machine (see the "Simulated Device?" config checkbox's
+	 * automatic sync in connect()'s success path, and its proactive counterpart in index.ts's configUpdated()).
+	 */
+	isLocalAddress(addr: string): boolean {
+		const urlObj = this.getURLobj(addr)
+		if (urlObj === null) return false
+		const host = urlObj.hostname()
+		if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true
+		for (const ifaceList of Object.values(os.networkInterfaces())) {
+			for (const iface of ifaceList ?? []) {
+				if (iface.address === host) return true
+			}
+		}
+		return false
+	}
+
+	/**
+	 * Automatic fallback only when the configured address can't be reached (see connect()'s catch block) -
+	 * runs at most once per "disconnected episode" (see hasScannedSinceLastFailure), not on every 10s retry,
+	 * so a prolonged outage doesn't turn into hours of repeated subnet sweeps. Checks candidates in priority
+	 * order (earlier groups awaited to completion before the next starts, so results surface in this order):
+	 *   1. localhost:3000 (the Analog Way simulator's own default)
+	 *   2. 192.168.2.140:80 (an Aquilon's factory-reset default address)
+	 *   3. a bounded neighborhood (NEARBY_SCAN_RADIUS addresses either side, 1021 total) around this
+	 *      machine's own address on what looks like "the current network" (best-effort guess only - see
+	 *      below), on both port 80 (real device default) and 3000 (simulator default)
+	 *   4. the same bounded neighborhood around this machine's other local network interfaces, same two ports
+	 * Groups 3-4 are deliberately independent of the interface's actual subnet mask - a /8 or /16 interface
+	 * still gets bounded, useful local-vicinity coverage instead of being skipped outright, while a normal
+	 * /24 network is still covered in full (254 hosts comfortably fits within the window). Uses the same
+	 * /auth/status reachability check connect() itself uses to recognize an AWJ device. Returns every match
+	 * found (there can be more than one on a real network).
+	 */
+	async scanNetworkForDevices(): Promise<{address: string, port: number, model: string}[]> {
+		const found: {address: string, port: number, model: string}[] = []
+		const alreadyChecked = new Set<string>()
+
+		const checkOne = async (ip: string, port: number): Promise<void> => {
+			const key = `${ip}:${port}`
+			if (alreadyChecked.has(key)) return
+			alreadyChecked.add(key)
+			try {
+				const authResponse = await ky.get(`http://${ip}:${port}/auth/status`, {
+					retry: 0,
+					timeout: 400,
+				}).json<{[name: string]: any}>()
+				const isAuth = authResponse.authentication?.isAuthenticationEnabled
+				const deviceObj = authResponse.device || authResponse.devices?.leader
+				if (isAuth !== undefined && deviceObj !== undefined) {
+					// /auth/status carries no direct isSimulated flag (unlike the full device state) - port
+					// 3000 is the Analog Way simulator's own established default, used here as a cheap stand-in.
+					const rawModel: string = deviceObj.reference?.label ?? deviceObj.dev ?? 'unknown model'
+					const model = port === 3000 ? `${rawModel} (simulated)` : rawModel
+					found.push({address: ip, port, model})
+				}
+			} catch {
+				// not reachable / didn't respond like an AWJ device / timed out - the expected outcome for
+				// almost every address scanned, not worth logging individually
+			}
+		}
+
+		const checkBatched = async (pairs: [string, number][]): Promise<void> => {
+			const BATCH_SIZE = 32
+			for (let i = 0; i < pairs.length; i += BATCH_SIZE) {
+				await Promise.allSettled(pairs.slice(i, i + BATCH_SIZE).map(([ip, port]) => checkOne(ip, port)))
+			}
+		}
+
+		// 1 + 2: the two well-known defaults, checked first regardless of this machine's own subnets
+		await checkBatched([['127.0.0.1', 3000], ['192.168.2.140', 80]])
+
+		// 3 + 4: a bounded neighborhood around this machine's own address on each local interface - "current
+		// network" is a best-effort guess only (the module has no real way to know which interface the
+		// Companion UI's browser is actually on), taken as the first non-internal IPv4 interface Node.js
+		// reports; every other qualifying interface follows after.
+		const ownAddresses = this.getLocalInterfaceAddresses()
+		for (const ownIp of ownAddresses) {
+			await checkBatched(this.nearbyHostPorts(ownIp))
+		}
+
+		return found
+	}
+
+	/**
+	 * [ip, port] pairs for a bounded window of NEARBY_RADIUS addresses on either side of `centerIp` (1021
+	 * addresses total including the center, on both ports 80 and 3000) - deliberately independent of the
+	 * interface's actual subnet mask, so a /8 or /16 interface still gets bounded, useful local-vicinity
+	 * coverage instead of being skipped outright, while a normal /24 network is still covered in full (254
+	 * hosts comfortably fits within a 1021-address window centered on this machine's own address in it).
+	 */
+	private static readonly NEARBY_SCAN_RADIUS = 510
+
+	private nearbyHostPorts(centerIp: string): [string, number][] {
+		const center = this.ipToInt(centerIp)
+		const pairs: [string, number][] = []
+		for (let offset = -AWJconnection.NEARBY_SCAN_RADIUS; offset <= AWJconnection.NEARBY_SCAN_RADIUS; offset++) {
+			const candidate = center + offset
+			if (candidate < 0 || candidate > 0xffffffff) continue // don't wrap past the address space's edges
+			const ip = this.intToIp(candidate)
+			pairs.push([ip, 80], [ip, 3000])
+		}
+		return pairs
+	}
+
+	private ipToInt(ip: string): number {
+		const [a, b, c, d] = ip.split('.').map(Number)
+		return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0
+	}
+
+	private intToIp(n: number): string {
+		return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.')
+	}
+
+	/** This machine's own address on every local, non-internal IPv4 interface, in the order Node.js reports
+	 * them (used as a best-effort "current network first" ordering - see scanNetworkForDevices()). */
+	private getLocalInterfaceAddresses(): string[] {
+		const interfaces = os.networkInterfaces()
+		const addresses: string[] = []
+		for (const ifaceList of Object.values(interfaces)) {
+			for (const iface of ifaceList ?? []) {
+				if (iface.family !== 'IPv4' || iface.internal) continue
+				if (!addresses.includes(iface.address)) addresses.push(iface.address)
+			}
+		}
+		return addresses
+	}
+
+	/**
+	 * Connect to an AWJ device
 	 * @param addr the complete base url of the device to connect to, can contain protocol, credentials, host and port
 	 * @returns void
 	 */
@@ -129,6 +325,15 @@ class AWJconnection {
 		this.addr = addr
 		if (this.addr === undefined) return
 		this.shouldBeConnected = true
+
+		if (this.addr.trim() === '') {
+			// No address configured at all - nothing to connect to, but still worth triggering the same
+			// network-scan fallback as a real connection failure, so "Found AWJ Devices" gets a chance to
+			// populate even before the user has typed anything in "Device Network Address".
+			this.instance.updateStatus(InstanceStatus.BadConfig, 'No device address configured')
+			this.triggerNetworkScanIfNeeded()
+			return
+		}
 
 		const urlObj = this.getURLobj(this.addr)
 		if (urlObj === null) return
@@ -154,7 +359,14 @@ class AWJconnection {
 					if (res.device) {
 						this.instance.state.set('DEVICE', res)
 						//console.log('rest get API device state result')
-						this.instance.state.set('LINK', authResponse.device || authResponse.devices)
+						// A Follower can be configured/detected (present in .followers) while the link itself is
+						// currently deactivated (e.g. temporarily unplugged/standalone) - isLinkActive, from the
+						// same auth/status response's separate .system object, is the actual live signal for
+						// whether the system is really operating as linked right now.
+						this.instance.state.set('LINK', {
+							...(authResponse.device || authResponse.devices),
+							isLinkActive: authResponse.system?.isLinkActive === true,
+						})
 
 						const system = res.device.system // this.instance.state.get('DEVICE/device/system')
 						if (!system) {
@@ -190,7 +402,7 @@ class AWJconnection {
 						let newPlatform = ''
 						let modelName = ''
 						if (device.substring(0, 3) === 'NLC') {
-							modelName = device.replace('NLC_', 'Aquilon ')
+							modelName = formatAquilonModel(device)
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
@@ -306,17 +518,91 @@ class AWJconnection {
 							this.instance.log('error', `switching sync after connect failed:\n${error}`)
 						}
 						this.hadError = false
+						this.hasScannedSinceLastFailure = false
 						
 
 						try {
 							const deviceMacaddr = this.instance.choices.getMACaddress()
 							const configMacaddr = this.instance.config.macaddress.split(/[,:_.\s-]/).join(':')
+							let configChanged = false
 							if (configMacaddr !== deviceMacaddr) {
 								this.instance.config.macaddress = deviceMacaddr
-								this.instance.saveConfig(this.instance.config)
+								configChanged = true
 							}
+							if (this.instance.config.deviceModel !== modelName) {
+								this.instance.config.deviceModel = modelName
+								configChanged = true
+							}
+							if (this.instance.config.deviceFirmware !== fwVersion) {
+								this.instance.config.deviceFirmware = fwVersion
+								configChanged = true
+							}
+							// Kept fully in sync with live reality in both directions - e.g. after picking a
+							// simulator found via the network-scan dropdown, the checkbox should reflect that
+							// without a separate manual step, and equally should clear itself if pointed at a
+							// real device while still checked from a previous simulator connection.
+							if (this.instance.config.simulatedDevice !== deviceroot.isSimulated) {
+								this.instance.config.simulatedDevice = !!deviceroot.isSimulated
+								configChanged = true
+							}
+							// A simulator's https is selectable but doesn't work and has no upside (confirmed
+							// live) - force Secure HTTP off whenever a live check confirms this IS a simulator,
+							// regardless of whether the checkbox itself was already checked (a user could have
+							// typed https:// by hand while assuming it would work here).
+							if (deviceroot.isSimulated && this.instance.config.secureHttp) {
+								this.instance.config.secureHttp = false
+								configChanged = true
+							}
+
+							// Linked systems (e.g. Aquilon) can have up to 3 additional Follower devices - detect
+							// and store their IP/MAC/Model/Firmware too, so Wake on LAN can also wake them (see
+							// devicePower). Blank means "no link detected" and is shown as such in the config UI.
+							for (const deviceKey of [2, 3, 4] as const) {
+								const {ip, mac, model, firmware} = this.instance.choices.getLinkedDeviceInfo(deviceKey)
+								const ipField = `device${deviceKey}ip` as const
+								const macField = `device${deviceKey}mac` as const
+								const modelField = `device${deviceKey}model` as const
+								const firmwareField = `device${deviceKey}firmware` as const
+								if (this.instance.config[ipField] !== ip) {
+									this.instance.config[ipField] = ip
+									configChanged = true
+								}
+								if (this.instance.config[macField] !== mac) {
+									this.instance.config[macField] = mac
+									configChanged = true
+								}
+								if (this.instance.config[modelField] !== model) {
+									this.instance.config[modelField] = model
+									configChanged = true
+								}
+								if (this.instance.config[firmwareField] !== firmware) {
+									this.instance.config[firmwareField] = firmware
+									configChanged = true
+								}
+							}
+
+							// Card/slot info (used for the config's installed-cards display) lives on a separate
+							// REST endpoint, /api/device/chassis/{deviceKey} - not part of the WebSocket-pushed
+							// DEVICE state tree at all, confirmed live (2026-09-05) via the real WebRCS UI's own
+							// "Hardware" panel network call. Only fetched for deviceKey 1 (Leader) and any
+							// deviceKey 2-4 that's actually linked right now. Must complete BEFORE saveConfig()
+							// below - Companion only re-renders the open config panel in response to a config
+							// change, so if this ran after saveConfig() the freshly-fetched cards would sit in
+							// state but never actually get shown until some later, unrelated config change.
+							const deviceKeysToFetch = [1, ...([2, 3, 4] as const).filter((deviceKey) => !!this.instance.config[`device${deviceKey}ip` as const])]
+							await Promise.all(deviceKeysToFetch.map(async (deviceKey) => {
+								const chassis = await this.fetchChassisInfo(deviceKey)
+								this.instance.state.set(['LOCAL', 'chassis', deviceKey.toString()], chassis)
+								const slotCount = Array.isArray(chassis?.slots) ? chassis.slots.length : 'n/a'
+								this.instance.log('warn', `chassis info for device ${deviceKey}: ${chassis === null ? 'FAILED (null - see any error above)' : `OK, ${slotCount} slots`}`)
+							}))
+							// The chassis fetch itself never changes anything under this.instance.config, but its
+							// result must reach the UI - force the same saveConfig() refresh path unconditionally.
+							configChanged = true
+
+							if (configChanged) this.instance.saveConfig(this.instance.config)
 						} catch (error) {
-							this.instance.log('error', 'getting MAC address from device failed ' + error)
+							this.instance.log('error', 'getting MAC address/chassis info from device failed ' + error)
 						}
 
 						// The REMOTE channel (current selection, global anchor point) only ever streams deltas over
@@ -397,6 +683,7 @@ class AWJconnection {
 								InstanceStatus.Disconnected,
 								(secondsLeft) => `Disconnected, retrying in ${secondsLeft}s`
 							)
+							this.triggerNetworkScanIfNeeded()
 						}
 					})
 
@@ -460,7 +747,7 @@ class AWJconnection {
 							redirect: 'manual',
 							throwHttpErrors: false
 						})
-						// Got succesful auth response
+						// Got successful auth response
 						// Note: res.headers is a Headers instance (fetch API), not a plain object - must use .get(), bracket access always returns undefined
 						const setCookie = res.headers.get('set-cookie')
 						if (setCookie) {
@@ -510,7 +797,36 @@ class AWJconnection {
 			}
 			this.instance.log('error', logMessage)
 			this.scheduleRetryWithCountdown(InstanceStatus.ConnectionFailure, buildMessage)
+			this.triggerNetworkScanIfNeeded()
 		}
+	}
+
+	/**
+	 * One-shot automatic fallback: the configured address isn't answering, so sweep the local network(s) for
+	 * anything that looks like an AWJ device (see scanNetworkForDevices()) and offer whatever turns up in the
+	 * "Found AWJ Devices" config dropdown. Called both when a fresh connect() attempt fails outright and
+	 * immediately when an already-established connection unexpectedly drops (the websocket 'close' handler) -
+	 * not just on the next retry's connect() failure, so the scan starts right away instead of only after the
+	 * next ~10s retry interval elapses. Deliberately not awaited by callers - runs in the background, and
+	 * only once per disconnected episode (hasScannedSinceLastFailure resets on the next successful connect).
+	 */
+	private triggerNetworkScanIfNeeded(): void {
+		if (this.hasScannedSinceLastFailure || this.isScanningNetwork) return
+		this.hasScannedSinceLastFailure = true
+		this.isScanningNetwork = true
+		this.scanNetworkForDevices()
+			.then((found) => {
+				this.instance.state.set(['LOCAL', 'networkScanResults'], found)
+				this.instance.log('warn', found.length > 0
+					? `Network scan found ${found.length} AWJ device(s) - see "Found AWJ Devices" in the connection's config.`
+					: 'Network scan for AWJ devices found nothing.')
+				// Nothing in this.instance.config actually changed, but the config panel (if open) only
+				// re-renders in response to a config change - force that refresh so the new dropdown
+				// choices actually show up, same fix as the "Installed Cards" field needed.
+				this.instance.saveConfig(this.instance.config)
+			})
+			.catch((error) => this.instance.log('error', 'Network scan for AWJ devices failed: ' + error))
+			.finally(() => { this.isScanningNetwork = false })
 	}
 
 	async downloadDevicestate(urlObj) {
@@ -557,7 +873,7 @@ class AWJconnection {
 			})
 				//.ok((res) => res.status < 400)
 			.then((res) => {
-				this.instance.log('debug', 'http POST successfull ' + res.status)
+				this.instance.log('debug', 'http POST successful ' + res.status)
 			})
 			.catch((err) => {
 				this.instance.log('debug', 'http POST failed ' + err)
@@ -574,7 +890,7 @@ class AWJconnection {
 			})
 				//.ok((res) => res.status < 400)
 			.then((res) => {
-				this.instance.log('debug', 'http POST successfull ' + res.status)
+				this.instance.log('debug', 'http POST successful ' + res.status)
 			})
 			.catch((err) => {
 				this.instance.log('debug', 'http POST failed ' + err)
@@ -591,7 +907,7 @@ class AWJconnection {
 			})
 				//.ok((res) => res.status < 400)
 			.then((res) => {
-				// Got succesful auth response
+				// Got successful auth response
 				// Note: res.headers is a Headers instance (fetch API), not a plain object - must use .get()
 				const setCookie = res.headers.get('set-cookie')
 				if (setCookie) {
@@ -608,7 +924,7 @@ class AWJconnection {
 					redirect: 'error'
 					})
 					.then((res) => {
-						this.instance.log('debug', 'http POST successfull ' + res.status)
+						this.instance.log('debug', 'http POST successful ' + res.status)
 					})
 					.catch((err) => {
 						this.instance.log('debug', 'http POST failed ' + err)
@@ -652,6 +968,29 @@ class AWJconnection {
 			setTimeout(step, this.snapshotMinIntervalMs)
 		}
 		step()
+	}
+
+	/**
+	 * Fetches the physical chassis/card layout for one device (1 = Leader, 2-4 = a linked Follower), from
+	 * `http://<address>/api/device/chassis/{deviceKey}` - confirmed live (2026-09-05) as the same call the
+	 * real WebRCS "Device Overview - Hardware" panel makes. Returns the raw parsed JSON (a `slots` array,
+	 * each slot carrying `attributes.cardKey`/`cardType`/`febeCardType` and an `elements` array of `PLUGS`
+	 * entries whose `plugTypes` give the real per-port connector types - port COUNT is not a plain number
+	 * anywhere, it has to be derived from counting non-empty `plugTypes` entries), or null if unreachable.
+	 */
+	async fetchChassisInfo(deviceKey: number): Promise<any | null> {
+		if (!this.addr) return null
+		const urlObj = this.getURLobj(this.addr)
+		if (urlObj === null) return null
+		try {
+			return await ky.get(`${urlObj.protocol()}://${urlObj.host()}/api/device/chassis/${deviceKey}`, {
+				headers: this.authcookie ? { cookie: this.authcookie } : {},
+				retry: 0,
+				timeout: 5000,
+			}).json()
+		} catch {
+			return null
+		}
 	}
 
 	/**
@@ -719,7 +1058,7 @@ class AWJconnection {
 	sendRawWSmessage(message: string): void {
 		if (this.websocket?.readyState === 1) {
 			this.websocket?.send(message)
-			// this.instance.log('debug', 'sendig WS message ' + this.websocket.url + ' ' + message)
+			// this.instance.log('debug', 'sending WS message ' + this.websocket.url + ' ' + message)
 		}
 	}
 
@@ -743,6 +1082,48 @@ class AWJconnection {
 			}
 			this.sendRawWSmessage(JSON.stringify(obj))
 		}
+	}
+
+	/**
+	 * Mirrors a command to the Hot Backup Device, in the exact same shape sendWSmessage() just sent to the
+	 * main device - called from the currently curated set of "safe" actions (Recall Screen/Master/Layer
+	 * Memory, Screen Selection - deliberately starting narrow, to be expanded once this is confirmed working
+	 * against real hardware) right after their own sendWSmessage() call. Fire-and-forget, one-way only - the
+	 * backup device's response is never read (see backupConnection.ts). A no-op whenever Hot Backup isn't
+	 * enabled, or its connection isn't currently open (no queueing - a command missed while the backup device
+	 * was unreachable is simply not mirrored, matching this feature's "best-effort, not guaranteed redundancy"
+	 * design, see the "Enable Hot Backup Device" tooltip).
+	 */
+	mirrorToBackup(path: string | string[], ...values: (string | string[] | number | boolean)[]): void {
+		if (!this.instance.config.hotBackupEnabled) return
+		this.backupConnection.send(path, ...values)
+	}
+
+	/**
+	 * Force-unlocks a screen/aux on the Hot Backup Device, unconditionally - called right before mirroring a
+	 * Recall Screen/Master/Layer Memory to it, regardless of whether the corresponding screen is actually
+	 * locked on Main. Nobody operates the Backup device directly (see the "Enable Hot Backup Device" tooltip),
+	 * so there is no legitimate "should stay locked" case to preserve there - only the risk of a mirrored
+	 * recall being silently rejected by a lock state this one-way connection has no way to even see.
+	 */
+	mirrorUnlockToBackup(screen: string, preset: string): void {
+		if (!this.instance.config.hotBackupEnabled) return
+		const platformLongId = this.instance.choices.getScreenInfo(screen).platformLongId
+		const pst = preset === 'PREVIEW' ? 'Prw' : 'Pgm'
+		this.backupConnection.sendData('REMOTE', 'unlockScreenAuxes' + pst, '/live/screens/presetModeLock', [[platformLongId]])
+	}
+
+	/**
+	 * Replaces the Hot Backup Device's own selection with `screens` (platform long ids), via the same REMOTE
+	 * 'replace' shape the main "Screen Selection" action uses - called whenever Main's own selection changes,
+	 * regardless of whether Main itself is in "sync selection" (REMOTE) or local-only mode, since Backup has
+	 * no local-selection concept of its own to update - REMOTE is the only lever that affects what a WebRCS
+	 * client connected to Backup would show as selected.
+	 */
+	mirrorSelectionToBackup(screens: string[]): void {
+		if (!this.instance.config.hotBackupEnabled) return
+		const platformLongIds = screens.map((screen) => this.instance.choices.getScreenInfo(screen).platformLongId)
+		this.backupConnection.sendData('REMOTE', 'replace', '/live/screens/screenAuxSelection', [platformLongIds])
 	}
 
 	/**

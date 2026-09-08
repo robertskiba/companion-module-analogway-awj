@@ -80,19 +80,30 @@ export default class ChoicesLivepremier4 extends Choices {
 	public getLiveInputArray(prefix?: string): Choicemeta[] {
 		const ret: Choicemeta[] = []
 		if(prefix == undefined) prefix = 'IN'
-		const items = this.state.get('DEVICE/device/inputList/itemKeys')
-		if (items) {
-			items.forEach((key: string) => {
-				if (this.state.get('DEVICE/device/inputList/items/' + key + '/status/pp/isAvailable')
-					&& (this.state.get('LOCAL/config/showDisabled') || this.state.get('DEVICE/device/inputList/items/' + key + '/status/pp/isEnabled'))
-				) {
-					ret.push({
-						id: key.replace(/^\w+_/, prefix + '_'),
-						label: this.state.get('DEVICE/device/inputList/items/' + key + '/control/pp/label'),
-						index: key.replace(/^\w+_/, '')
-					})
-				}
-			})
+		const items: string[] = this.state.get('DEVICE/device/inputList/itemKeys') ?? []
+		const byNumber = new Map<number, string>()
+		items.forEach((key: string) => {
+			const n = Number(key.replace(/^\w+_/, ''))
+			if (!Number.isNaN(n)) byNumber.set(n, key)
+		})
+		// "Show also not existing..." lists every input up to this platform's theoretical maximum (meant for
+		// pre-programming before a bigger/different device is connected) - otherwise stop at the highest
+		// number the connected device actually reports, same as before.
+		const maxN = this.instance.config.showNotExisting ? this.constants.maxInputs : Math.max(0, ...byNumber.keys())
+		for (let n = 1; n <= maxN; n += 1) {
+			const key = byNumber.get(n)
+			const isAvailable = key ? this.state.get('DEVICE/device/inputList/items/' + key + '/status/pp/isAvailable') : false
+			// The "disabled/hidden from source picker" flag is NOT on the live inputList item itself (that one's
+			// own isEnabled is live-confirmed to always read true) - it lives in the separate preconfig tree,
+			// under the currently-applied preconfig (not the "new"/draft one still pending xApply).
+			const isEnabled = key ? this.state.get('DEVICE/device/preconfig/inputs/current/inputList/items/' + key + '/status/pp/isEnabled') : false
+			if (isAvailable ? (this.instance.config.showDisabled || isEnabled) : this.instance.config.showNotExisting) {
+				ret.push({
+					id: `${prefix}_${n}`,
+					label: isAvailable ? (this.state.get('DEVICE/device/inputList/items/' + key + '/control/pp/label') ?? '') : '',
+					index: n.toString()
+				})
+			}
 		}
 		return ret
 	}
@@ -204,7 +215,7 @@ export default class ChoicesLivepremier4 extends Choices {
 	/**
 	 * Returns array with some layer choices
 	 * @param param if it is a number that number of layer choices are returned, if it is a string the layers of the screen are returned
-	 * @param bkg whether to include only live layers (false) or also background and eventually foreground layer (true or omitted) 
+	 * @param bkg whether to include only live layers (false) or also background and possibly foreground layer (true or omitted) 
 	 */
 	public getLayersAsArray(param: string | number, bkg?: boolean): Choicemeta[] {
 		const ret: Choicemeta[] = []
@@ -427,10 +438,9 @@ export default class ChoicesLivepremier4 extends Choices {
 	 */
 	getLinkedDevicesChoices(): Dropdown<number>[] {
 		const ret = [{id: 1, label: '1 (Leader 👑)'}]
-		ret.push(
-			...this.instance.state.get('LINK/followers') ?? []
-			.map((_follower, i) => [{id: (i + 2),  label: (i + 2).toString()}])
-		)
+		const isLinkActive = this.instance.state.get('LINK/isLinkActive') === true
+		const followers: unknown[] = isLinkActive ? (this.instance.state.get('LINK/followers') ?? []) : []
+		ret.push(...followers.map((_follower, i) => ({id: i + 2, label: (i + 2).toString()})))
 		return ret
 	}
 

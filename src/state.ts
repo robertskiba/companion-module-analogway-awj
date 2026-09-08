@@ -63,11 +63,11 @@ class StateMachine {
 		if (patharray.length === 0) {
 			return obj[first]
 		} else {
-			// if we are at an non existing branch -> return undefined
+			// if we are at a non-existent branch -> return undefined
 			if (obj[first] == undefined) {
 				return undefined
 			}
-			// else if we are at an branch -> go ahead
+			// else if we are at a branch -> go ahead
 			return this.get(patharray, obj[first])
 		}
 	}
@@ -107,7 +107,7 @@ class StateMachine {
 	}
 
 	/**
-	 * Stores the last message to the state with a locking mechanism. Message is only stored if there not had been an attempt to call this function in the last 800ms
+	 * Stores the last message to the state with a locking mechanism. Message is only stored if there has not been an attempt to call this function in the last 800ms
 	 * @param msg The message object
 	 */
 	private storeLastMsg(msg: { path: unknown; value: unknown} ): void {
@@ -129,7 +129,7 @@ class StateMachine {
 	}
 
 	/**
-	 * Handles a received object describing a state change, applies it to the local state storage, runs any needed subscriptions, checks feedbacks and eventually handles action recording
+	 * Handles a received object describing a state change, applies it to the local state storage, runs any needed subscriptions, checks feedbacks and possibly handles action recording
 	 * @param obj the AWJ object to apply
 	 * @returns
 	 */
@@ -253,11 +253,11 @@ class StateMachine {
 			//console.log('state update')
 			//console.log('\nstate update', JSON.stringify(this.stateobj))
 		} else {
-			// if we are at an non existing branch -> create
+			// if we are at a non-existent branch -> create
 			if (obj[first] == undefined) {
 				obj[first] = {}
 			}
-			// else if we are at an branch -> go ahead
+			// else if we are at a branch -> go ahead
 			this.set(patharray, value, obj[first])
 		}
 	}
@@ -309,11 +309,11 @@ class StateMachine {
 			}
 			// console.log('\nstate update', JSON.stringify(this.stateobj).substring(0, 500))
 		} else {
-			// if we are at an non existing branch -> nothing to delete
+			// if we are at a non-existent branch -> nothing to delete
 			if (obj[first] == undefined) {
 				return
 			}
-			// else if we are at an branch -> go ahead
+			// else if we are at a branch -> go ahead
 			this.delete(patharray, obj[first])
 		}
 	}

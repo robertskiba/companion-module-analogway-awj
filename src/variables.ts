@@ -16,6 +16,18 @@ export function initVariables(_instance: AWJinstance): TrackedVariable[] {
 			name: 'The label of this connection',
 		},
 		{
+			variableId: 'Device.Connected.Maindevice',
+			name: 'Main device connection status (mirrors this connection\'s own status: ok, connecting, disconnected, connection_failure, bad_config, unknown_error, unknown_warning, authentication_failure, insufficient_permissions)',
+		},
+		{
+			variableId: 'Device.Connected.Hotbackupdevice',
+			name: 'Hot Backup device connection status - "not_configured" while "Enable Hot Backup Device" is unchecked, otherwise "ok" or "disconnected" reflecting the actual mirror connection to the Hot Backup device',
+		},
+		{
+			variableId: 'Device.IP.Hotbackup',
+			name: 'Configured Hot Backup Device address - empty while "Enable Hot Backup Device" is unchecked',
+		},
+		{
 			variableId: 'selectedPreset',
 			name: 'Selected Preset (Program/Preview)',
 		},

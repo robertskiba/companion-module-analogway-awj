@@ -118,6 +118,24 @@ export const parseBoolean = (value: unknown): boolean => {
  * @param time as number of deciseconds
  * @returns timestring in format SECONDS.D, e.g. "1.5" - matches the "Set Transition Time" action's own seconds field (0.1 step), so a read value can be fed straight back into it
  */
-export const deciSceondsToString = (time: number): string => {
+export const deciSecondsToString = (time: number): string => {
     return (time / 10).toFixed(1)
+}
+
+/**
+ * Maps a raw Aquilon 'dev' suffix (e.g. 'RS6', 'CPLUS') to Analog Way's actual display spelling for that
+ * model - most (RS1-RS6, RSalpha) are just the raw suffix as-is, but the C-line needs real casing (CPLUS ->
+ * C+, CMAX -> Cmax, CMINI -> Cmini) since the device only ever reports it fully upper-cased. Falls back to
+ * the raw suffix unchanged for any future/unrecognized model, so something informative still shows either way.
+ */
+const AQUILON_MODEL_NAMES: Record<string, string> = {
+    CPLUS: 'C+',
+    CMAX: 'Cmax',
+    CMINI: 'Cmini',
+    RSALPHA: 'RSalpha',
+}
+
+export const formatAquilonModel = (dev: string): string => {
+    const suffix = dev.replace(/^NLC_/, '')
+    return `Aquilon ${AQUILON_MODEL_NAMES[suffix] ?? suffix}`
 }

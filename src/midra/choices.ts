@@ -37,7 +37,7 @@ export default class ChoicesMidra extends Choices {
 			number: NaN,
 			/** is it a screen */
 			isScreen: false,
-			/** is it a auxiliary screen */
+			/** is it an auxiliary screen */
 			isAux: false,
 			/** screen or auxSCreen */
 			prefixlong: '',
@@ -145,22 +145,33 @@ export default class ChoicesMidra extends Choices {
 
 	public getLiveInputArray(prefix?: string): Choicemeta[] {
 		const ret: Choicemeta[] = []
-	
+
 		if(prefix == undefined) prefix = 'INPUT'
-		const items = this.state.get('DEVICE/device/inputList/itemKeys')
-		if (items) {
-			items.forEach((key: string) => {
-				if (this.state.get('DEVICE/device/inputList/items/' + key + '/status/pp/isAvailable')) {
-					const plug = this.state.get('DEVICE/device/inputList/items/' + key + '/control/pp/plug')
-					ret.push({
-						id: key.replace(/^\w+_/, prefix + '_'),
-						label: this.state.get('DEVICE/device/inputList/items/' + key + '/plugList/items/' + plug + '/control/pp/label'),
-						index: key.replace(/^\w+_/, '')
-					})
-				}
-			})
+		const items: string[] = this.state.get('DEVICE/device/inputList/itemKeys') ?? []
+		const byNumber = new Map<number, string>()
+		items.forEach((key: string) => {
+			const n = Number(key.replace(/^\w+_/, ''))
+			if (!Number.isNaN(n)) byNumber.set(n, key)
+		})
+		// "Show also not existing..." lists every input up to this platform's theoretical maximum (meant for
+		// pre-programming before a bigger/different device is connected) - Midra has no per-input
+		// enable/disable concept, so only isAvailable/not-existing matters here.
+		const maxN = this.instance.config.showNotExisting ? this.constants.maxInputs : Math.max(0, ...byNumber.keys())
+		for (let n = 1; n <= maxN; n += 1) {
+			const key = byNumber.get(n)
+			const isAvailable = key ? this.state.get('DEVICE/device/inputList/items/' + key + '/status/pp/isAvailable') : false
+			if (isAvailable) {
+				const plug = this.state.get('DEVICE/device/inputList/items/' + key + '/control/pp/plug')
+				ret.push({
+					id: `${prefix}_${n}`,
+					label: this.state.get('DEVICE/device/inputList/items/' + key + '/plugList/items/' + plug + '/control/pp/label') ?? '',
+					index: n.toString()
+				})
+			} else if (this.instance.config.showNotExisting) {
+				ret.push({ id: `${prefix}_${n}`, label: '', index: n.toString() })
+			}
 		}
-	
+
 		return ret
 	}
 
@@ -326,7 +337,7 @@ export default class ChoicesMidra extends Choices {
 	/**
 	 * Returns array with some layer choices
 	 * @param param if it is a number that number of layer choices are returned, if it is a string the layers of the screen are returned
-	 * @param bkg whether to include only live layers (false) or also background and eventually foreground layer (true or omitted) 
+	 * @param bkg whether to include only live layers (false) or also background and possibly foreground layer (true or omitted) 
 	 */
 	public getLayersAsArray(param: string | number, bkg?: boolean, top?: boolean): Choicemeta[] {
 		const ret: Choicemeta[] = []

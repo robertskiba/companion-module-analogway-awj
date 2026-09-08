@@ -1,6 +1,7 @@
 import { AWJinstance } from '../index.js'
 import { State } from '../../types/State.js'
 import Constants from './constants.js'
+import { formatAquilonModel } from '../util.js'
 
 type Dropdown<t> = {id: t, label: string}
 
@@ -149,7 +150,7 @@ export default class Choices {
 			number: NaN,
 			/** is it a screen */
 			isScreen: false,
-			/** is it a auxiliary screen */
+			/** is it an auxiliary screen */
 			isAux: false,
 			/** screen or auxScreen */
 			prefixlong: '',
@@ -290,23 +291,32 @@ export default class Choices {
 		)
 	}
 
-	/** All Image Store slots that actually exist on this device (licensed/available), meant as the target of an "assign image" action. Empty slots are included, since assigning is how you fill them. */
+	/** All Image Store slots that actually exist on this device (licensed/available), meant as the target of an "assign image" action. Empty slots are included, since assigning is how you fill them. "Show also not existing..." additionally lists every slot up to maxStills, for pre-programming before a bigger/differently-licensed device is connected. */
 	public getStillStoreChoices(): Dropdown<string>[] {
 		const bankpath = 'DEVICE/device/stillList/'
-		const real: Dropdown<string>[] = (
-			this.state.get(this.state.concat(bankpath, 'itemKeys'))?.filter((itm: string) => {
-				return this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isAvailable']))
-			}).map((itm: string) => {
-				const label = this.state.get(this.state.concat(bankpath, ['items', itm, 'control', 'pp', 'label']))
-				const isValid = this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isValid']))
-				return {
-					id: itm,
-					label: `${itm}${label ? ' - ' + label : ''}${isValid ? '' : ' (empty)'}`,
-				}
-			}) ?? []
+		const availableIds = new Set<string>(
+			(this.state.get(this.state.concat(bankpath, 'itemKeys')) ?? []).filter((itm: string) =>
+				this.state.get(this.state.concat(bankpath, ['items', itm, 'status', 'pp', 'isAvailable']))
+			)
 		)
-		if (real.length > 0 || this.state.get('DEVICE')) return real
-		return Array.from({ length: this.constants.maxStills }, (_, i) => ({ id: `${i + 1}`, label: `${i + 1}` }))
+		if (availableIds.size === 0 && !this.state.get('DEVICE')) {
+			return Array.from({ length: this.constants.maxStills }, (_, i) => ({ id: `${i + 1}`, label: `${i + 1}` }))
+		}
+		const maxN = this.instance.config.showNotExisting
+			? this.constants.maxStills
+			: Math.max(0, ...[...availableIds].map(Number).filter((n) => !Number.isNaN(n)))
+		const ret: Dropdown<string>[] = []
+		for (let n = 1; n <= maxN; n += 1) {
+			const id = `${n}`
+			if (availableIds.has(id)) {
+				const label = this.state.get(this.state.concat(bankpath, ['items', id, 'control', 'pp', 'label']))
+				const isValid = this.state.get(this.state.concat(bankpath, ['items', id, 'status', 'pp', 'isValid']))
+				ret.push({ id, label: `${id}${label ? ' - ' + label : ''}${isValid ? '' : ' (empty)'}` })
+			} else if (this.instance.config.showNotExisting) {
+				ret.push({ id, label: `${id} (not existing)` })
+			}
+		}
+		return ret
 	}
 
 	/** All valid images in the Image Library, with file name and resolution, meant as the source of an "assign image" action */
@@ -733,7 +743,7 @@ export default class Choices {
 	/**
 	 * Returns array with some layer choices
 	 * @param param if it is a number that number of layer choices are returned, if it is a string the layers of the screen are returned
-	 * @param bkg whether to include only live layers (false) or also background and eventually foreground layer (true or omitted)
+	 * @param bkg whether to include only live layers (false) or also background and possibly foreground layer (true or omitted)
 	 * @param top whether to include foreground layer if available, follows bkg if omitted
 	*/
 	public getLayersAsArray(param: string | number, bkg?: boolean, _top?: boolean): Choicemeta[] {
@@ -756,7 +766,7 @@ export default class Choices {
 	/**
 	 * Returns array with some layer choices
 	 * @param param if it is a number that number of layer choices are returned, if it is a string the layers of the screen are returned
-	 * @param bkg whether to include only live layers (false) or also background and eventually foreground layer (true or omitted) 
+	 * @param bkg whether to include only live layers (false) or also background and possibly foreground layer (true or omitted) 
 	 * @param top whether to include foreground layer if available, follows bkg if omitted
 	 */
 	public getLayerChoices(param: string | number, bkg?: boolean, top?: boolean): Dropdown<string>[] {
@@ -791,18 +801,31 @@ export default class Choices {
 		// explicitly asked for the Aquilon-consistent fix over a cosmetic-only relabel). Midra's Multiviewer
 		// stays fully reachable via its own dedicated getMultiviewerChoices()/getMultiviewerArray() override.
 		const multiviewerKeys = this.getMultiviewerOutputListKeys()
-		const real: Choicemeta[] = this.state.get('DEVICE/device/outputList/itemKeys')?.filter((itm: string) => {
-			return this.state.get('DEVICE/device/outputList/items/'+itm+'/status/pp/isAvailable') === true && !multiviewerKeys.includes(itm)
-		}).map((itm: string) => {
-			return {
-				id: itm,
-				label: this.state.get('DEVICE/device/outputList/items/'+itm+'/control/pp/label')
-			}
-		}) ?? []
 		// no dedicated max-Outputs constant exists - 96 matches this module's own established assumption for
 		// the outputList array's theoretical size (see the registration-scope rule discussion elsewhere in
 		// this project, "confirmed both are always-present 256/96-key state arrays").
-		return this.syntheticRangeIfNeverConnected(real, 96, (n) => `${n}`)
+		const maxOutputs = 96
+		const availableIds = new Set<string>(
+			(this.state.get('DEVICE/device/outputList/itemKeys') ?? []).filter((itm: string) =>
+				!multiviewerKeys.includes(itm) && this.state.get('DEVICE/device/outputList/items/'+itm+'/status/pp/isAvailable') === true
+			)
+		)
+		// "Show also not existing..." lists every output up to the theoretical maximum above (meant for
+		// pre-programming before a bigger/different device is connected) - otherwise stop at the highest
+		// number the connected device actually reports, same as before.
+		const maxN = this.instance.config.showNotExisting
+			? maxOutputs
+			: Math.max(0, ...[...availableIds].map(Number).filter((n) => !Number.isNaN(n)))
+		const real: Choicemeta[] = []
+		for (let n = 1; n <= maxN; n += 1) {
+			const id = `${n}`
+			if (availableIds.has(id)) {
+				real.push({ id, label: this.state.get('DEVICE/device/outputList/items/'+id+'/control/pp/label') ?? '', index: id })
+			} else if (this.instance.config.showNotExisting) {
+				real.push({ id, label: '', index: id })
+			}
+		}
+		return this.syntheticRangeIfNeverConnected(real, maxOutputs, (n) => `${n}`)
 	}
 
 	public getOutputChoices(): Dropdown<string>[] {
@@ -942,20 +965,24 @@ export default class Choices {
 	/** Is a screen / preset combination locked */
 	public isLocked(screen: string, preset: string): boolean {
 		preset = preset.replace(/.+m.*/i, 'PROGRAM').replace(/.+w.*/i, 'PREVIEW')
-		let path = ['LOCAL']
-		if (this.instance.state.syncSelection) {
-			path = ['REMOTE', 'live', 'screens']
-		}
+		const useRemote = this.instance.state.syncSelection
+		const path = useRemote ? ['REMOTE', 'live', 'screens'] : ['LOCAL']
+		// LOCAL's presetModeLock object is keyed by the plain short id (e.g. "S1"/"A1" - see state.ts's default
+		// and setScreenLock()/the "Lock Screen" action's own LOCAL branch), while REMOTE (WebRCS's own state) is
+		// keyed by the platform's long id instead (e.g. Midra's "SCREEN_1"/"AUX_1"). Using platformLongId for
+		// both here was a bug: on Midra (where platformLongId differs from id, unlike LivePremier/LivePremier4)
+		// every LOCAL-mode ("sync selection" off) lookup silently missed, always reading as unlocked - or, for
+		// the "all" branch, as permanently all-locked.
+		const keyFor = (id: string) => useRemote ? this.getScreenInfo(id).platformLongId : this.getScreenInfo(id).id
 		if (screen === 'all') {
-			const allscreens = this.getChosenScreenAuxes('all')
-				.map( screenId => this.getScreenInfo(screenId).platformLongId )
+			const allscreens = this.getChosenScreenAuxes('all').map(keyFor)
 			return (
 				allscreens.find((scr) => {
 					return this.state.get([...path, 'presetModeLock', preset, scr]) === false
 				}) === undefined
 			)
 		} else {
-			return this.state.get([...path, 'presetModeLock', preset, this.getScreenInfo(screen).platformLongId ])
+			return this.state.get([...path, 'presetModeLock', preset, keyFor(screen)])
 		}
 	}
 
@@ -1142,7 +1169,7 @@ export default class Choices {
 	}
 
 	/**
-	 * Returnes the input array of screens but extends it by all active screens or the selected screens if the input array containes 'all' or 'sel'
+	 * Returns the input array of screens but extends it by all active screens or the selected screens if the input array contains 'all' or 'sel'
 	 * @param input array of strings to check
 	 * @param prefix what to write in front of the screen number, defaults to 'S'
 	 * @returns either all active screens or the input
@@ -1171,7 +1198,7 @@ export default class Choices {
 	}
 
 	/**
-	 * Returnes the input array of auxes but extends it by all active auxes or the selected auxes if the input array containes 'all' or 'sel'
+	 * Returns the input array of auxes but extends it by all active auxes or the selected auxes if the input array contains 'all' or 'sel'
 	 * @param input array of strings to check
 	 * @returns either all active auxes or the input
 	 */
@@ -1203,14 +1230,14 @@ export default class Choices {
 	}
 
 	/**
-	 * Returnes the input array of screens and maybe auxes if on this platform they support screen memories but extends it by all active screens and auxes or the selected screens/auxes if the input array containes 'all' or 'sel'
+	 * Returns the input array of screens and maybe auxes if on this platform they support screen memories but extends it by all active screens and auxes or the selected screens/auxes if the input array contains 'all' or 'sel'
 	 * @param input array of strings to check
 	 * @returns either all active screens or the input in prefix+number(S1 A2) format
 	 */
 	public getChosenScreensSupportedByScreenMemories = this.getChosenScreenAuxes
 
 	/**
-	 * Returnes the input array of screens and auxes but extends it by all active screens and auxes or the selected screens/auxes if the input array containes 'all' or 'sel'
+	 * Returns the input array of screens and auxes but extends it by all active screens and auxes or the selected screens/auxes if the input array contains 'all' or 'sel'
 	 * @param input array of strings to check
 	 * @returns either all active screens or the input in prefix+number(S1 A2) format
 	 */
@@ -1275,6 +1302,167 @@ export default class Choices {
 	 */
 	getLinkedDevicesChoices(): Dropdown<number>[] {
 		return [{id: 1, label: '1 (Leader 👑)'}]
+	}
+
+	/**
+	 * get IP, MAC address, model name and firmware version of a linked Follower device (2-4), read from its
+	 * own entry in device/system/deviceList/items - confirmed present in the same shape on all 4 slots
+	 * against the Analog Way simulator (deviceKey 1 = Leader, 2-4 = Followers), same byte-array encoding as
+	 * getMACaddress()/the config's ipv4 fields elsewhere. Returns empty strings if the link is currently
+	 * inactive (isLinkActive false - e.g. a configured Follower temporarily unplugged/standalone) or has
+	 * fewer Followers than the given deviceKey needs.
+	 */
+	public getLinkedDeviceInfo(deviceKey: number): {ip: string, mac: string, model: string, firmware: string} {
+		const isLinkActive = this.state.get('LINK/isLinkActive') === true
+		const followerCount: number = isLinkActive ? (this.state.get('LINK/followers')?.length ?? 0) : 0
+		if (deviceKey - 1 > followerCount) return {ip: '', mac: '', model: '', firmware: ''}
+
+		const macBytes = this.state.get(['DEVICE', 'device', 'system', 'deviceList', 'items', deviceKey.toString(), 'network', 'adapter', 'pp', 'macAddress'])
+		const ipBytes = this.state.get(['DEVICE', 'device', 'system', 'deviceList', 'items', deviceKey.toString(), 'network', 'ipv4', 'pp', 'ip'])
+		const dev: string = this.state.get(['DEVICE', 'device', 'system', 'deviceList', 'items', deviceKey.toString(), 'pp', 'dev']) ?? ''
+		const firmware: string = this.state.get(['DEVICE', 'device', 'system', 'deviceList', 'items', deviceKey.toString(), 'version', 'pp', 'updater']) ?? ''
+
+		const mac = Array.isArray(macBytes)
+			? macBytes.map((elem: number) => elem.toString(16).padStart(2, '0')).join(':')
+			: ''
+		const ip = Array.isArray(ipBytes) ? ipBytes.join('.') : ''
+		const model = this.deriveLinkedDeviceModelName(dev)
+
+		return {ip, mac, model, firmware}
+	}
+
+	/**
+	 * Maps a raw 'dev' identifier (e.g. 'NLC_RS6') to a human-readable model name, same prefixes/naming as
+	 * the master-device detection in connection.ts's connect() - kept as a small separate lookup here since
+	 * that one also drives platform routing/logging and isn't easily reused as-is. Falls back to the raw
+	 * 'dev' string for an unrecognized prefix, so something informative is still shown either way.
+	 */
+	private deriveLinkedDeviceModelName(dev: string): string {
+		if (!dev) return ''
+		if (dev.substring(0, 3) === 'NLC') return formatAquilonModel(dev)
+		if (dev.match(/^EIKOS/)) return 'Eikos 4k'
+		if (dev.match(/^PULSE/)) return 'Pulse 4k'
+		if (dev.match(/^QMX/)) return 'QuikMatrix 4k'
+		if (dev.match(/^QVU/)) return 'QuickVu 4k'
+		if (dev.match(/^ZEN100/)) return 'Zenith 100'
+		if (dev.match(/^ZEN200/)) return 'Zenith 200'
+		if (dev.match(/^DBG/)) return 'MNG_DEBUG'
+		return dev
+	}
+
+	/** Known plug-type display-name overrides, for cases where the raw protocol value (e.g. 'DISPLAY_PORT')
+	 * isn't already the desired display text. Extend as more card/connector types get confirmed live. */
+	private static readonly PLUG_TYPE_NAMES: Record<string, string> = {
+		DISPLAY_PORT: 'DisplayPort',
+		OPTIC: 'HDMI Fiber',
+	}
+
+	private formatPlugType(type: string, count: number): string {
+		// SDI's real variant depends on the port count, not the plugType string alone - confirmed live
+		// (2026-09-05): a 4-port SDI card is 12G-SDI, an 8-port SDI card is 3G-SDI.
+		if (type === 'SDI') return count >= 8 ? '3G-SDI' : '12G-SDI'
+		return Choices.PLUG_TYPE_NAMES[type] ?? type
+	}
+
+	/** Known CARD-level display-name overrides, for cards whose individual ports report a generic plugType
+	 * (e.g. an NDI/12G-SDI card's ports still report plain 'SDI') even though the card itself is something
+	 * more specific - keyed by the slot's own 'attributes.febeCardType', takes priority over per-port
+	 * plugTypes when present. Confirmed live (2026-09-05): 'FE_IP_SDI' is the Input-side NDI/12G-SDI card;
+	 * an Output-side equivalent (if it exists) is an unconfirmed guess at the same 'BE_IP_SDI' naming pattern. */
+	private static readonly FEBE_CARD_TYPE_NAMES: Record<string, string> = {
+		FE_IP_SDI: 'NDI/12G-SDI',
+		BE_IP_SDI: 'NDI/12G-SDI',
+		// Only present in the last Output port - required for the system to be linkable at all (see the
+		// Beta 6 "linked device" work elsewhere in this module).
+		BE_EXT_QSFP: 'QSFP+ Link Card',
+	}
+
+	/**
+	 * Builds a human-readable "Inputs: ...\nOutputs: ..." summary of a device's installed I/O cards, for
+	 * direct display in the config (Device Model / Device N) - NOT sourced from the WebSocket-pushed DEVICE
+	 * state tree at all. Confirmed live (2026-09-05) against the real WebRCS UI's own "Device Overview -
+	 * Hardware" panel: the actual data comes from a separate REST call, GET /api/device/chassis/{deviceKey}
+	 * (see connection.ts's fetchChassisInfo(), cached per device under LOCAL/chassis/{deviceKey}). Each
+	 * physical card is one 'slots' entry keyed like 'SLOT_IN_3' (cardType IN/OUT, slot number from the key);
+	 * two slots share one 'attributes.cardKey' per physical Input/Output panel (e.g. 'IN_1'), each holding
+	 * one physical card. Port COUNT per connector type is NOT a plain number anywhere - it has to be derived
+	 * by counting that slot's 'elements' entries (type 'PLUGS') whose 'plugTypes' array is non-empty; an
+	 * empty/unplugged slot or a filler card (e.g. 'FE_CAP') has every element's plugTypes empty and is
+	 * skipped entirely. Returns an empty string if there is no chassis data yet (not connected, or this
+	 * device/deviceKey doesn't exist).
+	 */
+	public getInstalledCardsSummary(deviceKey: number): string {
+		const slots = this.state.get(['LOCAL', 'chassis', deviceKey.toString(), 'slots'])
+		if (!Array.isArray(slots)) return ''
+
+		const describeSlot = (slot: any): {group: 'IN' | 'OUT', num: number, text: string} | null => {
+			const cardType = slot?.attributes?.cardType
+			if (cardType !== 'IN' && cardType !== 'OUT') return null
+			const match = /^SLOT_(?:IN|OUT)_(\d+)$/.exec(slot?.key ?? '')
+			if (!match) return null
+
+			const num = parseInt(match[1], 10)
+			const label = cardType === 'IN' ? 'Input' : 'Output'
+			const febeCardType: string | undefined = slot?.attributes?.febeCardType
+
+			// The QSFP+ Link Card isn't a normal video I/O card (no plugTypes of its own) - shown as its own
+			// "Slot N: ..." line, without the usual "Input/Output-Card N" label or a port count, and checked
+			// before the port-count/filler logic below since it would otherwise look like an empty/filler slot.
+			if (febeCardType === 'BE_EXT_QSFP') {
+				return {group: cardType, num, text: `Slot ${num}: ${Choices.FEBE_CARD_TYPE_NAMES.BE_EXT_QSFP}`}
+			}
+
+			const nonEmptyElements = (slot.elements ?? []).filter(
+				(el: any) => el?.type === 'PLUGS' && (el?.attributes?.plugTypes ?? []).length > 0
+			)
+			const portCount = nonEmptyElements.length
+
+			if (portCount === 0) {
+				// No functional ports - either the slot is genuinely empty (febeCardType 'UNKNOWN', confirmed
+				// live), or a filler/blanking card is physically present but provides nothing ('FE_CAP'/'BE_CAP',
+				// confirmed live too - guessing "Filler Card" as the display name for that one, not yet
+				// confirmed with Analog Way's own wording). A genuinely empty slot is still listed (as "Slot N:
+				// empty/no card present", not "Card N:" since there's no card there at all) rather than silently
+				// omitted; anything else with no ports gets listed with its raw type, so it's visible rather
+				// than silently missing, and easy to correct once the real display name is known.
+				if (!febeCardType || febeCardType === 'UNKNOWN') {
+					return {group: cardType, num, text: `${label} Slot ${num}: empty/no card present`}
+				}
+				const filler = /_CAP$/.test(febeCardType) ? 'Filler Card' : `no ports (raw type: ${febeCardType})`
+				return {group: cardType, num, text: `${label} Card ${num}: ${filler}`}
+			}
+
+			// A card-level override (e.g. NDI/12G-SDI) takes priority over the per-port plugTypes label, since
+			// some cards report a generic plugType (plain 'SDI') on every port despite being something more
+			// specific at the card level - confirmed live for 'FE_IP_SDI'.
+			const cardOverride = febeCardType ? Choices.FEBE_CARD_TYPE_NAMES[febeCardType] : undefined
+			if (cardOverride) {
+				return {group: cardType, num, text: `${label} Card ${num}: ${cardOverride} (${portCount} Port${portCount === 1 ? '' : 's'})`}
+			}
+
+			const plugCounts: Record<string, number> = {}
+			for (const el of nonEmptyElements) {
+				for (const plugType of el.attributes.plugTypes) {
+					plugCounts[plugType] = (plugCounts[plugType] ?? 0) + 1
+				}
+			}
+			const parts = Object.entries(plugCounts).map(([plugType, count]) => `${this.formatPlugType(plugType, count)} (${count} Port${count === 1 ? '' : 's'})`)
+
+			return {group: cardType, num, text: `${label} Card ${num}: ${parts.join(', ')}`}
+		}
+
+		const described = (slots as any[]).map(describeSlot).filter((s): s is NonNullable<typeof s> => s !== null)
+		const byNum = (a: {num: number}, b: {num: number}): number => a.num - b.num
+		const inputs = described.filter((s) => s.group === 'IN').sort(byNum).map((s) => s.text)
+		const outputs = described.filter((s) => s.group === 'OUT').sort(byNum).map((s) => s.text)
+
+		if (inputs.length === 0 && outputs.length === 0) return ''
+
+		// Two-column Markdown table (Inputs | Outputs) - NOT confirmed live whether Companion's config
+		// static-text actually renders Markdown tables; falls back to an empty cell for the shorter column.
+		const rowCount = Math.max(inputs.length, outputs.length)
+		const rows = Array.from({length: rowCount}, (_v, i) => `| ${inputs[i] ?? ''} | ${outputs[i] ?? ''} |`)
+		return ['| Inputs | Outputs |', '| --- | --- |', ...rows].join('\n')
 	}
 
 	/**

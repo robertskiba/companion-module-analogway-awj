@@ -1,7 +1,7 @@
 import {AWJinstance} from '../index.js'
 import { Subscription } from '../../types/Subscription.js'
 import Subscriptions from '../awjdevice/subscriptions.js'
-import { deciSceondsToString } from '../util.js'
+import { deciSecondsToString } from '../util.js'
 
 /**
  * Class for managing and checking of the subscriptions.
@@ -28,6 +28,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 		'selectedLayerCroppingChange',
 		'layerPropertyStatusChange',
 		'selectedScreenChange',
+		'hotBackupSelectionChange',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
 		'backupSetChange',
@@ -153,7 +154,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
 					}
 					this.instance.setVariableValues({
-						[varId]: deciSceondsToString(deciseconds),
+						[varId]: deciSecondsToString(deciseconds),
 					})
 				}
 				if (pres === 'takeDownTime') {
@@ -164,7 +165,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 						this.instance.addVariable({ id: 'screenTransitionTime', variableId: varId, name: `Transition time for ${screen} ${presname}` })
 					}
 					this.instance.setVariableValues({
-						[varId]: deciSceondsToString(deciseconds),
+						[varId]: deciSecondsToString(deciseconds),
 					})
 				}
 
@@ -287,12 +288,12 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 					this.instance.state.set(`LOCAL/screens/${screen}/pgm/preset`, program);
 					this.instance.state.set(`LOCAL/screens/${screen}/pvw/preset`, preview);
 					this.instance.setVariableValues({
-						[this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)]: deciSceondsToString(
+						[this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)]: deciSecondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenGroupList', 'items', screen, 'control', 'pp', 'takeUpTime'])
 						)
 					});
 					this.instance.setVariableValues({
-						[this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)]: deciSceondsToString(
+						[this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)]: deciSecondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenGroupList', 'items', screen, 'control', 'pp', 'takeDownTime'])
 						)
 					});
@@ -305,7 +306,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 					this.instance.state.set(`LOCAL/screens/${screen}/pgm/preset`, program);
 					this.instance.state.set(`LOCAL/screens/${screen}/pvw/preset`, preview);
 					this.instance.setVariableValues({
-						[this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)]: deciSceondsToString(
+						[this.varName(`screen${screen}timePGM`, `${screen}.pgm.time`)]: deciSecondsToString(
 							this.instance.state.get([
 								'DEVICE',
 								'device',
@@ -317,7 +318,7 @@ export default class SubscriptionsLivepremier extends Subscriptions {
 						)
 					});
 					this.instance.setVariableValues({
-						[this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)]: deciSceondsToString(
+						[this.varName(`screen${screen}timePVW`, `${screen}.prw.time`)]: deciSecondsToString(
 							this.instance.state.get(['DEVICE', 'device', 'screenGroupList', 'items', screen, 'control', 'pp', 'takeUpTime'])
 						)
 					});

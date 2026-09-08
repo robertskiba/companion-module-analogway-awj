@@ -2,7 +2,7 @@ import {AWJinstance} from '../index.js'
 import { Subscription } from '../../types/Subscription.js'
 import { InstanceStatus } from '@companion-module/base'
 import Subscriptions from '../awjdevice/subscriptions.js'
-import { deciSceondsToString } from '../util.js'
+import { deciSecondsToString } from '../util.js'
 
 /**
  * Class for managing and checking of the subscriptions.
@@ -29,6 +29,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'selectedLayerCroppingChange',
 		'layerPropertyStatusChange',
 		'selectedScreenChange',
+		'hotBackupSelectionChange',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
 		// Backup does not exist on Midra/Alta - see the matching comment in midra/actions.ts.
@@ -131,10 +132,10 @@ export default class SubscriptionsMidra extends Subscriptions {
 					this.instance.addVariable({ id: 'screenTransitionTime', variableId: pgmVarId, name: `Transition time for S${screenNumber} PGM` })
 				}
 				this.instance.setVariableValues({
-					[pvwVarId]: deciSceondsToString(deciseconds),
+					[pvwVarId]: deciSecondsToString(deciseconds),
 				})
 				this.instance.setVariableValues({
-					[pgmVarId]: deciSceondsToString(deciseconds),
+					[pgmVarId]: deciSecondsToString(deciseconds),
 				})
 
 				return false
@@ -160,10 +161,10 @@ export default class SubscriptionsMidra extends Subscriptions {
 					this.instance.addVariable({ id: 'auxScreenTransitionTime', variableId: pgmVarId, name: `Transition time for A${screenNumber} PGM` })
 				}
 				this.instance.setVariableValues({
-					[pvwVarId]: deciSceondsToString(deciseconds),
+					[pvwVarId]: deciSecondsToString(deciseconds),
 				})
 				this.instance.setVariableValues({
-					[pgmVarId]: deciSceondsToString(deciseconds),
+					[pgmVarId]: deciSecondsToString(deciseconds),
 				})
 
 				return false
@@ -437,7 +438,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const screenNum = patharr[5];
 				const prefix = patharr[3].charAt(0).toUpperCase()
 				let program = '', preview = ''
-				const takeTime = deciSceondsToString(
+				const takeTime = deciSecondsToString(
 						this.instance.state.get(['DEVICE', 'device', 'transition', ...screenpath, 'control', 'pp', 'takeTime'])
 					)
 

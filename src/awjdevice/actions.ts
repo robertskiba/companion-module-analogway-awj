@@ -12,7 +12,7 @@ import {
 import { Config } from '../config.js'
 import { compileExpression } from '@nx-js/compiler-util'
 import { AWJconnection } from '../connection.js'
-import { splitRgb } from '@companion-module/base'
+import { splitRgb, InstanceStatus } from '@companion-module/base'
 import { StateMachine } from '../state.js'
 import Constants from './constants.js'
 import { timeToSeconds, parseBoolean } from '../util.js'
@@ -116,6 +116,7 @@ export default class Actions {
 		'cstawjcmd',
 		'cstawjgetcmd',
 		'devicePower',
+		'deviceFailoverToHotBackup',
 		'deviceBackupSetSource',
 		'deviceBackupAutoMode',
 	]
@@ -609,6 +610,11 @@ export default class Actions {
 						'pp',
 					]
 					this.connection.sendWSmessage([...layerPath, 'xRequest'], false, true)
+					// Hot Backup: always force-unlock on the backup device first, regardless of Main's own lock
+					// state - see mirrorUnlockToBackup()'s doc comment for why (nobody operates Backup directly,
+					// so there is no "wrong to unlock" case, only a silently-blocked mirrored recall to avoid).
+					this.connection.mirrorUnlockToBackup(layer.screenAuxKey, preset)
+					this.connection.mirrorToBackup([...layerPath, 'xRequest'], false, true)
 					waitPromises.push(this.waitForPulseComplete(['DEVICE', ...layerPath, 'isLoading']))
 				}
 				if (parseBoolean(action.options.relockAfterChange)) {
@@ -861,17 +867,15 @@ export default class Actions {
 				// itself is near-instant, so unlike Take there's no need to release the lock before waiting.
 				return this.instance.serialize(targetScreens, async () => {
 				for (const screen of targetScreens) {
-					this.connection.sendWSmessage(
-						[
-							...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
-							'items',
-							screen,
-							'control',
-							'pp',
-							'xCut'
-						],
-						true
-					)
+					const path = [
+						...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
+						'items',
+						screen,
+						'control',
+						'pp',
+						'xCut'
+					]
+					this.connection.sendWSmessage(path, true)
 				}
 				// Confirms receipt only, not full completion - see waitForPulseComplete()'s doc comment for why
 				// a fixed delay (not a status poll) is used specifically for Take/Cut.
@@ -897,7 +901,7 @@ export default class Actions {
 				{
 					id: 'info',
 					type: 'static-text',
-					label: 'Beware: in WebRCS you always set the T-Bar Position for ALL screens. T-Bar position is never syncronized.',
+					label: 'Beware: in WebRCS you always set the T-Bar Position for ALL screens. T-Bar position is never synchronized.',
 					value: ''
 				},
 				{
@@ -5299,6 +5303,32 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					sel = 2
 				}
 				const screeninfo = this.choices.getScreenInfo(action.options.screen)
+				// Computed once (from the currently-known selection, same add/remove/replace/toggle logic as
+				// below) regardless of which branch Main itself takes - this is what Main's selection SHOULD
+				// become, mirrored to Backup as one absolute "replace" rather than replaying the same relative
+				// op (which would risk drifting if Backup's own selection state ever diverges - see the "Device
+				// - Failover to Hot Backup" design notes on relative-command mirroring risk).
+				const currentSelection = this.choices.getSelectedScreens()
+				let resultingSelection: string[]
+				switch (sel) {
+					case 0:
+						resultingSelection = currentSelection.filter((id) => id !== screeninfo.id)
+						break
+					case 1:
+						resultingSelection = currentSelection.includes(screeninfo.id) ? currentSelection : [...currentSelection, screeninfo.id]
+						break
+					case 2:
+						resultingSelection = [screeninfo.id]
+						break
+					case 3:
+						resultingSelection = currentSelection.includes(screeninfo.id)
+							? currentSelection.filter((id) => id !== screeninfo.id)
+							: [...currentSelection, screeninfo.id]
+						break
+					default:
+						resultingSelection = currentSelection
+				}
+				this.connection.mirrorSelectionToBackup(resultingSelection)
 				if (this.state.syncSelection) {
 					switch (sel) {
 						case 0:
@@ -5822,7 +5852,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	}
 
 	/**
-	 * MARK: Switch selection syncronization with device on/off
+	 * MARK: Switch selection synchronization with device on/off
 	 */
 	get remoteSync() {
 		type RemoteSync = {sync: number}
@@ -7359,7 +7389,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		const devicePower: AWJaction<DevicePower> = {
 			name: 'Device - Power',
 			sortName: '08 Device - Power',
-			description: 'Switches the device on (Wake on LAN), off, or reboots it.',
+			description: 'Switches the device on (Wake on LAN), off, or reboots it. On a linked system (e.g. Aquilon), Wake on LAN also wakes every Follower device whose MAC address was detected on a previous connection (see the connection\'s config fields), not just the Leader.',
 			options: [
 				{
 					id: 'action',
@@ -7377,8 +7407,18 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				const path = ['device','system','shutdown','cmd','pp','xRequest']
 
 				if (action.options.action === 'on') {
-					const mac = this.instance.config.macaddress.split(/[,:-_.\s]/).join('')
-					this.connection.wake(mac)
+					const macs = [
+						this.instance.config.macaddress,
+						this.instance.config.device2mac,
+						this.instance.config.device3mac,
+						this.instance.config.device4mac,
+					]
+					for (const rawMac of macs) {
+						if (!rawMac) continue
+						const mac = rawMac.split(/[,:-_.\s]/).join('')
+						if (mac.length !== 12) continue // covers 'no link detected' and any other non-MAC placeholder
+						this.connection.wake(mac)
+					}
 					this.connection.resetReconnectInterval()
 				}
 				if (action.options.action === 'off') {
@@ -7394,6 +7434,104 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		}
 
 		return devicePower
+	}
+
+	/**
+	 * MARK: Failover to Hot Backup
+	 */
+	get deviceFailoverToHotBackup() {
+		type DeviceFailoverToHotBackup = { safetyConfirm: boolean }
+
+		const deviceFailoverToHotBackup: AWJaction<DeviceFailoverToHotBackup> = {
+			name: 'Device - Failover to Hot Backup',
+			sortName: '08 Device - Failover to Hot Backup',
+			description: 'Swaps the Hot Backup Device address with the current Device Network Address, then reconnects to what was the Hot Backup Device - use this immediately if the main device fails during a show. The old main device becomes the new Hot Backup Device address, so this action is also how you swap back afterwards. Requires "Enable Hot Backup Device" to be checked and a valid Hot Backup Device Address configured; does nothing otherwise.',
+			options: [
+				{
+					id: 'currentMainDeviceInfo',
+					type: 'static-text',
+					label: 'Current Main Device',
+					// Re-read fresh every time this action's definition is fetched (a plain getter, not cached) -
+					// same live-hint convention as e.g. Audio - Dante Functions' "(currently: X)" pre-fills.
+					value:
+						`${this.instance.config.deviceaddr || '(not configured)'}` +
+						`${this.instance.config.deviceModel ? ` - ${this.instance.config.deviceModel}` : ''}` +
+						`\n${this.connection.isConnected ? 'connected' : 'not connected'}`,
+					disableAutoExpression: true,
+				},
+				{
+					id: 'currentHotBackupDeviceInfo',
+					type: 'static-text',
+					label: 'Current Hot Backup Device',
+					// While disabled, the stored address is irrelevant (the Failover action refuses to run
+					// anyway, see the callback below) - show "(not configured)" rather than a leftover address
+					// that looks active, and skip the connection line entirely rather than "not connected",
+					// which reads like a fault.
+					value: this.instance.config.hotBackupEnabled
+						? `${this.instance.config.hotBackupAddress || '(not configured)'}\n${this.connection.backupConnection.isConnected ? 'connected' : 'not connected'}`
+						: '(not configured)',
+					disableAutoExpression: true,
+				},
+				{
+					id: 'safetyConfirm',
+					type: 'checkbox',
+					label: 'I know what I am doing.',
+					tooltip: 'Safety guard: while unchecked, this action does nothing at all. Swapping to the Hot Backup Device switches which physical device this connection controls - only do this when you have actually confirmed the main device has failed, and are aware the Hot Backup Device only reflects whatever Recall/Take/Cut/Preset commands this module itself has sent it (see the "Enable Hot Backup Device" config option\'s own tooltip for the full list of caveats).',
+					default: false,
+					disableAutoExpression: true,
+				},
+			],
+			callback: (action) => {
+				if (!parseBoolean(action.options.safetyConfirm)) {
+					this.instance.log('warn', 'Failover to Hot Backup: safety checkbox not checked, doing nothing.')
+					return
+				}
+				const FAILOVER_COOLDOWN_MS = 30_000
+				const msSinceLastFailover = Date.now() - this.instance.lastFailoverAt
+				if (msSinceLastFailover < FAILOVER_COOLDOWN_MS) {
+					this.instance.log('warn', `Failover to Hot Backup: ignored, only ${Math.round(msSinceLastFailover / 1000)}s since the last failover - wait ${Math.ceil((FAILOVER_COOLDOWN_MS - msSinceLastFailover) / 1000)}s more before triggering again, to guard against an accidental double-press swapping straight back.`)
+					return
+				}
+				if (!this.instance.config.hotBackupEnabled) {
+					this.instance.log('warn', 'Failover to Hot Backup requested, but "Enable Hot Backup Device" is not checked in the connection\'s config - ignoring.')
+					return
+				}
+				const backupAddr = this.instance.config.hotBackupAddress?.trim()
+				if (!backupAddr) {
+					this.instance.log('warn', 'Failover to Hot Backup requested, but no Hot Backup Device Address is configured - ignoring.')
+					return
+				}
+				if (this.connection.getURLobj(backupAddr) === null) {
+					this.instance.log('warn', `Failover to Hot Backup requested, but "${backupAddr}" is not a valid address - ignoring.`)
+					return
+				}
+				// Not a hard block - a manual failover is meant to always work, even against a backup that's
+				// momentarily unreachable (the reconnect below will keep retrying independently either way) -
+				// but worth a clear warning, since triggering this against a backup that never actually
+				// received the mirrored commands could mean landing on a stale/empty show.
+				if (!this.connection.backupConnection.isConnected) {
+					this.instance.log('warn', 'Failover to Hot Backup: the Hot Backup Device is not currently connected (commands sent while it was unreachable were never mirrored) - proceeding anyway since this was requested manually.')
+				}
+				this.instance.lastFailoverAt = Date.now()
+				const oldMainAddr = this.instance.config.deviceaddr
+				this.instance.config.deviceaddr = backupAddr
+				this.instance.config.hotBackupAddress = oldMainAddr
+				// saveConfig() called BY THE MODULE ITSELF (as opposed to the user editing a field in
+				// Companion's UI) only persists/displays the new values - confirmed live (2026-09-05) that it
+				// does NOT loop back into configUpdated(), so the "deviceaddr changed -> reconnect" logic
+				// living there never runs for this path. Trigger the reconnect explicitly instead, the same
+				// calls configUpdated() itself makes - including restarting the Hot Backup mirror connection,
+				// now pointed at the old main address (completing the role swap in both directions).
+				this.instance.saveConfig(this.instance.config)
+				this.instance.updateStatus(InstanceStatus.Connecting)
+				this.connection.disconnect()
+				this.connection.connect(backupAddr)
+				this.connection.updateBackupConnection()
+				this.instance.log('warn', `Failed over: now connecting to the former Hot Backup Device (${backupAddr}). The old main device (${oldMainAddr}) is now configured as the Hot Backup Device.`)
+			}
+		}
+
+		return deviceFailoverToHotBackup
 	}
 
 }
