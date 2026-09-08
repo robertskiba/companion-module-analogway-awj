@@ -1,4 +1,5 @@
 import { combineRgb, JsonObject, SomeCompanionConfigField } from '@companion-module/base'
+import { compareFirmwareVersions } from './util.js'
 
 export interface Config extends JsonObject {
 	deviceaddr: string
@@ -70,29 +71,33 @@ function installedCardsField(id: string, summary?: string): SomeCompanionConfigF
 }
 
 // Analog Way's currently recommended firmware baseline - devices below this get an "Update Suggested" hint.
-// Update this constant when a newer recommended version is confirmed.
-const RECOMMENDED_FIRMWARE = '6.2.73'
+// Update this constant when a newer recommended version is confirmed. Also used by choices.ts's
+// isFirmwareAtLeast() as the optimistic assumption before any real device has connected - keep it ahead of
+// every firmware gate actually in use, or offline pre-programming could start assuming a gated feature isn't
+// available when it actually would be once connected.
+export const RECOMMENDED_FIRMWARE = '6.2.73'
 
 function isFirmwareBelow(version: string, threshold: string): boolean {
-	const v = version.split('.').map((n) => parseInt(n, 10))
-	const t = threshold.split('.').map((n) => parseInt(n, 10))
-	for (let i = 0; i < Math.max(v.length, t.length); i++) {
-		const vi = v[i] ?? 0
-		const ti = t[i] ?? 0
-		if (vi !== ti) return vi < ti
-	}
-	return false
+	return compareFirmwareVersions(version, threshold) < 0
 }
 
-// Below V4, the AWJ protocol itself changed (not just additions) - a third-party control system (Crestron,
-// AMX, Extron, Q-Sys, ...) may need reconfiguring, so that case gets a stronger, different warning than an
-// already-V4+ device that just isn't on the latest V6+ build yet (protocol-compatible either way there).
+// Below V4, the AWJ protocol itself changed (not just additions), and this module no longer supports it at
+// all (the dedicated pre-V4 implementation was removed - too much duplicate maintenance for a case that in
+// practice only affects fixed installs nobody has touched in years, since every Aquilon can be updated to V4+
+// regardless of hardware generation). AWJconnection refuses the connection outright for such a device and
+// logs FIRMWARE_TOO_OLD_TEXT as the error; this same text doubles as the config page's explanation for
+// existing configs that still remember a pre-V4 firmware from before this change (see updateSuggestedField()).
 const UPDATE_PATH_HINT =
 	'Please read the update instructions of the new Livepremier firmware and follow the update path recommendations for your firmware'
 const UPDATE_SUGGESTED_TEXT_V4_PLUS =
 	`It is strongly recommended to update your firmware to the most current firmware version V6 or above. If your device is also controlled by other control devices (e.g. Crestron, AMX, Extron, Q-Sys or similar), it will still work since there were no changes (only additions) of the communications protocol. ${UPDATE_PATH_HINT}`
-const UPDATE_SUGGESTED_TEXT_BELOW_V4 =
-	`It is strongly recommended to update your firmware to the most current firmware version V6 or above. ATTENTION: If your device is also controlled by other control devices (e.g. Crestron, AMX, Extron, Q-Sys or similar), please FIRST ASK THE SYSTEM INTEGRATOR since there WERE CHANGES of the communications protocol beginning with V4 of the Livepremier firmware. ${UPDATE_PATH_HINT}`
+// A device on 6.0.4+ is already close to current - the update to the latest stable release is low-risk (no
+// protocol changes, no config migration) rather than a "you're behind" warning, so this gets reassuring
+// wording instead of UPDATE_SUGGESTED_TEXT_V4_PLUS's more general one.
+const UPDATE_SUGGESTED_TEXT_NEAR_CURRENT =
+	`Your firmware is already nearly recent. As of this module's release, the current stable, reliable version is at least V${RECOMMENDED_FIRMWARE} (a newer one may exist by now if this module hasn't been updated recently) - updating to it from here is low-risk: no communications protocol changes and no unwanted changes to your existing setup are expected. There is no update path to follow at this point - please read the update instructions of the new Livepremier firmware and update your firmware.`
+export const FIRMWARE_TOO_OLD_TEXT =
+	`This module no longer supports Livepremier/Aquilon firmware below V4 - the connection was refused. The AWJ communications protocol changed with V4, and this module's dedicated support for the older protocol has been discontinued. Please update the device firmware to V4 or above (V6+ recommended); if the device is also controlled by other control devices (e.g. Crestron, AMX, Extron, Q-Sys or similar), please FIRST ASK THE SYSTEM INTEGRATOR before updating. If updating isn't an option, use an older release of this module instead. ${UPDATE_PATH_HINT}`
 
 /** Plain "Firmware x.x.xx" - Companion's config static-text does not render HTML/color styling (confirmed
  * live: a <span style="color:..."> got stripped down to plain text), so any "outdated" emphasis is handled
@@ -101,19 +106,29 @@ function firmwareLabel(fw: string): string {
 	return `Firmware ${fw}`
 }
 
-/** A standalone "Update Suggested" field/row, shown directly under a device's own info line only when its
+/** A standalone "Update Suggested"/"Not Supported" field/row, shown directly under a device's own info line
+ * (for the Leader, this ends up above "Device Network Address" - see its call site below) only when its
  * firmware is below RECOMMENDED_FIRMWARE - omitted entirely otherwise. No tooltip; the explanation is the
- * field's plain visible text itself, and differs depending on whether the device is already on V4+ (protocol-
- * compatible with third-party control, just not the latest build) or still below V4 (a real protocol change). */
+ * field's plain visible text itself, and has three tiers: below V4 (no longer supported at all - see
+ * FIRMWARE_TOO_OLD_TEXT above), V4 up to 6.0.4 (protocol-compatible with third-party control, general "please
+ * update" wording), and 6.0.4+ (already close to current - reassuring "safe, low-risk update" wording
+ * instead, since there's nothing left to warn about other than not being on the very latest build). For the
+ * below-V4 case, AWJconnection persists config.deviceFirmware even though it refuses the connection (see its
+ * Aquilon branch), specifically so this notice reliably shows up here instead of only in the connection log. */
 function updateSuggestedField(id: string, firmware?: string): SomeCompanionConfigField[] {
 	if (!firmware || !isFirmwareBelow(firmware, RECOMMENDED_FIRMWARE)) return []
 	const major = parseInt(firmware.split('.')[0], 10)
 	if (isNaN(major)) return []
+	const value = major < 4
+		? FIRMWARE_TOO_OLD_TEXT
+		: compareFirmwareVersions(firmware, '6.0.4') >= 0
+			? UPDATE_SUGGESTED_TEXT_NEAR_CURRENT
+			: UPDATE_SUGGESTED_TEXT_V4_PLUS
 	return [{
 		id,
 		type: 'static-text' as const,
-		label: 'Update Suggested',
-		value: major < 4 ? UPDATE_SUGGESTED_TEXT_BELOW_V4 : UPDATE_SUGGESTED_TEXT_V4_PLUS,
+		label: major < 4 ? 'This Firmware Is Not Supported Any More' : 'Update Suggested',
+		value,
 		width: 12,
 	}]
 }

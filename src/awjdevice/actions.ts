@@ -84,6 +84,7 @@ export default class Actions {
 		'devicePositionSizeV3',
 		'deviceLayerTransitionsV3',
 		'deviceLayerKeyingV3',
+		'deviceLayerCutFillV3',
 		'deviceLayerOpacityV3',
 		'deviceLayerAspectCropV3',
 		'deviceLayerMaskV3',
@@ -215,7 +216,7 @@ export default class Actions {
 	 */
 	get deviceUpdatePreset() {
 		const returnAction: AWJaction<{ screens: string, preset: string, mode: string, unlockIfLocked: boolean, relockAfterChange: boolean }> = {
-			name: 'LIVE - Save/Revert Screen Memory Changes',
+			name: 'LIVE - Save/Revert Screen Memory Changes (Aquilon)',
 			sortName: '01 LIVE - 17 Save/Revert Screen Memory Changes',
 			description: 'Mirrors the Save/Revert function in the top-right corner of the WebRCS editor, where you click the SM number to either save your current changes or restore the Screen Memory to its previously saved state. Does nothing on a Screen/Preset where no Screen Memory is currently loaded. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
@@ -275,7 +276,7 @@ export default class Actions {
 	 */
 	get deviceSaveScreenMemory() {
 		const returnAction: AWJaction<{ screens: string, preset: string, memory: string, label: string, action: string, allowExisting: boolean }> = {
-			name: 'LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory)',
+			name: 'LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory) (Aquilon)',
 			sortName: '01 LIVE - 18 Save Screen Memory to Slot',
 			description: 'Saves the current live Layer configuration of a Screen/Aux\'s Program or Preview preset into a chosen Screen Memory slot (either an explicitly picked one, overwriting whatever is saved there, or the next currently-empty slot) - or, instead, just renames or deletes an existing Screen Memory slot without touching any live Screen. Unlike "Save/Revert Screen Memory Changes", saving here does not require the slot to already be loaded - it can save into any slot, used or empty. Waits for the device to confirm before returning - only actually delays a following action (e.g. another "Save to Slot" targeting "Next Available") when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
@@ -349,8 +350,8 @@ export default class Actions {
 		type DeviceLayerMemory = { method: string, screen: string[], preset: string, layer: string[], memory: string, unlockIfLocked: boolean, relockAfterChange: boolean }
 
 		const returnAction: AWJaction<DeviceLayerMemory> = {
-			name: 'Deprecated from V2 - Recall Layer Memory (please upgrade to new action V3)',
-			sortName: '11 Deprecated from V2 - Recall Layer Memory',
+			name: 'Deprecated from V2 - Recall Layer Memory (please upgrade to new action V3) (Aquilon)',
+			sortName: '10 Deprecated from V2 - Recall Layer Memory',
 			description: 'Deprecated - replaced by "LIVE - Recall Layer Memory" (V3). Recalls a Layer Memory into one or more specific Layers, loading only that Layer\'s saved source/position/properties without affecting the rest of the Screen or Preset. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
 				{
@@ -497,7 +498,7 @@ export default class Actions {
 		type DeviceLayerMemoryV3 = { useSelectedLayers: boolean, screens: string[], preset: string, layers: string[], memory: string, unlockIfLocked: boolean, relockAfterChange: boolean }
 
 		const deviceLayerMemoryV3: AWJaction<DeviceLayerMemoryV3> = {
-			name: 'LIVE - Recall Layer Memory',
+			name: 'LIVE - Recall Layer Memory (Aquilon)',
 			sortName: '01 LIVE - 03 Recall Layer Memory',
 			description: 'Recalls a Layer Memory into one or more specific Layers, loading only that Layer\'s saved source/position/properties without affecting the rest of the Screen or Preset. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
@@ -635,7 +636,7 @@ export default class Actions {
 	get deviceAuxMemory() {
 		
 		const deviceAuxMemory: AWJaction<{ screens: string, preset: string, memory: string, selectScreens: boolean}> = {
-			name: 'LIVE - Recall Aux Memory',
+			name: 'LIVE - Recall Aux Memory (Midra/Alta)',
 			sortName: '01 LIVE - 14 Recall Aux Memory',
 			description: 'Recalls an Aux Memory, loading its saved Layer configuration into the chosen Auxscreen(s)\' Program or Preview preset. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
@@ -980,9 +981,9 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'all', label: 'Both (Program/Preview)' }, ...this.choices.choicesPreset],
+					choices: [...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
-					default: 'all',
+					default: 'prw',
 				},
 				{
 					id: 'time',
@@ -1088,9 +1089,9 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
 					tooltip: 'Only applies to Transition Time. "Both" adjusts the times for both directions by the same step.',
-					choices: [{ id: 'all', label: 'Both (Program/Preview)' }, ...this.choices.choicesPreset],
+					choices: [...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
-					default: 'all',
+					default: 'prw',
 					isVisibleExpression: "$(options:value) == 'transitionTime'",
 				},
 				{
@@ -1169,7 +1170,7 @@ export default class Actions {
 		
 		const deviceSelectSource: AWJaction<DeviceSelectSource> = {
 			name: 'Deprecated from V2 - Select Layer Source (please upgrade to new action V3)',
-			sortName: '11 Deprecated from V2 - Select Layer Source',
+			sortName: '10 Deprecated from V2 - Select Layer Source',
 			description: 'Deprecated - replaced by "Layer Properties - Source". Sets which source (Input, Image Store, Color, etc.) is shown by a Layer.',
 			options: [
 				{
@@ -1238,7 +1239,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -1247,7 +1248,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true)],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true)],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -1257,9 +1259,11 @@ export default class Actions {
 					// above, not on the value here, so an invalid combination (e.g. Background Set on a numbered
 					// layer) is simply a no-op on the device
 					id: 'sourceLayer',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Source',
-					choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.getSourceChoices(), ...this.choices.choicesBackgroundSources],
+					tooltip: 'Input/Image use this module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
+					choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources],
 					default: 'keep',
 				},
 				{
@@ -1302,18 +1306,22 @@ export default class Actions {
 	 */
 	get deviceInputKeying() {
 		type DeviceInputKeying = {input: string, mode: string}
-		
+
+		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({ id: `IN${inp.index}`, label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}` }))
+
 		const deviceInputKeying: AWJaction<DeviceInputKeying> = {
-			name: 'Preconfig - Set Input Keying',
-			sortName: '07 Preconfig - Set Input Keying',
-			description: 'Sets an Input\'s own Chroma/Luma keying mode. This is the input-level keying setting, not the same as assigning a Keying preset to a Layer (see "Layer Properties - Keying").',
+			name: 'Preconfig - Inputs - Set Input Keying',
+			sortName: '06 Preconfig - Inputs - Set Input Keying',
+			description: 'Switches an Input\'s own Chroma/Luma/CremaTTe3D/Cut&Fill keying mode between the values already configured for it. This is the input-level keying setting, not the same as assigning a Keying preset to a Layer (see "Layer Properties - Keying"). Only the mode itself can be switched here - the actual key parameters (color, threshold, etc.) must still be configured in WebRCS itself, for now.',
 			options: [
 				{
 					id: 'input',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Input',
-					choices: this.choices.getLiveInputChoices(),
-					default: this.choices.getLiveInputChoices()[0]?.id,
+					tooltip: 'This module\'s own short id convention (IN{n}) - a bare number, or the raw AWJ id (e.g. IN_1/LIVE_1), is also accepted.',
+					choices: inputChoices,
+					default: inputChoices[0]?.id,
 				},
 				{
 					id: 'mode',
@@ -1323,20 +1331,28 @@ export default class Actions {
 						{ id: 'DISABLE', label: 'Keying Disabled' },
 						{ id: 'CHROMA', label: 'Chroma Key' },
 						{ id: 'LUMA', label: 'Luma Key' },
+						{ id: 'CREMATTE3D', label: 'CremaTTe3D' },
+						// Analog Way's release notes: input-level Cut&Fill was added in firmware 4.0.254 -
+						// live-confirmed (2026-09-08) this is that same feature, not a separate protocol area.
+						{ id: 'CUT_AND_FILL', label: this.choices.isFirmwareAtLeast('4.0.254') ? 'Cut&Fill' : 'Cut&Fill (requires at least firmware 4.0.254)' },
 					],
 					default: 'DISABLE',
 				},
 			],
 			callback: (action) => {
+				const match = (action.options.input ?? '').match(/^(?:IN_?|LIVE_)?(\d+)$/i)
+				if (!match) return
+				if (action.options.mode === 'CUT_AND_FILL' && !this.choices.isFirmwareAtLeast('4.0.254')) return
+				const input = `IN_${match[1]}`
 				this.connection.sendWSmessage(
 					[
 						'device',
 						'inputList',
 						'items',
-						action.options.input,
+						input,
 						'plugList',
 						'items',
-						this.state.get('DEVICE/device/inputList/items/' + action.options.input + '/status/pp/plug'),
+						this.state.get('DEVICE/device/inputList/items/' + input + '/status/pp/plug'),
 						'settings',
 						'keying',
 						'control',
@@ -1354,21 +1370,28 @@ export default class Actions {
 
 	/**
 	 * MARK: Change input freeze
+	 * "Input" option uses this module's own short 'IN{n}' convention as its canonical/default value (matching
+	 * the dropdown choices), but the callback is deliberately lenient and also accepts a bare number ('3') or
+	 * the old V2-style 'IN_3' (this module's actual internal/AWJ id) - easier to program with and keeps old
+	 * V2 configs/expressions working, per explicit user decision (2026-09-08).
 	 */
 	get deviceInputFreeze() {
 		type DeviceInputFreeze = {input: string, mode: number}
-		
+
+		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({ id: `IN${inp.index}`, label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}` }))
+
 		const deviceInputFreeze: AWJaction<DeviceInputFreeze> = {
-			name: 'Freeze - Input',
-			sortName: '05 Freeze - Input',
+			name: 'LIVE - Input Freeze',
+			sortName: '01 LIVE - 19 Freeze - Input',
 			description: 'Freezes, unfreezes, or toggles the freeze state of an Input\'s live signal.',
 			options: [
 				{
 					id: 'input',
 					type: 'dropdown',
 					label: 'Input',
-					choices: this.choices.getLiveInputChoices(),
-					default: this.choices.getLiveInputChoices()[0]?.id,
+					choices: inputChoices,
+					default: inputChoices[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'mode',
@@ -1383,7 +1406,9 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const input = action.options.input
+				const match = (action.options.input ?? '').match(/^(?:IN_?)?(\d+)$/i)
+				if (!match) return
+				const input = `IN_${match[1]}`
 				let val = false
 				if (action.options.mode === 1) {
 					val = true
@@ -1404,8 +1429,8 @@ export default class Actions {
 		type DeviceLayerFreeze = {screen: string[], mode: number}
 		
 		const deviceLayerFreeze: AWJaction<DeviceLayerFreeze> = {
-			name: 'Freeze - Layer',
-			sortName: '05 Freeze - Layer',
+			name: 'Freeze - Layer (Midra/Alta)',
+			sortName: '01 LIVE - 20 Freeze - Layer',
 			description: 'Freezes, unfreezes, or toggles the freeze state of one or more Layers (Midra only).',
 			options: [
 				{
@@ -1475,8 +1500,8 @@ export default class Actions {
 		type DeviceScreenFreeze = {screen: string[], mode: number}
 		
 		const deviceScreenFreeze: AWJaction<DeviceScreenFreeze> = {
-			name: 'Freeze - Screen',
-			sortName: '05 Freeze - Screen',
+			name: 'Freeze - Screen (Midra/Alta)',
+			sortName: '01 LIVE - 21 Freeze - Screen',
 			description: 'Freezes, unfreezes, or toggles the freeze state of one or more Screens/Auxscreens (Midra only).',
 			options: [
 				{
@@ -1523,14 +1548,71 @@ export default class Actions {
 	}
 
 	/**
+	 * MARK: Change output freeze
+	 * "Output" option uses this module's own short 'OUT{n}' convention as its canonical/default value
+	 * (matching the dropdown choices), but the callback also accepts a bare number ('3'), matching how
+	 * deviceInputFreeze handles 'IN{n}' - no old naming to stay compatible with here since this is a new
+	 * feature. Output-level freeze is per-output (not per-Screen) - a Screen spanning several outputs needs
+	 * one call per output to freeze the whole Screen. Live-confirmed (2026-09-08) on a real Aquilon:
+	 * device/outputList/items/{n}/control/pp/freeze, plain numeric output ids, no firmware gate needed
+	 * (Analog Way's release notes place this at 3.0.255+, below this module's V4 floor).
+	 */
+	get deviceOutputFreeze() {
+		type DeviceOutputFreeze = {output: string, mode: number}
+
+		const outputChoices = this.choices.getOutputArray().map((out) => ({ id: `OUT${out.index}`, label: `Output ${out.index}${out.label ? ' - ' + out.label : ''}` }))
+
+		const deviceOutputFreeze: AWJaction<DeviceOutputFreeze> = {
+			name: 'LIVE - Output Freeze (Aquilon)',
+			sortName: '01 LIVE - 22 Freeze - Output',
+			description: 'Freezes, unfreezes, or toggles the freeze state of a physical Output.',
+			options: [
+				{
+					id: 'output',
+					type: 'dropdown',
+					label: 'Output',
+					choices: outputChoices,
+					default: outputChoices[0]?.id,
+					allowInvalidValues: true,
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: [
+						{ id: 1, label: 'Freeze' },
+						{ id: 0, label: 'Unfreeze' },
+						{ id: 2, label: 'Toggle' },
+					],
+					default: 2,
+				},
+			],
+			callback: (action) => {
+				const match = (action.options.output ?? '').match(/^(?:OUT)?(\d+)$/i)
+				if (!match) return
+				const output = match[1]
+				let val = false
+				if (action.options.mode === 1) {
+					val = true
+				} else if (action.options.mode === 2) {
+					val = !this.state.get('DEVICE/device/outputList/items/' + output + '/control/pp/freeze')
+				}
+				this.connection.sendWSmessage(['device', 'outputList', 'items', output, 'control', 'pp', 'freeze'], val)
+			},
+		}
+
+		return deviceOutputFreeze
+	}
+
+	/**
 	 * MARK: Assign an image from the Image Library to an Image Store slot
 	 */
 	get deviceAssignImageLibraryToStore() {
 		type DeviceAssignImageLibraryToStore = { store: string, source: string, allowDownscale: boolean }
 
 		const deviceAssignImageLibraryToStore: AWJaction<DeviceAssignImageLibraryToStore> = {
-			name: 'Preconfig - Assign Image from Library to Image Store',
-			sortName: '07 Preconfig - Assign Image from Library to Image Store',
+			name: 'Preconfig - Assign Image from Library to Image Store (Aquilon)',
+			sortName: '06 Preconfig - Assign Image from Library to Image Store',
 			description: 'Assigns an image from the Image Library (or a Timer) to an Image Store slot, so it becomes available as a Layer source.',
 			options: [
 				{
@@ -1630,7 +1712,12 @@ export default class Actions {
 					: [opt.screen]
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const devicePositionSizeV3: AWJaction<DevicePositionSizeV3> = {
@@ -1651,16 +1738,17 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
 				{
 					id: `layersel`,
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch.',
-					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
+					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch. To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: (e+1).toString(), label: `Layer ${e+1}`}})],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -1754,7 +1842,10 @@ export default class Actions {
 
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screeninfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const laydata = getLayerPositionData(screeninfo.id, preset, layers[0].layerKey)
 				if (laydata === undefined) return undefined
@@ -1774,22 +1865,11 @@ export default class Actions {
 				return newoptions
 			},
 			callback: async (action) => {
-				let layers = resolveLayers(action.options)
-
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				layers = layers.filter(layer => {
-					if (!layer.layerKey.match(/^\d+$/)) return false // wipe out native layer
-					if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-						if (!parseBoolean(action.options.unlockIfLocked)) return false
-						if (!unlockedScreens.has(layer.screenAuxKey)) {
-							this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-							unlockedScreens.add(layer.screenAuxKey)
-						}
-					}
-					return true
-				})
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return
+
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				let anchor: AnchorPoint
 				if (action.options.anchor === 'sel' || action.options.anchor === undefined) {
@@ -1811,82 +1891,97 @@ export default class Actions {
 				const refHGiven = action.options.refH !== '' && !isNaN(Number(action.options.refH)) && Number(action.options.refH) > 0
 				const hasFixedRatio = refWGiven && refHGiven
 
-				for (const layer of layers) {
-					const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
-					if (laydata === undefined) continue // this layer does not allow for sizing
-
-					const ratioSizeH = hasFixedRatio ? Number(action.options.refW) : laydata.sizeH
-					const ratioSizeV = hasFixedRatio ? Number(action.options.refH) : laydata.sizeV
-
-					const wGiven = action.options.w !== '' && !isNaN(Number(action.options.w))
-					const hGiven = action.options.h !== '' && !isNaN(Number(action.options.h))
-					let targetSizeH = wGiven ? Math.round(Number(action.options.w)) : laydata.sizeH
-					let targetSizeV = hGiven ? Math.round(Number(action.options.h)) : laydata.sizeV
-					// "Keep Aspect Ratio" only kicks in when exactly one of Width/Height was actually given -
-					// with both given the user's explicit values always win, with neither given there is nothing to derive.
-					if (keepAspectRatio && ratioSizeH !== 0 && ratioSizeV !== 0) {
-						if (wGiven && !hGiven) targetSizeV = Math.round(targetSizeH * ratioSizeV / ratioSizeH)
-						else if (hGiven && !wGiven) targetSizeH = Math.round(targetSizeV * ratioSizeH / ratioSizeV)
-					}
-					const sizeChanges = wGiven || (keepAspectRatio && hGiven)
-					const sizeVChanges = hGiven || (keepAspectRatio && wGiven)
-
-					const xGiven = action.options.x !== '' && !isNaN(Number(action.options.x))
-					const yGiven = action.options.y !== '' && !isNaN(Number(action.options.y))
-
-					let newPosH: number | undefined
-					let newPosV: number | undefined
-					if (xGiven || yGiven) {
-						// The anchor point refers to the box AFTER this call's resize (if any), not its current size.
-						const rawX = xGiven ? Math.round(Number(action.options.x)) : 0
-						const rawY = yGiven ? Math.round(Number(action.options.y)) : 0
-						const centerPos = anchor === 'CENTER'
-							? { x: rawX, y: rawY }
-							: convertAnchorPosition(rawX, rawY, targetSizeH, targetSizeV, anchor, 'CENTER')
-						if (xGiven) newPosH = centerPos.x
-						if (yGiven) newPosV = centerPos.y
-					}
-					// Resizing without an explicit new position would otherwise always grow/shrink the box
-					// around AWJ's native center point (posH/posV), no matter which Anchor Point is chosen -
-					// since that's what leaving posH/posV untouched literally means at the protocol level.
-					// To make a non-Center anchor actually behave like an anchor (its own point of the box
-					// stays put while the opposite side moves), re-derive the position needed to keep that
-					// same anchor point fixed at its current location whenever the size is actually changing.
-					// At Center this is a no-op by construction (Center -> Center conversion never moves
-					// anything), matching "only grows symmetrically when the anchor is Center".
-					if (anchor !== 'CENTER' && (targetSizeH !== laydata.sizeH || targetSizeV !== laydata.sizeV)) {
-						const currentAnchorPos = convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
-						const compensatedPos = convertAnchorPosition(currentAnchorPos.x, currentAnchorPos.y, targetSizeH, targetSizeV, anchor, 'CENTER')
-						if (newPosH === undefined) newPosH = compensatedPos.x
-						if (newPosV === undefined) newPosV = compensatedPos.y
-					}
-
-					if (newPosH !== undefined && newPosH !== laydata.posH) {
-						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
-						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
-					}
-					if (newPosV !== undefined && newPosV !== laydata.posV) {
-						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
-						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
-					}
-					if (sizeChanges) {
-						const sizeH = targetSizeH
-						if (sizeH !== laydata.sizeH) {
-							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
-							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
+							}
 						}
-					}
-					if (sizeVChanges) {
-						const sizeV = targetSizeV
-						if (sizeV !== laydata.sizeV) {
-							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
-							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
+						return true
+					})
+
+					for (const layer of targetLayers) {
+						const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
+						if (laydata === undefined) continue // this layer does not allow for sizing
+
+						const ratioSizeH = hasFixedRatio ? Number(action.options.refW) : laydata.sizeH
+						const ratioSizeV = hasFixedRatio ? Number(action.options.refH) : laydata.sizeV
+
+						const wGiven = action.options.w !== '' && !isNaN(Number(action.options.w))
+						const hGiven = action.options.h !== '' && !isNaN(Number(action.options.h))
+						let targetSizeH = wGiven ? Math.round(Number(action.options.w)) : laydata.sizeH
+						let targetSizeV = hGiven ? Math.round(Number(action.options.h)) : laydata.sizeV
+						// "Keep Aspect Ratio" only kicks in when exactly one of Width/Height was actually given -
+						// with both given the user's explicit values always win, with neither given there is nothing to derive.
+						if (keepAspectRatio && ratioSizeH !== 0 && ratioSizeV !== 0) {
+							if (wGiven && !hGiven) targetSizeV = Math.round(targetSizeH * ratioSizeV / ratioSizeH)
+							else if (hGiven && !wGiven) targetSizeH = Math.round(targetSizeV * ratioSizeH / ratioSizeV)
+						}
+						const sizeChanges = wGiven || (keepAspectRatio && hGiven)
+						const sizeVChanges = hGiven || (keepAspectRatio && wGiven)
+
+						const xGiven = action.options.x !== '' && !isNaN(Number(action.options.x))
+						const yGiven = action.options.y !== '' && !isNaN(Number(action.options.y))
+
+						let newPosH: number | undefined
+						let newPosV: number | undefined
+						if (xGiven || yGiven) {
+							// The anchor point refers to the box AFTER this call's resize (if any), not its current size.
+							const rawX = xGiven ? Math.round(Number(action.options.x)) : 0
+							const rawY = yGiven ? Math.round(Number(action.options.y)) : 0
+							const centerPos = anchor === 'CENTER'
+								? { x: rawX, y: rawY }
+								: convertAnchorPosition(rawX, rawY, targetSizeH, targetSizeV, anchor, 'CENTER')
+							if (xGiven) newPosH = centerPos.x
+							if (yGiven) newPosV = centerPos.y
+						}
+						// Resizing without an explicit new position would otherwise always grow/shrink the box
+						// around AWJ's native center point (posH/posV), no matter which Anchor Point is chosen -
+						// since that's what leaving posH/posV untouched literally means at the protocol level.
+						// To make a non-Center anchor actually behave like an anchor (its own point of the box
+						// stays put while the opposite side moves), re-derive the position needed to keep that
+						// same anchor point fixed at its current location whenever the size is actually changing.
+						// At Center this is a no-op by construction (Center -> Center conversion never moves
+						// anything), matching "only grows symmetrically when the anchor is Center".
+						if (anchor !== 'CENTER' && (targetSizeH !== laydata.sizeH || targetSizeV !== laydata.sizeV)) {
+							const currentAnchorPos = convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
+							const compensatedPos = convertAnchorPosition(currentAnchorPos.x, currentAnchorPos.y, targetSizeH, targetSizeV, anchor, 'CENTER')
+							if (newPosH === undefined) newPosH = compensatedPos.x
+							if (newPosV === undefined) newPosV = compensatedPos.y
+						}
+
+						if (newPosH !== undefined && newPosH !== laydata.posH) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+						}
+						if (newPosV !== undefined && newPosV !== laydata.posV) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+						}
+						if (sizeChanges) {
+							const sizeH = targetSizeH
+							if (sizeH !== laydata.sizeH) {
+								this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
+								this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
+							}
+						}
+						if (sizeVChanges) {
+							const sizeV = targetSizeV
+							if (sizeV !== laydata.sizeV) {
+								this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
+								this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
+							}
 						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -1899,7 +1994,7 @@ export default class Actions {
 	}
 
 	/**
-	 * MARK: Layer Properties - Transitions (V3, placeholder - not yet implemented)
+	 * MARK: Layer Properties - Transitions
 	 */
 	get deviceLayerTransitionsV3() {
 		type DeviceLayerTransitionsV3 = {
@@ -1950,7 +2045,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const deviceLayerTransitionsV3: AWJaction<DeviceLayerTransitionsV3> = {
@@ -1970,7 +2070,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -1979,7 +2079,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'openingHeader', type: 'static-text', label: '', value: '---\n**Opening Transition**', disableAutoExpression: true },
@@ -2022,7 +2123,7 @@ export default class Actions {
 					id: 'allowCrossEffect',
 					type: 'dropdown',
 					label: 'Allow Cross Effect',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -2032,7 +2133,7 @@ export default class Actions {
 					id: 'allowCrossDepth',
 					type: 'dropdown',
 					label: 'Allow Cross Depth',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{ id: 'flyingHeader', type: 'static-text', label: '', value: '---\n**Flying Curve**', disableAutoExpression: true },
@@ -2068,7 +2169,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -2103,52 +2207,58 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/)) // transitions/flying only apply to numbered content layers
-					.filter(layer => {
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // transitions/flying only apply to numbered content layers
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
+
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
 						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
 							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
 								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
+								unlockedTargets.add(key)
 							}
 						}
 						return true
 					})
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
-					if (action.options.openingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'type'], action.options.openingType)
-					if (action.options.openingWay !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'way'], action.options.openingWay)
-					if (action.options.closingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'type'], action.options.closingType)
-					if (action.options.closingWay !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
-					// only touches the flags array at all if at least one of Allow Cross Effect/Depth actually
-					// changed - the untouched half is preserved from the layer's current live flags
-					if (action.options.allowCrossEffect !== 'keep' || action.options.allowCrossDepth !== 'keep') {
-						let flags: string[] = this.state.get(['DEVICE', ...path, 'transition', 'pp', 'flags']) ?? []
-						if (action.options.allowCrossEffect !== 'keep') {
-							flags = flags.filter(f => f !== 'FORCE_TRANSITION' && f !== 'FORCE_CROSS')
-							flags.push(action.options.allowCrossEffect === 'on' ? 'FORCE_CROSS' : 'FORCE_TRANSITION')
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
+						if (action.options.openingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'type'], action.options.openingType)
+						if (action.options.openingWay !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'way'], action.options.openingWay)
+						if (action.options.closingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'type'], action.options.closingType)
+						if (action.options.closingWay !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
+						// only touches the flags array at all if at least one of Allow Cross Effect/Depth actually
+						// changed - the untouched half is preserved from the layer's current live flags
+						if (action.options.allowCrossEffect !== 'keep' || action.options.allowCrossDepth !== 'keep') {
+							let flags: string[] = this.state.get(['DEVICE', ...path, 'transition', 'pp', 'flags']) ?? []
+							if (action.options.allowCrossEffect !== 'keep') {
+								const turnOn = action.options.allowCrossEffect === 'toggle' ? !flags.includes('FORCE_CROSS') : action.options.allowCrossEffect === 'on'
+								flags = flags.filter(f => f !== 'FORCE_TRANSITION' && f !== 'FORCE_CROSS')
+								flags.push(turnOn ? 'FORCE_CROSS' : 'FORCE_TRANSITION')
+							}
+							if (action.options.allowCrossDepth !== 'keep') {
+								const turnOn = action.options.allowCrossDepth === 'toggle' ? !flags.some(f => f.startsWith('DEPTH_CUT_')) : action.options.allowCrossDepth === 'on'
+								flags = flags.filter(f => !f.startsWith('DEPTH_CUT_'))
+								if (!turnOn) flags.push('DEPTH_CUT_MIDDLE')
+							}
+							this.connection.sendWSmessage([...path, 'transition', 'pp', 'flags'], flags)
 						}
-						if (action.options.allowCrossDepth !== 'keep') {
-							flags = flags.filter(f => !f.startsWith('DEPTH_CUT_'))
-							if (action.options.allowCrossDepth === 'off') flags.push('DEPTH_CUT_MIDDLE')
-						}
-						this.connection.sendWSmessage([...path, 'transition', 'pp', 'flags'], flags)
+						if (action.options.flyingCurve !== 'keep') this.connection.sendWSmessage([...path, 'flying', 'pp', 'type'], action.options.flyingCurve)
 					}
-					if (action.options.flyingCurve !== 'keep') this.connection.sendWSmessage([...path, 'flying', 'pp', 'type'], action.options.flyingCurve)
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -2160,17 +2270,17 @@ export default class Actions {
 	}
 
 	/**
-	 * MARK: Layer Properties - Keying (V3, placeholder - not yet implemented)
+	 * MARK: Layer Properties - Keying
 	 */
 	get deviceLayerKeyingV3() {
 		type DeviceLayerKeyingV3 = {screen: string, preset: string, layersel: string, enable: string, keyingPreset: string, unlockIfLocked: boolean, relockAfterChange: boolean}
 
-		if (!this.choices.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast('5.0.128')) {
 			return {
-				name: 'Layer Properties - Keying',
+				name: 'Layer Properties - Keying (Aquilon)',
 				sortName: '03 Layer Properties - 04 Keying',
 				description: 'Applies an existing Keying preset (from the Keyer Bank) to a layer. Creating/editing the presets themselves is done in WebRCS, not here.',
-				options: this.firmwareGateOptions('V6'),
+				options: this.firmwareGateOptions('5.0.128'),
 				callback: () => {},
 			}
 		}
@@ -2184,11 +2294,16 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const deviceLayerKeyingV3: AWJaction<DeviceLayerKeyingV3> = {
-			name: 'Layer Properties - Keying',
+			name: 'Layer Properties - Keying (Aquilon)',
 			sortName: '03 Layer Properties - 04 Keying',
 			description: 'Applies an existing Keying preset (from the Keyer Bank) to a layer. Creating/editing the presets themselves is done in WebRCS, not here.',
 			options: [
@@ -2204,7 +2319,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -2213,7 +2328,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2221,7 +2337,7 @@ export default class Actions {
 					id: 'enable',
 					type: 'dropdown',
 					label: 'Keying',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -2257,7 +2373,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -2279,35 +2398,42 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/)) // keying only applies to numbered content layers, not background
-					.filter(layer => {
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // keying only applies to numbered content layers, not background
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
+
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
 						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
 							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
 								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
+								unlockedTargets.add(key)
 							}
 						}
 						return true
 					})
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
-					if (action.options.enable !== 'keep') this.connection.sendWSmessage([...path, 'keying', 'pp', 'enable'], action.options.enable === 'on')
-					if (action.options.keyingPreset !== 'keep') this.connection.sendWSmessage([...path, 'keying', 'pp', 'source'], action.options.keyingPreset)
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
+						if (action.options.enable !== 'keep') {
+							const turnOn = action.options.enable === 'toggle' ? !this.state.get(['DEVICE', ...path, 'keying', 'pp', 'enable']) : action.options.enable === 'on'
+							this.connection.sendWSmessage([...path, 'keying', 'pp', 'enable'], turnOn)
+						}
+						if (action.options.keyingPreset !== 'keep') this.connection.sendWSmessage([...path, 'keying', 'pp', 'source'], action.options.keyingPreset)
+					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -2319,7 +2445,315 @@ export default class Actions {
 	}
 
 	/**
-	 * MARK: Layer Properties - Opacity (V3, placeholder - not yet implemented)
+	 * MARK: Layer Properties - Cut&Fill
+	 * Live-confirmed on a real Aquilon (2026-09-08): unlike every other Layer Property, Cut&Fill lives at
+	 * .../presetList/items/{A|B}/layerList/items/{n}/cutNFill/ - `pp.type` ('NONE' when off, 'CUT_N_FILL'
+	 * when on), `cut.pp.inputNum` (the key/cut source, same raw id space `getSourceChoices()` already
+	 * provides for "Layer Properties - Source"), `cut.pp.flags` (Filter/Transform - the exact same flag
+	 * tokens deviceLayerEffectsV3 already uses: BLACK_N_WHITE/NEGATIVE/SEPIA/SOLAR/FLIP_H/FLIP_V), and
+	 * `cut.cropping.pp.{top,bottom,left,right}`.
+	 * Curve (`cut.pp.curve`, a single packed number - e.g. 16711935 for the default straight-through curve)
+	 * is deliberately NOT exposed here: WebRCS itself only offers a drag-only curve-editor widget with no
+	 * typeable value, and a live drag-and-diff attempt could not pin down its packed encoding in the time
+	 * available - needs further live investigation before it can be added safely (never guess a protocol-
+	 * critical write, see GUIDELINES.md).
+	 * Crop's 0-100 range is assumed to use the same 0-65536 raw scale the "%" fallback field in "Layer
+	 * Properties - Aspect & Crop" already uses for its own crop percentage - WebRCS's Cut&Fill crop only ever
+	 * showed a 0-100 input with an auto-computed pixel readout, never a separate raw-pixel field, so there
+	 * was nothing to diff against live; flag if this turns out to be a different scale in practice.
+	 * Built with the module's newer per-Layer multi-target pattern from the start - the "Layer" field also
+	 * accepts 'All Layers' and a concatenated Expression Mode string like 'L1L2' (`choices.getChosenLayers()`,
+	 * existence-guarded per Screen via `getLayersAsArray()` - see GUIDELINES.md's "never write to a target
+	 * that doesn't currently exist"), per explicit user decision (2026-09-08) even though a single button
+	 * rarely needs to touch more than one Layer's Cut&Fill at once. "Screen" keeps the same first/sel/
+	 * individual shape every sibling "Layer Properties" action already uses (still supports a concatenated
+	 * 'S1S2A1' Screen expression too, via the existing getChosenScreenAuxes() fallback).
+	 */
+	get deviceLayerCutFillV3() {
+		type DeviceLayerCutFillV3 = {
+			screen: string, preset: string, layersel: string,
+			enable: string, source: string,
+			filterBlackWhite: string, filterNegative: string, filterSepia: string, filterSolar: string,
+			transformFlipH: string, transformFlipV: string,
+			curve: string,
+			cropTop: number, cropBottom: number, cropLeft: number, cropRight: number,
+			unlockIfLocked: boolean, relockAfterChange: boolean,
+		}
+
+		const resolveLayers = (opt: {screen: string, layersel: string}): {screenAuxKey: string, layerKey: string}[] => {
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					: this.choices.getChosenScreenAuxes(opt.screen)
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
+		}
+
+		const flagChoices = [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }]
+		const flagFields: [keyof DeviceLayerCutFillV3, string][] = [
+			['filterBlackWhite', 'BLACK_N_WHITE'], ['filterNegative', 'NEGATIVE'], ['filterSepia', 'SEPIA'], ['filterSolar', 'SOLAR'],
+			['transformFlipH', 'FLIP_H'], ['transformFlipV', 'FLIP_V'],
+		]
+		// WebRCS enforces Top+Bottom <= 100% and Left+Right <= 100% live as you edit (the other field's max
+		// shrinks as you type) - Companion's option fields have no equivalent mechanism (min/max are static,
+		// unlike isVisibleExpression there is no way for one field's live value to adjust another field's
+		// bounds), so the same constraint is enforced here in the callback instead: whichever of a pair is
+		// set in this same action call takes priority in the order listed (Top before Bottom, Left before
+		// Right) and the other is clamped to whatever percentage remains; if only one of a pair is set, it is
+		// clamped against the OTHER one's current live device value instead, so a lone change can never push
+		// the pair over 100% either. Explicit user decision (2026-09-08).
+		const cropPairs: [keyof DeviceLayerCutFillV3, keyof DeviceLayerCutFillV3, string, string][] = [
+			['cropTop', 'cropBottom', 'top', 'bottom'],
+			['cropLeft', 'cropRight', 'left', 'right'],
+		]
+
+		const deviceLayerCutFillV3: AWJaction<DeviceLayerCutFillV3> = {
+			name: 'Layer Properties - Cut&Fill (Aquilon)',
+			sortName: '03 Layer Properties - 04a Cut&Fill',
+			description: 'Sets up a Layer\'s Cut&Fill key: Filter (Black&White/Negative/Sepia/Solar), Transform (Flip H/V), Curve, Crop, and which Input/Image/Color acts as the key/cut source - mirrors WebRCS\'s "Cut & Fill" sub-panel. Curve is a single opaque raw value copied 1:1, not individually editable fields - see its own tooltip for why.',
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen / Aux',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					default: 'first',
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset (Program/Preview)',
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
+					allowInvalidValues: true,
+					default: 'prw',
+				},
+				{
+					id: 'layersel',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Layer',
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({ length: this.choices.getMaxConfiguredLayerCount() }, (_i, e: number) => ({ id: (e + 1).toString(), label: `Layer ${e + 1}` }))],
+					default: 'first',
+				},
+				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
+				{
+					id: 'enable',
+					type: 'dropdown',
+					label: 'Cut&Fill',
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
+					default: 'keep',
+				},
+				{
+					id: 'source',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Source',
+					tooltip: 'This module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
+					choices: [{ id: 'keep', label: "Don't change" }, ...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label }))],
+					default: 'keep',
+				},
+				{ id: 'filterHeader', type: 'static-text', label: '', value: '---\n**Filter**', disableAutoExpression: true },
+				{ id: 'filterBlackWhite', type: 'dropdown', label: 'Black & White', choices: flagChoices, default: 'keep' },
+				{ id: 'filterNegative', type: 'dropdown', label: 'Negative', choices: flagChoices, default: 'keep' },
+				{ id: 'filterSepia', type: 'dropdown', label: 'Sepia', choices: flagChoices, default: 'keep' },
+				{ id: 'filterSolar', type: 'dropdown', label: 'Solar', choices: flagChoices, default: 'keep' },
+				{ id: 'transformHeader', type: 'static-text', label: '', value: '---\n**Transform**', disableAutoExpression: true },
+				{ id: 'transformFlipH', type: 'dropdown', label: 'Flip H', choices: flagChoices, default: 'keep' },
+				{ id: 'transformFlipV', type: 'dropdown', label: 'Flip V', choices: flagChoices, default: 'keep' },
+				{ id: 'curveHeader', type: 'static-text', label: '', value: '---\n**Curve**', disableAutoExpression: true },
+				{
+					id: 'curve',
+					type: 'textinput',
+					label: 'Curve (raw value)',
+					tooltip: 'WebRCS only offers a drag-only curve-editor widget for this, with no typeable value, and its packed raw encoding could not be reverse-engineered live - so this is copied through 1:1 instead of individually editable points: use "Get current values" (Learn) on a Layer whose curve you already shaped the way you want in WebRCS to capture its exact raw value here, then this action can reapply that same curve to other Layers/buttons. Leave empty to not change the curve.',
+					default: '',
+					useVariables: true,
+				},
+				{ id: 'cropHeader', type: 'static-text', label: '', value: '---\n**Crop** (Top+Bottom and Left+Right are each clamped to a combined 100% - see the action\'s own description)', disableAutoExpression: true },
+				{ id: 'cropPctNote', type: 'static-text', label: '', value: 'Please select "-1" for "Don\'t change".', disableAutoExpression: true },
+				{ id: 'cropTop', type: 'number', label: 'Top (%)', min: -1, max: 100, step: 0.01, range: true, default: -1 },
+				{ id: 'cropBottom', type: 'number', label: 'Bottom (%)', min: -1, max: 100, step: 0.01, range: true, default: -1 },
+				{ id: 'cropLeft', type: 'number', label: 'Left (%)', min: -1, max: 100, step: 0.01, range: true, default: -1 },
+				{ id: 'cropRight', type: 'number', label: 'Right (%)', min: -1, max: 100, step: 0.01, range: true, default: -1 },
+				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
+				{
+					id: 'unlockIfLocked',
+					type: 'checkbox',
+					label: 'Unlock Screen if locked?',
+					tooltip: 'Unlocks all affected screens before execution if they are locked.',
+					default: false,
+				},
+				{
+					id: 'relockAfterChange',
+					type: 'checkbox',
+					label: 'Relock after change',
+					tooltip: 'Locks all affected screens after execution if they were previously locked.',
+					default: false,
+					isVisibleExpression: '$(options:unlockIfLocked) == true',
+				},
+			],
+			// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved
+			// layer's full current Cut&Fill state (Enable, Source, every Filter/Transform flag, raw Curve -
+			// see the "curve" option's own tooltip for why it's opaque, Crop) and pins Screen/Preset/Layer to
+			// the concrete values it read from.
+			learn: (action) => {
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				if (layers.length === 0) return undefined
+
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
+				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
+				const path = [
+					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+					'items', screenInfo.platformId,
+					'presetList', 'items', this.choices.getPreset(screenInfo.id, preset),
+					...this.choices.getLayerPath(layers[0].layerKey),
+					'cutNFill',
+				]
+
+				const newoptions: Partial<DeviceLayerCutFillV3> = {
+					screen: screenInfo.id,
+					layersel: layers[0].layerKey,
+					preset,
+				}
+
+				const type = this.state.get(['DEVICE', ...path, 'pp', 'type'])
+				if (typeof type === 'string') newoptions.enable = type === 'CUT_N_FILL' ? 'on' : 'off'
+
+				const inputNum = this.state.get(['DEVICE', ...path, 'cut', 'pp', 'inputNum'])
+				if (typeof inputNum === 'string') newoptions.source = this.choices.backgroundContentToShortSource(inputNum)
+
+				const flags: string[] = this.state.get(['DEVICE', ...path, 'cut', 'pp', 'flags']) ?? []
+				for (const [optId, flagName] of flagFields) {
+					(newoptions[optId] as string) = flags.includes(flagName) ? 'on' : 'off'
+				}
+
+				const curve = this.state.get(['DEVICE', ...path, 'cut', 'pp', 'curve'])
+				if (typeof curve === 'number') newoptions.curve = curve.toString()
+
+				for (const [optId, propName] of cropPairs.flatMap(([a, b, pa, pb]) => [[a, pa], [b, pb]] as [keyof DeviceLayerCutFillV3, string][])) {
+					const raw = this.state.get(['DEVICE', ...path, 'cut', 'cropping', 'pp', propName])
+					if (typeof raw === 'number') (newoptions[optId] as number) = Math.round(raw / 65536 * 100 * 100) / 100
+				}
+
+				return newoptions
+			},
+			callback: (action) => {
+				const layers = resolveLayers(action.options)
+					.filter(layer => layer.layerKey.match(/^\d+$/)) // Cut&Fill only applies to numbered content layers, not the background
+					.filter(layer => {
+						// canUseMask is a historically-misnamed flag that actually tracks whether Cut&Fill (once
+						// internally called "Mask") is available on this Layer at all - live-confirmed
+						// (2026-09-08), toggled by a Preconfig change (e.g. Mixer/Split mode), not something
+						// this action can change itself. Never send anything to a Layer that can't do Cut&Fill
+						// (see GUIDELINES.md's "never write to a target that doesn't exist").
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						return !!this.state.get(['DEVICE', ...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath), 'items', screenInfo.platformId, 'layerList', 'items', layer.layerKey, 'status', 'pp', 'canUseMask'])
+					})
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
+
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
+							}
+						}
+						return true
+					})
+
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+							'cutNFill',
+						]
+
+						if (action.options.enable !== 'keep') {
+							const current = this.state.get(['DEVICE', ...path, 'pp', 'type'])
+							const turnOn = action.options.enable === 'toggle' ? current !== 'CUT_N_FILL' : action.options.enable === 'on'
+							this.connection.sendWSmessage([...path, 'pp', 'type'], turnOn ? 'CUT_N_FILL' : 'NONE')
+						}
+
+						if (action.options.source !== 'keep') {
+							this.connection.sendWSmessage([...path, 'cut', 'pp', 'inputNum'], this.choices.shortSourceToBackgroundContent(action.options.source))
+						}
+
+						if (action.options.curve !== '') {
+							const curve = Number(action.options.curve)
+							if (!Number.isNaN(curve)) this.connection.sendWSmessage([...path, 'cut', 'pp', 'curve'], curve)
+						}
+
+						if (flagFields.some(([optId]) => action.options[optId] !== 'keep')) {
+							let flags: string[] = this.state.get(['DEVICE', ...path, 'cut', 'pp', 'flags']) ?? []
+							for (const [optId, flagName] of flagFields) {
+								const value = action.options[optId] as string
+								if (value === 'keep') continue
+								const turnOn = value === 'toggle' ? !flags.includes(flagName) : value === 'on'
+								flags = flags.filter(f => f !== flagName)
+								if (turnOn) flags.push(flagName)
+							}
+							this.connection.sendWSmessage([...path, 'cut', 'pp', 'flags'], flags)
+						}
+
+						for (const [optA, optB, propA, propB] of cropPairs) {
+							const valueA = Number(action.options[optA])
+							const valueB = Number(action.options[optB])
+							const settingA = valueA >= 0
+							const settingB = valueB >= 0
+							if (!settingA && !settingB) continue
+
+							const currentA = settingA ? valueA : (this.state.get(['DEVICE', ...path, 'cut', 'cropping', 'pp', propA]) ?? 0) / 65536 * 100
+							const currentB = settingB ? valueB : (this.state.get(['DEVICE', ...path, 'cut', 'cropping', 'pp', propB]) ?? 0) / 65536 * 100
+
+							let finalA = currentA
+							let finalB = currentB
+							if (finalA + finalB > 100) {
+								if (settingA && settingB) {
+									finalB = Math.max(0, 100 - finalA)
+								} else if (settingA) {
+									finalA = Math.max(0, 100 - currentB)
+								} else {
+									finalB = Math.max(0, 100 - currentA)
+								}
+							}
+
+							if (settingA) this.connection.sendWSmessage([...path, 'cut', 'cropping', 'pp', propA], Math.round(finalA / 100 * 65536))
+							if (settingB) this.connection.sendWSmessage([...path, 'cut', 'cropping', 'pp', propB], Math.round(finalB / 100 * 65536))
+						}
+					}
+				}
+
+				if (parseBoolean(action.options.relockAfterChange)) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
+						this.choices.setScreenLock(screenAuxKey, preset, true)
+					}
+				}
+				this.instance.sendXupdate()
+			},
+		}
+
+		return deviceLayerCutFillV3
+	}
+
+	/**
+	 * MARK: Layer Properties - Opacity
 	 */
 	get deviceLayerOpacityV3() {
 		type DeviceLayerOpacityV3 = {screen: string, preset: string, layersel: string, opacity: number, unlockIfLocked: boolean, relockAfterChange: boolean}
@@ -2333,7 +2767,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const deviceLayerOpacityV3: AWJaction<DeviceLayerOpacityV3> = {
@@ -2353,7 +2792,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -2362,7 +2801,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2403,7 +2843,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -2425,36 +2868,40 @@ export default class Actions {
 			callback: (action) => {
 				const rawOpacity = Number(action.options.opacity) >= 0 ? Math.round(Math.min(256, Number(action.options.opacity))) : undefined
 
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/)) // opacity only applies to numbered content layers, not background
-					.filter(layer => {
-						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
-								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
-							}
-						}
-						return true
-					})
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // opacity only applies to numbered content layers, not background
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				if (rawOpacity !== undefined) {
-					for (const layer of layers) {
-						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-						const path = [
-							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-							'items', screenInfo.platformId,
-							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-							...this.choices.getLayerPath(layer.layerKey),
-						]
-						this.connection.sendWSmessage([...path, 'opacity', 'pp', 'opacity'], rawOpacity)
+					for (const preset of presetsToApply) {
+						const targetLayers = layers.filter(layer => {
+							if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+								if (!parseBoolean(action.options.unlockIfLocked)) return false
+								const key = `${layer.screenAuxKey}|${preset}`
+								if (!unlockedTargets.has(key)) {
+									this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+									unlockedTargets.add(key)
+								}
+							}
+							return true
+						})
+
+						for (const layer of targetLayers) {
+							const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+							const path = [
+								...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+								'items', screenInfo.platformId,
+								'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+								...this.choices.getLayerPath(layer.layerKey),
+							]
+							this.connection.sendWSmessage([...path, 'opacity', 'pp', 'opacity'], rawOpacity)
+						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -2466,7 +2913,7 @@ export default class Actions {
 	}
 
 	/**
-	 * MARK: Layer Properties - Aspect & Crop (V3, placeholder - not yet implemented)
+	 * MARK: Layer Properties - Aspect & Crop
 	 */
 	get deviceLayerAspectCropV3() {
 		type DeviceLayerAspectCropV3 = {
@@ -2496,7 +2943,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const deviceLayerAspectCropV3: AWJaction<DeviceLayerAspectCropV3> = {
@@ -2516,7 +2968,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -2525,7 +2977,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2640,7 +3093,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -2672,20 +3128,9 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/)) // aspect/crop only applies to numbered content layers, not background
-					.filter(layer => {
-						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
-								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
-							}
-						}
-						return true
-					})
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // aspect/crop only applies to numbered content layers, not background
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				// 'v' fields (top/bottom) normalize against the source's height, 'h' fields (left/right) against
 				// its width - confirmed live, cropping is stored as a 16-bit fraction (0-65536) of the source's
@@ -2698,41 +3143,56 @@ export default class Actions {
 					['cropLeftPx', 'cropLeftPct', 'left', 'h'], ['cropRightPx', 'cropRightPct', 'right', 'h'],
 				]
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
-					if (action.options.aspectOverride !== 'keep') this.connection.sendWSmessage([...path, 'cropping', 'classic', 'pp', 'aspectOverride'], action.options.aspectOverride)
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
+							}
+						}
+						return true
+					})
 
-					let source: {width: number | '', height: number | ''} | undefined
-					for (const [pxId, pctId, prop, axis] of cropFields) {
-						const rawPx = action.options[pxId]
-						let fraction: number | undefined
-						if (rawPx !== '' && !isNaN(Number(rawPx))) {
-							source ??= this.choices.getLayerSourceInfo(path)
-							const dimension = axis === 'v' ? source.height : source.width
-							// clamp to 0-100% of the source's dimension - a pixel value beyond the source's own size
-							// (e.g. 1200 on a 1080px-tall source) has no meaningful crop value, so cap it at "fully
-							// cropped" (100%) instead of sending a nonsensical raw value, making the mistake visible
-							// live (the layer goes fully cropped) rather than silently doing something undefined.
-							if (dimension !== '') fraction = Math.min(1, Math.max(0, Number(rawPx) / dimension))
-						}
-						if (fraction === undefined) {
-							const pct = Number(action.options[pctId])
-							if (pct >= 0) fraction = pct / 100 // -1 (the field's default) is the "don't change" sentinel, so 0% stays usable as a real value
-						}
-						if (fraction !== undefined) {
-							this.connection.sendWSmessage([...path, 'cropping', 'classic', 'pp', prop], Math.round(fraction * 65536))
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
+						if (action.options.aspectOverride !== 'keep') this.connection.sendWSmessage([...path, 'cropping', 'classic', 'pp', 'aspectOverride'], action.options.aspectOverride)
+
+						let source: {width: number | '', height: number | ''} | undefined
+						for (const [pxId, pctId, prop, axis] of cropFields) {
+							const rawPx = action.options[pxId]
+							let fraction: number | undefined
+							if (rawPx !== '' && !isNaN(Number(rawPx))) {
+								source ??= this.choices.getLayerSourceInfo(path)
+								const dimension = axis === 'v' ? source.height : source.width
+								// clamp to 0-100% of the source's dimension - a pixel value beyond the source's own size
+								// (e.g. 1200 on a 1080px-tall source) has no meaningful crop value, so cap it at "fully
+								// cropped" (100%) instead of sending a nonsensical raw value, making the mistake visible
+								// live (the layer goes fully cropped) rather than silently doing something undefined.
+								if (dimension !== '') fraction = Math.min(1, Math.max(0, Number(rawPx) / dimension))
+							}
+							if (fraction === undefined) {
+								const pct = Number(action.options[pctId])
+								if (pct >= 0) fraction = pct / 100 // -1 (the field's default) is the "don't change" sentinel, so 0% stays usable as a real value
+							}
+							if (fraction !== undefined) {
+								this.connection.sendWSmessage([...path, 'cropping', 'classic', 'pp', prop], Math.round(fraction * 65536))
+							}
 						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -2744,7 +3204,7 @@ export default class Actions {
 	}
 
 	/**
-	 * MARK: Layer Properties - Mask (V3, placeholder - not yet implemented)
+	 * MARK: Layer Properties - Mask
 	 */
 	get deviceLayerMaskV3() {
 		type DeviceLayerMaskV3 = {
@@ -2762,7 +3222,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const pxTooltip = (dim: 'height' | 'width') =>
@@ -2786,7 +3251,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -2795,7 +3260,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2900,7 +3366,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -2932,63 +3401,67 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/)) // mask only applies to numbered content layers, not background
-					.filter(layer => {
-						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
-								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
-							}
-						}
-						return true
-					})
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // mask only applies to numbered content layers, not background
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				const maskFields: [keyof DeviceLayerMaskV3, keyof DeviceLayerMaskV3, string, 'h' | 'v'][] = [
 					['maskTopPx', 'maskTopPct', 'top', 'v'], ['maskBottomPx', 'maskBottomPct', 'bottom', 'v'],
 					['maskLeftPx', 'maskLeftPct', 'left', 'h'], ['maskRightPx', 'maskRightPct', 'right', 'h'],
 				]
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
-
-					// unlike Aspect & Crop (normalized against the source's native resolution), Mask is confirmed
-					// live to normalize against the layer's own current on-screen size instead - defaults mirror
-					// "Reset Layer Size or Ratio"'s fallback for a layer whose size isn't known yet.
-					let sizeH: number | undefined
-					let sizeV: number | undefined
-					for (const [pxId, pctId, prop, axis] of maskFields) {
-						const rawPx = action.options[pxId]
-						let fraction: number | undefined
-						if (rawPx !== '' && !isNaN(Number(rawPx))) {
-							if (sizeH === undefined) {
-								sizeH = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
-								sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
 							}
-							const dimension = axis === 'v' ? sizeV! : sizeH!
-							fraction = Math.min(1, Math.max(0, Number(rawPx) / dimension))
 						}
-						if (fraction === undefined) {
-							const pct = Number(action.options[pctId])
-							if (pct >= 0) fraction = pct / 100
-						}
-						if (fraction !== undefined) {
-							this.connection.sendWSmessage([...path, 'cropping', 'mask', 'pp', prop], Math.round(fraction * 65536))
+						return true
+					})
+
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
+
+						// unlike Aspect & Crop (normalized against the source's native resolution), Mask is confirmed
+						// live to normalize against the layer's own current on-screen size instead - defaults mirror
+						// "Reset Layer Size or Ratio"'s fallback for a layer whose size isn't known yet.
+						let sizeH: number | undefined
+						let sizeV: number | undefined
+						for (const [pxId, pctId, prop, axis] of maskFields) {
+							const rawPx = action.options[pxId]
+							let fraction: number | undefined
+							if (rawPx !== '' && !isNaN(Number(rawPx))) {
+								if (sizeH === undefined) {
+									sizeH = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
+									sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
+								}
+								const dimension = axis === 'v' ? sizeV! : sizeH!
+								fraction = Math.min(1, Math.max(0, Number(rawPx) / dimension))
+							}
+							if (fraction === undefined) {
+								const pct = Number(action.options[pctId])
+								if (pct >= 0) fraction = pct / 100
+							}
+							if (fraction !== undefined) {
+								this.connection.sendWSmessage([...path, 'cropping', 'mask', 'pp', prop], Math.round(fraction * 65536))
+							}
 						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -3035,7 +3508,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const clamp255 = (n: number) => Math.round(Math.min(255, Math.max(0, n)))
@@ -3057,7 +3535,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -3066,7 +3544,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -3075,7 +3554,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Edge',
 					tooltip: 'Master on/off for the border edge itself (confirmed live: adds/removes the "EDGE" flag). The fields in the "Edge/Smooth" section below only have a visible effect while this is on.',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -3083,7 +3562,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Smooth',
 					tooltip: 'Confirmed live: adds/removes the "SMOOTH" flag on the edge (independent of Shadow\'s own separate Smooth checkbox further down).',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -3091,7 +3570,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Shadow',
 					tooltip: 'Master on/off for the shadow itself. Confirmed live: reuses the same "EDGE" flag as the Edge switch above, but on the shadow\'s own separate style array - turning this on produced shadow.pp.style=["EDGE"] on a real device. The fields in the "Shadow" section below only have a visible effect while this is on.',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{ id: 'edgeHeader', type: 'static-text', label: '', value: '---\n**Edge/Smooth**', disableAutoExpression: true },
@@ -3147,7 +3626,7 @@ export default class Actions {
 					id: 'edgeRound',
 					type: 'dropdown',
 					label: 'Round',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -3192,7 +3671,7 @@ export default class Actions {
 					id: 'shadowSmooth',
 					type: 'dropdown',
 					label: 'Smooth',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -3221,7 +3700,7 @@ export default class Actions {
 					id: 'shadowRound',
 					type: 'dropdown',
 					label: 'Round',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{
@@ -3258,7 +3737,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -3307,111 +3789,125 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/)) // border only applies to numbered content layers, not background
-					.filter(layer => {
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // border only applies to numbered content layers, not background
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
+
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
 						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
 							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
 								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
+								unlockedTargets.add(key)
 							}
 						}
 						return true
 					})
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
 
-					// Edge Horizontal/Vertical Size - if only one is given, derive the other to preserve the
-					// edge's current aspect ratio, matching WebRCS's own "Keep Aspect Ratio" behavior.
-					let newSizeH = Number(action.options.edgeSizeH) >= 0 ? Number(action.options.edgeSizeH) : undefined
-					let newSizeV = Number(action.options.edgeSizeV) >= 0 ? Number(action.options.edgeSizeV) : undefined
-					if (newSizeH !== undefined && newSizeV === undefined) {
-						const curH = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeH']) ?? 0
-						const curV = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeV']) ?? 0
-						if (curH > 0) newSizeV = newSizeH * curV / curH
-					} else if (newSizeV !== undefined && newSizeH === undefined) {
-						const curH = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeH']) ?? 0
-						const curV = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeV']) ?? 0
-						if (curV > 0) newSizeH = newSizeV * curH / curV
-					}
-					if (newSizeH !== undefined) this.connection.sendWSmessage([...path, 'border', 'edge', 'pp', 'sizeH'], clamp255(newSizeH))
-					if (newSizeV !== undefined) this.connection.sendWSmessage([...path, 'border', 'edge', 'pp', 'sizeV'], clamp255(newSizeV))
+						// Edge Horizontal/Vertical Size - if only one is given, derive the other to preserve the
+						// edge's current aspect ratio, matching WebRCS's own "Keep Aspect Ratio" behavior.
+						let newSizeH = Number(action.options.edgeSizeH) >= 0 ? Number(action.options.edgeSizeH) : undefined
+						let newSizeV = Number(action.options.edgeSizeV) >= 0 ? Number(action.options.edgeSizeV) : undefined
+						if (newSizeH !== undefined && newSizeV === undefined) {
+							const curH = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeH']) ?? 0
+							const curV = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeV']) ?? 0
+							if (curH > 0) newSizeV = newSizeH * curV / curH
+						} else if (newSizeV !== undefined && newSizeH === undefined) {
+							const curH = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeH']) ?? 0
+							const curV = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'sizeV']) ?? 0
+							if (curV > 0) newSizeH = newSizeV * curH / curV
+						}
+						if (newSizeH !== undefined) this.connection.sendWSmessage([...path, 'border', 'edge', 'pp', 'sizeH'], clamp255(newSizeH))
+						if (newSizeV !== undefined) this.connection.sendWSmessage([...path, 'border', 'edge', 'pp', 'sizeV'], clamp255(newSizeV))
 
-					// Each of Edge/Smooth/Shadow/Round only ever adds/removes its own single flag - every other
-					// flag already on the layer's style array is preserved.
-					if (action.options.edgeEnable !== 'keep' || action.options.edgeSmoothEnable !== 'keep' || action.options.edgeRound !== 'keep') {
-						let flags: string[] = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'style']) ?? []
-						if (action.options.edgeEnable !== 'keep') {
-							flags = flags.filter(f => f !== 'EDGE')
-							if (action.options.edgeEnable === 'on') flags.push('EDGE')
+						// Each of Edge/Smooth/Shadow/Round only ever adds/removes its own single flag - every other
+						// flag already on the layer's style array is preserved.
+						// "toggle" flips whatever the flag's current state is at the moment this specific field is
+						// applied (read fresh from `flags`, not the pre-action state) - matches "on"/"off"'s own
+						// behavior of applying against whatever the array already looks like after earlier fields
+						// in the same call already changed it.
+						if (action.options.edgeEnable !== 'keep' || action.options.edgeSmoothEnable !== 'keep' || action.options.edgeRound !== 'keep') {
+							let flags: string[] = this.state.get(['DEVICE', ...path, 'border', 'edge', 'pp', 'style']) ?? []
+							if (action.options.edgeEnable !== 'keep') {
+								const turnOn = action.options.edgeEnable === 'toggle' ? !flags.includes('EDGE') : action.options.edgeEnable === 'on'
+								flags = flags.filter(f => f !== 'EDGE')
+								if (turnOn) flags.push('EDGE')
+							}
+							if (action.options.edgeSmoothEnable !== 'keep') {
+								const turnOn = action.options.edgeSmoothEnable === 'toggle' ? !flags.includes('SMOOTH') : action.options.edgeSmoothEnable === 'on'
+								flags = flags.filter(f => f !== 'SMOOTH')
+								if (turnOn) flags.push('SMOOTH')
+							}
+							if (action.options.edgeRound !== 'keep') {
+								const turnOn = action.options.edgeRound === 'toggle' ? !flags.includes('ROUNDED') : action.options.edgeRound === 'on'
+								flags = flags.filter(f => f !== 'ROUNDED')
+								if (turnOn) flags.push('ROUNDED')
+							}
+							this.connection.sendWSmessage([...path, 'border', 'edge', 'pp', 'style'], flags)
 						}
-						if (action.options.edgeSmoothEnable !== 'keep') {
-							flags = flags.filter(f => f !== 'SMOOTH')
-							if (action.options.edgeSmoothEnable === 'on') flags.push('SMOOTH')
+						if (action.options.shadowEnable !== 'keep' || action.options.shadowRound !== 'keep' || action.options.shadowSmooth !== 'keep') {
+							let flags: string[] = this.state.get(['DEVICE', ...path, 'border', 'shadow', 'pp', 'style']) ?? []
+							if (action.options.shadowEnable !== 'keep') {
+								const turnOn = action.options.shadowEnable === 'toggle' ? !flags.includes('EDGE') : action.options.shadowEnable === 'on'
+								flags = flags.filter(f => f !== 'EDGE')
+								if (turnOn) flags.push('EDGE')
+							}
+							if (action.options.shadowRound !== 'keep') {
+								const turnOn = action.options.shadowRound === 'toggle' ? !flags.includes('ROUNDED') : action.options.shadowRound === 'on'
+								flags = flags.filter(f => f !== 'ROUNDED')
+								if (turnOn) flags.push('ROUNDED')
+							}
+							if (action.options.shadowSmooth !== 'keep') {
+								const turnOn = action.options.shadowSmooth === 'toggle' ? !flags.includes('SMOOTH') : action.options.shadowSmooth === 'on'
+								flags = flags.filter(f => f !== 'SMOOTH')
+								if (turnOn) flags.push('SMOOTH')
+							}
+							this.connection.sendWSmessage([...path, 'border', 'shadow', 'pp', 'style'], flags)
 						}
-						if (action.options.edgeRound !== 'keep') {
-							flags = flags.filter(f => f !== 'ROUNDED')
-							if (action.options.edgeRound === 'on') flags.push('ROUNDED')
-						}
-						this.connection.sendWSmessage([...path, 'border', 'edge', 'pp', 'style'], flags)
-					}
-					if (action.options.shadowEnable !== 'keep' || action.options.shadowRound !== 'keep' || action.options.shadowSmooth !== 'keep') {
-						let flags: string[] = this.state.get(['DEVICE', ...path, 'border', 'shadow', 'pp', 'style']) ?? []
-						if (action.options.shadowEnable !== 'keep') {
-							flags = flags.filter(f => f !== 'EDGE')
-							if (action.options.shadowEnable === 'on') flags.push('EDGE')
-						}
-						if (action.options.shadowRound !== 'keep') {
-							flags = flags.filter(f => f !== 'ROUNDED')
-							if (action.options.shadowRound === 'on') flags.push('ROUNDED')
-						}
-						if (action.options.shadowSmooth !== 'keep') {
-							flags = flags.filter(f => f !== 'SMOOTH')
-							if (action.options.shadowSmooth === 'on') flags.push('SMOOTH')
-						}
-						this.connection.sendWSmessage([...path, 'border', 'shadow', 'pp', 'style'], flags)
-					}
 
-					const numFields: [keyof DeviceLayerBorderV3, string[]][] = [
-						['edgeRadius', ['border', 'edge', 'pp', 'radius']], ['edgeOpacity', ['border', 'edge', 'pp', 'opacity']],
-						['shadowOffsetX', ['border', 'shadow', 'pp', 'sizeH']], ['shadowOffsetY', ['border', 'shadow', 'pp', 'sizeV']],
-						['shadowRadius', ['border', 'shadow', 'pp', 'radius']], ['shadowOpacity', ['border', 'shadow', 'pp', 'opacity']],
-					]
-					for (const [optId, prop] of numFields) {
-						const raw = Number(action.options[optId])
-						if (raw >= 0) {
-							this.connection.sendWSmessage([...path, ...prop], clamp255(raw))
+						const numFields: [keyof DeviceLayerBorderV3, string[]][] = [
+							['edgeRadius', ['border', 'edge', 'pp', 'radius']], ['edgeOpacity', ['border', 'edge', 'pp', 'opacity']],
+							['shadowOffsetX', ['border', 'shadow', 'pp', 'sizeH']], ['shadowOffsetY', ['border', 'shadow', 'pp', 'sizeV']],
+							['shadowRadius', ['border', 'shadow', 'pp', 'radius']], ['shadowOpacity', ['border', 'shadow', 'pp', 'opacity']],
+						]
+						for (const [optId, prop] of numFields) {
+							const raw = Number(action.options[optId])
+							if (raw >= 0) {
+								this.connection.sendWSmessage([...path, ...prop], clamp255(raw))
+							}
 						}
-					}
 
-					if (parseBoolean(action.options.edgeChangeColor)) {
-						const color = Number(action.options.edgeColor)
-						const colorpath = [...path, 'border', 'edge', 'color', 'pp']
-						this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
-						this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
-						this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
-					}
-					if (parseBoolean(action.options.shadowChangeColor)) {
-						const color = Number(action.options.shadowColor)
-						const colorpath = [...path, 'border', 'shadow', 'color', 'pp']
-						this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
-						this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
-						this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+						if (parseBoolean(action.options.edgeChangeColor)) {
+							const color = Number(action.options.edgeColor)
+							const colorpath = [...path, 'border', 'edge', 'color', 'pp']
+							this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
+							this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
+							this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+						}
+						if (parseBoolean(action.options.shadowChangeColor)) {
+							const color = Number(action.options.shadowColor)
+							const colorpath = [...path, 'border', 'shadow', 'color', 'pp']
+							this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
+							this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
+							this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -3457,7 +3953,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		// Finds whichever output currently feeds the given screen/aux and returns its master rate in Hz, or
@@ -3476,12 +3977,19 @@ export default class Actions {
 		}
 		const fpmToFrames = (fpm: number, rateHz: number) => Math.min(255, Math.max(2, fpm ? Math.round(60 * rateHz / fpm) : 0))
 
-		const flagChoices = [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }]
+		// Strobe requires firmware 6.0.4+ (Analog Way's release notes: "Implementation of strobe effect at layer
+		// level" - Filter/Transform have no such requirement, confirmed present well before this module's V4
+		// firmware floor). Excluding 'strobeEnable' from flagFields on old firmware (rather than just hiding its
+		// option field) keeps the callback's flag-clearing loop below from ever touching STROBE at all - it only
+		// acts on ids actually present here, so an unsupported device's existing Strobe state is left untouched
+		// instead of being silently cleared by a hidden field defaulting to some "off"-like value.
+		const strobeSupported = this.choices.isFirmwareAtLeast('6.0.4')
+		const flagChoices = [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }]
 		// [optionId, AWJ flag name]
 		const flagFields: [keyof DeviceLayerEffectsV3, string][] = [
 			['filterBlackWhite', 'BLACK_N_WHITE'], ['filterNegative', 'NEGATIVE'], ['filterSepia', 'SEPIA'], ['filterSolar', 'SOLAR'],
 			['transformFlipH', 'FLIP_H'], ['transformFlipV', 'FLIP_V'],
-			['strobeEnable', 'STROBE'],
+			...(strobeSupported ? [['strobeEnable', 'STROBE'] as [keyof DeviceLayerEffectsV3, string]] : []),
 		]
 
 		const deviceLayerEffectsV3: AWJaction<DeviceLayerEffectsV3> = {
@@ -3501,7 +4009,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -3510,7 +4018,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'filterHeader', type: 'static-text', label: '', value: '---\n**Filter**', disableAutoExpression: true },
@@ -3522,23 +4031,25 @@ export default class Actions {
 				{ id: 'transformFlipH', type: 'dropdown', label: 'Flip Horizontal', choices: flagChoices, default: 'keep' },
 				{ id: 'transformFlipV', type: 'dropdown', label: 'Flip Vertical', choices: flagChoices, default: 'keep' },
 				{ id: 'strobeHeader', type: 'static-text', label: '', value: '---\n**Strobe**', disableAutoExpression: true },
-				{ id: 'strobeEnable', type: 'dropdown', label: 'Enable', choices: flagChoices, default: 'keep' },
-				{
-					id: 'strobeFpm',
-					type: 'textinput',
-					label: 'FPM',
-					tooltip: 'Leave empty to not change this value. Flashes Per Minute (confirmed live: FPM=round(60*rate/Hold), using the current output rate of the layer\'s own screen). Used only when Hold below is left empty, and has no effect if the screen\'s output rate can\'t be determined.',
-					default: '',
-					useVariables: true,
-				},
-				{
-					id: 'strobeHold',
-					type: 'textinput',
-					label: 'Hold',
-					tooltip: 'Leave empty to not change this value. Raw 2-255 device value (confirmed live) - number of frames the current image is held before the next flash. Takes priority over FPM above if both are set.',
-					default: '',
-					useVariables: true,
-				},
+				...(strobeSupported ? [
+					{ id: 'strobeEnable', type: 'dropdown', label: 'Enable', choices: flagChoices, default: 'keep' },
+					{
+						id: 'strobeFpm',
+						type: 'textinput',
+						label: 'FPM',
+						tooltip: 'Leave empty to not change this value. Flashes Per Minute (confirmed live: FPM=round(60*rate/Hold), using the current output rate of the layer\'s own screen). Used only when Hold below is left empty, and has no effect if the screen\'s output rate can\'t be determined.',
+						default: '',
+						useVariables: true,
+					},
+					{
+						id: 'strobeHold',
+						type: 'textinput',
+						label: 'Hold',
+						tooltip: 'Leave empty to not change this value. Raw 2-255 device value (confirmed live) - number of frames the current image is held before the next flash. Takes priority over FPM above if both are set.',
+						default: '',
+						useVariables: true,
+					},
+				] as SomeAWJactionInputfield<DeviceLayerEffectsV3>[] : this.firmwareGateOptions('6.0.4') as SomeAWJactionInputfield<DeviceLayerEffectsV3>[]),
 				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
 				{
 					// module-only convenience, not present in WebRCS - added to every "Layer Properties" action since
@@ -3564,7 +4075,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -3584,63 +4098,72 @@ export default class Actions {
 					(newoptions[optId] as string) = flags.includes(flagName) ? 'on' : 'off'
 				}
 				// only Hold is ever learned - FPM has no value of its own in the device config to read back
-				const hold = this.state.get(['DEVICE', ...path, 'effects', 'strobe', 'pp', 'frames'])
-				if (typeof hold === 'number') newoptions.strobeHold = hold.toString()
+				if (strobeSupported) {
+					const hold = this.state.get(['DEVICE', ...path, 'effects', 'strobe', 'pp', 'frames'])
+					if (typeof hold === 'number') newoptions.strobeHold = hold.toString()
+				}
 
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/))
-					.filter(layer => {
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
+
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
 						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
 							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
 								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
+								unlockedTargets.add(key)
 							}
 						}
 						return true
 					})
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
 
-					if (flagFields.some(([optId]) => action.options[optId] !== 'keep')) {
-						let flags: string[] = this.state.get(['DEVICE', ...path, 'effects', 'pp', 'flags']) ?? []
-						for (const [optId, flagName] of flagFields) {
-							const value = action.options[optId] as string
-							if (value === 'keep') continue
-							flags = flags.filter(f => f !== flagName)
-							if (value === 'on') flags.push(flagName)
+						if (flagFields.some(([optId]) => action.options[optId] !== 'keep')) {
+							let flags: string[] = this.state.get(['DEVICE', ...path, 'effects', 'pp', 'flags']) ?? []
+							for (const [optId, flagName] of flagFields) {
+								const value = action.options[optId] as string
+								if (value === 'keep') continue
+								const turnOn = value === 'toggle' ? !flags.includes(flagName) : value === 'on'
+								flags = flags.filter(f => f !== flagName)
+								if (turnOn) flags.push(flagName)
+							}
+							this.connection.sendWSmessage([...path, 'effects', 'pp', 'flags'], flags)
 						}
-						this.connection.sendWSmessage([...path, 'effects', 'pp', 'flags'], flags)
-					}
 
-					const hold = action.options.strobeHold
-					const fpm = action.options.strobeFpm
-					let frames: number | undefined
-					if (hold !== '' && !isNaN(Number(hold))) {
-						frames = Math.round(Math.min(255, Math.max(2, Number(hold))))
-					} else if (fpm !== '' && !isNaN(Number(fpm))) {
-						const rate = getScreenMasterRateHz(layer.screenAuxKey)
-						if (rate !== undefined) frames = fpmToFrames(Number(fpm), rate)
-					}
-					if (frames !== undefined) {
-						this.connection.sendWSmessage([...path, 'effects', 'strobe', 'pp', 'frames'], frames)
+						if (strobeSupported) {
+							const hold = action.options.strobeHold
+							const fpm = action.options.strobeFpm
+							let frames: number | undefined
+							if (hold !== '' && !isNaN(Number(hold))) {
+								frames = Math.round(Math.min(255, Math.max(2, Number(hold))))
+							} else if (fpm !== '' && !isNaN(Number(fpm))) {
+								const rate = getScreenMasterRateHz(layer.screenAuxKey)
+								if (rate !== undefined) frames = fpmToFrames(Number(fpm), rate)
+							}
+							if (frames !== undefined) {
+								this.connection.sendWSmessage([...path, 'effects', 'strobe', 'pp', 'frames'], frames)
+							}
+						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -3675,7 +4198,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const deviceLayerSpeedV3: AWJaction<DeviceLayerSpeedV3> = {
@@ -3695,7 +4223,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -3704,7 +4232,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -3712,7 +4241,7 @@ export default class Actions {
 					id: 'linear',
 					type: 'dropdown',
 					label: 'Linear',
-					choices: [{ id: 'keep', label: "Don't change" }, { id: 'off', label: 'Off' }, { id: 'on', label: 'On' }],
+					choices: [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }],
 					default: 'keep',
 				},
 				{ id: 'accelerationHeader', type: 'static-text', label: '', value: '---\n**Acceleration**', disableAutoExpression: true },
@@ -3764,7 +4293,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const path = [
 					...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
@@ -3789,43 +4321,50 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/))
-					.filter(layer => {
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
+
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
 						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
 							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
 								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
+								unlockedTargets.add(key)
 							}
 						}
 						return true
 					})
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
 
-					if (action.options.linear !== 'keep') {
-						this.connection.sendWSmessage([...path, 'speed', 'pp', 'type'], action.options.linear === 'on' ? 'LINEAR_TRANSITION' : 'SMOOTH_TRANSITION')
-					}
-					if (Number(action.options.point1) >= 0) {
-						this.connection.sendWSmessage([...path, 'speed', 'pp', 'point1'], Math.round(Number(action.options.point1)))
-					}
-					if (Number(action.options.point2) >= 0) {
-						this.connection.sendWSmessage([...path, 'speed', 'pp', 'point2'], Math.round(Number(action.options.point2)))
+						if (action.options.linear !== 'keep') {
+							const turnOn = action.options.linear === 'toggle'
+								? this.state.get(['DEVICE', ...path, 'speed', 'pp', 'type']) !== 'LINEAR_TRANSITION'
+								: action.options.linear === 'on'
+							this.connection.sendWSmessage([...path, 'speed', 'pp', 'type'], turnOn ? 'LINEAR_TRANSITION' : 'SMOOTH_TRANSITION')
+						}
+						if (Number(action.options.point1) >= 0) {
+							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point1'], Math.round(Number(action.options.point1)))
+						}
+						if (Number(action.options.point2) >= 0) {
+							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point2'], Math.round(Number(action.options.point2)))
+						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -3868,7 +4407,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const valueChoices = [
@@ -3904,7 +4448,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -3913,7 +4457,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -3975,20 +4520,9 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/))
-					.filter(layer => {
-						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
-								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
-							}
-						}
-						return true
-					})
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				const direction = action.options.direction === 'decrement' ? -1 : 1
 				const rawStr = action.options.stepRaw
@@ -3999,87 +4533,102 @@ export default class Actions {
 				const hasPx = pxStr !== '' && !isNaN(Number(pxStr))
 				if (!hasRaw && !hasPct && !hasPx) return // nothing to apply
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
-						...this.choices.getLayerPath(layer.layerKey),
-					]
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
+							}
+						}
+						return true
+					})
 
-					// Crop/Mask Top/Bottom/Left/Right all share the same 16-bit-fraction-of-a-dimension shape
-					// (see "Aspect & Crop"/"Mask" for the confirmed-live encoding and why Crop and Mask normalize
-					// against different dimensions) - one helper covers all 8.
-					const applyFraction = (propPath: string[], dimension: number | '') => {
-						const current = this.state.get(['DEVICE', ...path, ...propPath]) ?? 0
-						let delta: number | undefined
-						if (hasRaw) delta = Number(rawStr)
-						else if (hasPct) delta = Number(pctStr) / 100 * 65536
-						else if (hasPx && dimension !== '') delta = Number(pxStr) / dimension * 65536
-						if (delta === undefined) return
-						const newValue = Math.round(Math.min(65536, Math.max(0, current + direction * delta)))
-						this.connection.sendWSmessage([...path, ...propPath], newValue)
-					}
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+							...this.choices.getLayerPath(layer.layerKey),
+						]
 
-					// Position X/Y and Width/Height are already raw pixels at the protocol level, so Raw and
-					// Pixel are the same input here - Percent is of the screen's own canvas size instead.
-					const applyLinear = (propPath: string[], screenDimension: number) => {
-						const current = this.state.get(['DEVICE', ...path, ...propPath]) ?? 0
-						let delta: number | undefined
-						if (hasRaw) delta = Number(rawStr)
-						else if (hasPct) delta = Number(pctStr) / 100 * screenDimension
-						else if (hasPx) delta = Number(pxStr)
-						if (delta === undefined) return
-						this.connection.sendWSmessage([...path, ...propPath], Math.round(current + direction * delta))
-					}
-
-					switch (action.options.value) {
-						case 'opacity': {
-							const current = this.state.get(['DEVICE', ...path, 'opacity', 'pp', 'opacity']) ?? 0
+						// Crop/Mask Top/Bottom/Left/Right all share the same 16-bit-fraction-of-a-dimension shape
+						// (see "Aspect & Crop"/"Mask" for the confirmed-live encoding and why Crop and Mask normalize
+						// against different dimensions) - one helper covers all 8.
+						const applyFraction = (propPath: string[], dimension: number | '') => {
+							const current = this.state.get(['DEVICE', ...path, ...propPath]) ?? 0
 							let delta: number | undefined
 							if (hasRaw) delta = Number(rawStr)
-							else if (hasPct) delta = Number(pctStr) / 100 * 256
-							// Pixel not applicable to Opacity - deliberately not checked
-							if (delta === undefined) break
-							const newValue = Math.round(Math.min(256, Math.max(0, current + direction * delta)))
-							this.connection.sendWSmessage([...path, 'opacity', 'pp', 'opacity'], newValue)
-							break
+							else if (hasPct) delta = Number(pctStr) / 100 * 65536
+							else if (hasPx && dimension !== '') delta = Number(pxStr) / dimension * 65536
+							if (delta === undefined) return
+							const newValue = Math.round(Math.min(65536, Math.max(0, current + direction * delta)))
+							this.connection.sendWSmessage([...path, ...propPath], newValue)
 						}
-						case 'posX': case 'posY': case 'sizeW': case 'sizeH': {
-							const screenPath = [
-								...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-								'items', screenInfo.platformId,
-								...this.constants.screenSizePath,
-							]
-							const screenSizeH = this.state.get(['DEVICE', ...screenPath, 'sizeH']) ?? 1920
-							const screenSizeV = this.state.get(['DEVICE', ...screenPath, 'sizeV']) ?? 1080
-							if (action.options.value === 'posX') applyLinear([...this.constants.propsPositionPath, 'posH'], screenSizeH)
-							else if (action.options.value === 'posY') applyLinear([...this.constants.propsPositionPath, 'posV'], screenSizeV)
-							else if (action.options.value === 'sizeW') applyLinear([...this.constants.propsSizePath, 'sizeH'], screenSizeH)
-							else applyLinear([...this.constants.propsSizePath, 'sizeV'], screenSizeV)
-							break
+
+						// Position X/Y and Width/Height are already raw pixels at the protocol level, so Raw and
+						// Pixel are the same input here - Percent is of the screen's own canvas size instead.
+						const applyLinear = (propPath: string[], screenDimension: number) => {
+							const current = this.state.get(['DEVICE', ...path, ...propPath]) ?? 0
+							let delta: number | undefined
+							if (hasRaw) delta = Number(rawStr)
+							else if (hasPct) delta = Number(pctStr) / 100 * screenDimension
+							else if (hasPx) delta = Number(pxStr)
+							if (delta === undefined) return
+							this.connection.sendWSmessage([...path, ...propPath], Math.round(current + direction * delta))
 						}
-						case 'cropTop': case 'cropBottom': case 'cropLeft': case 'cropRight': {
-							const source = this.choices.getLayerSourceInfo(path)
-							const edge = action.options.value.replace('crop', '').toLowerCase()
-							const dimension = (edge === 'top' || edge === 'bottom') ? source.height : source.width
-							applyFraction(['cropping', 'classic', 'pp', edge], dimension)
-							break
-						}
-						case 'maskTop': case 'maskBottom': case 'maskLeft': case 'maskRight': {
-							const sizeH = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
-							const sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
-							const edge = action.options.value.replace('mask', '').toLowerCase()
-							const dimension = (edge === 'top' || edge === 'bottom') ? sizeV : sizeH
-							applyFraction(['cropping', 'mask', 'pp', edge], dimension)
-							break
+
+						switch (action.options.value) {
+							case 'opacity': {
+								const current = this.state.get(['DEVICE', ...path, 'opacity', 'pp', 'opacity']) ?? 0
+								let delta: number | undefined
+								if (hasRaw) delta = Number(rawStr)
+								else if (hasPct) delta = Number(pctStr) / 100 * 256
+								// Pixel not applicable to Opacity - deliberately not checked
+								if (delta === undefined) break
+								const newValue = Math.round(Math.min(256, Math.max(0, current + direction * delta)))
+								this.connection.sendWSmessage([...path, 'opacity', 'pp', 'opacity'], newValue)
+								break
+							}
+							case 'posX': case 'posY': case 'sizeW': case 'sizeH': {
+								const screenPath = [
+									...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+									'items', screenInfo.platformId,
+									...this.constants.screenSizePath,
+								]
+								const screenSizeH = this.state.get(['DEVICE', ...screenPath, 'sizeH']) ?? 1920
+								const screenSizeV = this.state.get(['DEVICE', ...screenPath, 'sizeV']) ?? 1080
+								if (action.options.value === 'posX') applyLinear([...this.constants.propsPositionPath, 'posH'], screenSizeH)
+								else if (action.options.value === 'posY') applyLinear([...this.constants.propsPositionPath, 'posV'], screenSizeV)
+								else if (action.options.value === 'sizeW') applyLinear([...this.constants.propsSizePath, 'sizeH'], screenSizeH)
+								else applyLinear([...this.constants.propsSizePath, 'sizeV'], screenSizeV)
+								break
+							}
+							case 'cropTop': case 'cropBottom': case 'cropLeft': case 'cropRight': {
+								const source = this.choices.getLayerSourceInfo(path)
+								const edge = action.options.value.replace('crop', '').toLowerCase()
+								const dimension = (edge === 'top' || edge === 'bottom') ? source.height : source.width
+								applyFraction(['cropping', 'classic', 'pp', edge], dimension)
+								break
+							}
+							case 'maskTop': case 'maskBottom': case 'maskLeft': case 'maskRight': {
+								const sizeH = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
+								const sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
+								const edge = action.options.value.replace('mask', '').toLowerCase()
+								const dimension = (edge === 'top' || edge === 'bottom') ? sizeV : sizeH
+								applyFraction(['cropping', 'mask', 'pp', edge], dimension)
+								break
+							}
 						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -4119,7 +4668,12 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		// Finds whichever of takeUpTime/takeDownTime corresponds to the transition that brings the given
@@ -4157,7 +4711,7 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
@@ -4166,7 +4720,8 @@ export default class Actions {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
 					default: 'first',
 				},
 				{ id: 'openingHeader', type: 'static-text', label: '', value: '---\n**Opening**', disableAutoExpression: true },
@@ -4200,7 +4755,10 @@ export default class Actions {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const screenInfo = this.choices.getScreenInfo(layers[0].screenAuxKey)
 				const presetKey = this.choices.getPreset(screenInfo.id, preset)
 				const path = [
@@ -4233,20 +4791,9 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				const unlockedScreens = new Set<string>()
-				const layers = resolveLayers(action.options)
-					.filter(layer => layer.layerKey.match(/^\d+$/))
-					.filter(layer => {
-						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-							if (!parseBoolean(action.options.unlockIfLocked)) return false
-							if (!unlockedScreens.has(layer.screenAuxKey)) {
-								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-								unlockedScreens.add(layer.screenAuxKey)
-							}
-						}
-						return true
-					})
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				const fields: [keyof DeviceLayerTimingV3, string[]][] = [
 					['openingStartMs', ['timing', 'opening', 'pp', 'start']],
@@ -4255,29 +4802,44 @@ export default class Actions {
 					['closingEndMs', ['timing', 'closing', 'pp', 'end']],
 				]
 
-				for (const layer of layers) {
-					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
-					const presetKey = this.choices.getPreset(layer.screenAuxKey, preset)
-					const path = [
-						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', screenInfo.platformId,
-						'presetList', 'items', presetKey,
-						...this.choices.getLayerPath(layer.layerKey),
-					]
+				for (const preset of presetsToApply) {
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
+							}
+						}
+						return true
+					})
 
-					let transitionMs: number | undefined
-					for (const [msId, prop] of fields) {
-						const msStr = action.options[msId] as string
-						if (msStr === '' || isNaN(Number(msStr))) continue
-						transitionMs ??= getRelevantTransitionMs(layer.screenAuxKey, presetKey)
-						if (transitionMs === undefined || transitionMs <= 0) continue
-						const value = Math.round(Number(msStr) / transitionMs * 65535)
-						this.connection.sendWSmessage([...path, ...prop], Math.min(65535, Math.max(0, value)))
+					for (const layer of targetLayers) {
+						const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+						const presetKey = this.choices.getPreset(layer.screenAuxKey, preset)
+						const path = [
+							...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items', screenInfo.platformId,
+							'presetList', 'items', presetKey,
+							...this.choices.getLayerPath(layer.layerKey),
+						]
+
+						let transitionMs: number | undefined
+						for (const [msId, prop] of fields) {
+							const msStr = action.options[msId] as string
+							if (msStr === '' || isNaN(Number(msStr))) continue
+							transitionMs ??= getRelevantTransitionMs(layer.screenAuxKey, presetKey)
+							if (transitionMs === undefined || transitionMs <= 0) continue
+							const value = Math.round(Number(msStr) / transitionMs * 65535)
+							this.connection.sendWSmessage([...path, ...prop], Math.min(65535, Math.max(0, value)))
+						}
 					}
 				}
 
 				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
 						this.choices.setScreenLock(screenAuxKey, preset, true)
 					}
 				}
@@ -4374,7 +4936,12 @@ export default class Actions {
 					: [opt.screen]
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: opt.layersel}))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
+			})
 		}
 
 		const deviceResetLayerSize: AWJaction<DeviceResetLayerSize> = {
@@ -4395,16 +4962,17 @@ export default class Actions {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset],
+					choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
 				allowInvalidValues: true,
 					default: 'prw',
 				},
 				{
 					id: `layersel`,
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Layer',
-					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended.',
-					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
+					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended. To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: (e+1).toString(), label: `Layer ${e+1}`}})],
 					default: 'first',
 				},
 				{
@@ -4429,11 +4997,11 @@ export default class Actions {
 				},
 			],
 			callback: async (action) => {
-				let layers = resolveLayers(action.options)
-
-				const preset = action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset
-				layers = layers.filter(layer => (!this.choices.isLocked(layer.screenAuxKey, preset) && layer.layerKey.match(/^\d+$/))) // wipe out layers of locked screens and native layer
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // wipe out native layer
 				if (layers.length === 0) return
+
+				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
+				const unlockedTargets = new Set<string>()
 
 				let anchor: AnchorPoint
 				if (action.options.anchor === 'sel' || action.options.anchor === undefined) {
@@ -4445,68 +5013,91 @@ export default class Actions {
 					}
 				}
 
-				for (const layer of layers) {
-					const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
-					if (laydata === undefined) continue // this layer does not allow for sizing
+				for (const preset of presetsToApply) {
+					// unlike every other "Layer Properties" action, this one never actually wired up
+					// unlockIfLocked/relockAfterChange despite offering both checkboxes - just silently dropped
+					// locked layers instead. Fixed here alongside the Both-preset retrofit, matching every sibling.
+					const targetLayers = layers.filter(layer => {
+						if (this.choices.isLocked(layer.screenAuxKey, preset)) {
+							if (!parseBoolean(action.options.unlockIfLocked)) return false
+							const key = `${layer.screenAuxKey}|${preset}`
+							if (!unlockedTargets.has(key)) {
+								this.choices.setScreenLock(layer.screenAuxKey, preset, false)
+								unlockedTargets.add(key)
+							}
+						}
+						return true
+					})
 
-					let targetSizeH: number
-					let targetSizeV: number
-					let newPosH: number | undefined
-					let newPosV: number | undefined
+					for (const layer of targetLayers) {
+						const laydata = getLayerPositionData(layer.screenAuxKey, preset, layer.layerKey)
+						if (laydata === undefined) continue // this layer does not allow for sizing
 
-					if (action.options.mode === 'fullscreen') {
-						const screninfo = this.choices.getScreenInfo(layer.screenAuxKey)
-						const screenpath = [
-							...(screninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-							'items', screninfo.platformId,
-							...this.constants.screenSizePath
-						]
-						const screenWidth = this.state.get(['DEVICE', ...screenpath, 'sizeH']) ?? 1920
-						const screenHeight = this.state.get(['DEVICE', ...screenpath, 'sizeV']) ?? 1080
-						targetSizeH = screenWidth
-						targetSizeV = screenHeight
-						newPosH = Math.round(screenWidth / 2)
-						newPosV = Math.round(screenHeight / 2)
-					} else {
-						const source = this.choices.getLayerSourceInfo(laydata.path)
-						if (source.width === '' || source.height === '') continue // unknown source resolution - nothing to derive from, leave untouched
+						let targetSizeH: number
+						let targetSizeV: number
+						let newPosH: number | undefined
+						let newPosV: number | undefined
 
-						if (action.options.mode === 'sourceRatio') {
-							targetSizeV = laydata.sizeV
-							targetSizeH = Math.round(targetSizeV * source.width / source.height)
+						if (action.options.mode === 'fullscreen') {
+							const screninfo = this.choices.getScreenInfo(layer.screenAuxKey)
+							const screenpath = [
+								...(screninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+								'items', screninfo.platformId,
+								...this.constants.screenSizePath
+							]
+							const screenWidth = this.state.get(['DEVICE', ...screenpath, 'sizeH']) ?? 1920
+							const screenHeight = this.state.get(['DEVICE', ...screenpath, 'sizeV']) ?? 1080
+							targetSizeH = screenWidth
+							targetSizeV = screenHeight
+							newPosH = Math.round(screenWidth / 2)
+							newPosV = Math.round(screenHeight / 2)
 						} else {
-							targetSizeH = source.width
-							targetSizeV = source.height
+							const source = this.choices.getLayerSourceInfo(laydata.path)
+							if (source.width === '' || source.height === '') continue // unknown source resolution - nothing to derive from, leave untouched
+
+							if (action.options.mode === 'sourceRatio') {
+								targetSizeV = laydata.sizeV
+								targetSizeH = Math.round(targetSizeV * source.width / source.height)
+							} else {
+								targetSizeH = source.width
+								targetSizeV = source.height
+							}
+
+							// Keep the chosen anchor point visually fixed while the box resizes, exactly like the
+							// resize-compensation in Set Layer Position and Size V3.
+							if (anchor !== 'CENTER' && (targetSizeH !== laydata.sizeH || targetSizeV !== laydata.sizeV)) {
+								const currentAnchorPos = convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
+								const compensatedPos = convertAnchorPosition(currentAnchorPos.x, currentAnchorPos.y, targetSizeH, targetSizeV, anchor, 'CENTER')
+								newPosH = compensatedPos.x
+								newPosV = compensatedPos.y
+							}
 						}
 
-						// Keep the chosen anchor point visually fixed while the box resizes, exactly like the
-						// resize-compensation in Set Layer Position and Size V3.
-						if (anchor !== 'CENTER' && (targetSizeH !== laydata.sizeH || targetSizeV !== laydata.sizeV)) {
-							const currentAnchorPos = convertAnchorPosition(laydata.posH, laydata.posV, laydata.sizeH, laydata.sizeV, 'CENTER', anchor)
-							const compensatedPos = convertAnchorPosition(currentAnchorPos.x, currentAnchorPos.y, targetSizeH, targetSizeV, anchor, 'CENTER')
-							newPosH = compensatedPos.x
-							newPosV = compensatedPos.y
+						if (newPosH !== undefined && newPosH !== laydata.posH) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
 						}
-					}
-
-					if (newPosH !== undefined && newPosH !== laydata.posH) {
-						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
-						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posH'], newPosH)
-					}
-					if (newPosV !== undefined && newPosV !== laydata.posV) {
-						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
-						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
-					}
-					if (targetSizeH !== laydata.sizeH) {
-						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], targetSizeH)
-						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], targetSizeH)
-					}
-					if (targetSizeV !== laydata.sizeV) {
-						this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], targetSizeV)
-						this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], targetSizeV)
+						if (newPosV !== undefined && newPosV !== laydata.posV) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
+						}
+						if (targetSizeH !== laydata.sizeH) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], targetSizeH)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], targetSizeH)
+						}
+						if (targetSizeV !== laydata.sizeV) {
+							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], targetSizeV)
+							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeV'], targetSizeV)
+						}
 					}
 				}
 
+				if (parseBoolean(action.options.relockAfterChange)) {
+					for (const key of unlockedTargets) {
+						const [screenAuxKey, preset] = key.split('|')
+						this.choices.setScreenLock(screenAuxKey, preset, true)
+					}
+				}
 				this.instance.sendXupdate()
 			},
 		}
@@ -4742,7 +5333,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const devicePositionSize: AWJaction<DevicePositionSize> = {
 			name: 'Deprecated from V2 - Set Position and Size (please upgrade to new action V3)',
-			sortName: '11 Deprecated from V2 - Set Position and Size',
+			sortName: '10 Deprecated from V2 - Set Position and Size',
 			description: 'Deprecated - replaced by "Layer Properties - Position & Size". Sets a Layer\'s position and/or size.',
 			options: [
 				{
@@ -4766,7 +5357,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection',
-					choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...Array.from({length: this.constants.maxLayers}, (_i, e:number) => {return {id: e+1, label: `Layer ${e+1}`}})],
+					choices: [{ id: 'sel', label: 'Selected Layer(s)' }, ...Array.from({length: this.constants.maxLayers}, (_i, e:number) => {return {id: (e+1).toString(), label: `Layer ${e+1}`}})],
 					default: 'sel',
 					isVisibleExpression: "$(options:screen) == 'sel'",
 					disableAutoExpression: true,
@@ -4888,7 +5479,10 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 				if (layers.length === 0) return undefined
 
-				const preset = this.choices.getPresetSelection()
+				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
+				// (choicesPreset) use 'prw' for Preview, so Learn must convert before writing it into an option
+				// value (getPreset() below still accepts either spelling, so this doesn't affect path-building).
+				const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 				const boundingBoxes = getBoundingBox(layers, preset)
 
 				layers = layers.filter(layer => layer.isPositionable)
@@ -5592,7 +6186,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const selectLayer: AWJaction<SelectLayer> = {
 			name: 'Deprecated from V2 - Layer Selection (please upgrade to new action V3)',
-			sortName: '11 Deprecated from V2 - Layer Selection',
+			sortName: '10 Deprecated from V2 - Layer Selection',
 			description: 'Deprecated - replaced by "LIVE - Layer Selection" (V3). Selects (or toggles) which Layer(s) are currently selected, for other actions/feedbacks that target the "selected" Layer(s). Does not change which Preset is active.',
 					options: [
 				{
@@ -5859,7 +6453,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const remoteSync: AWJaction<RemoteSync> = {
 			name: 'Device - Sync Selection',
-			sortName: '08 Device - Sync Selection',
+			sortName: '07 Device - Sync Selection',
 			description: 'Turns on/off/toggles whether this Companion connection\'s Screen/Layer selection is synchronized with WebRCS and other connected clients (the same "Sync" setting shown in WebRCS).',
 			options: [
 				{
@@ -5938,7 +6532,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		type DeviceStreamControl = {stream: string}
 		
 		const deviceStreamControl: AWJaction<DeviceStreamControl> = {
-			name: 'LIVE - Stream Control',
+			name: 'LIVE - Stream Control (Midra/Alta)',
 			sortName: '01 LIVE - 15 Stream Control',
 			description: 'Starts, stops, or toggles the device\'s streaming output (Midra only).',
 			options: [
@@ -5981,8 +6575,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		type DeviceStreamAudioMute = {stream: string}
 		
 		const deviceStreamAudioMute: AWJaction<DeviceStreamAudioMute> = {
-			name: 'Audio - Mute Stream',
-			sortName: '06 Audio - Mute Stream',
+			name: 'Audio - Mute Stream (Midra/Alta)',
+			sortName: '05 Audio - Mute Stream',
 			description: 'Mutes, unmutes, or toggles the audio of the device\'s streaming output (Midra only).',
 			options: [
 				{
@@ -6019,7 +6613,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '06 Audio - Route (Block)',
+			sortName: '05 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				// TODO(isVisible-migration): build-time-only visibility (based on number of linked devices at field-construction time, not a live option); field is only included when there is more than one linked device
@@ -6075,7 +6669,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '06 Audio - Route (Channels)',
+			sortName: '05 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				// TODO(isVisible-migration): build-time-only visibility (based on number of linked devices at field-construction time, not a live option); field is only included when there is more than one linked device
@@ -6178,7 +6772,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceAudioDanteFunctions: AWJaction<DeviceAudioDanteFunctions> = {
 			name: 'Audio - Dante Functions',
-			sortName: '06 Audio - 03 Dante Functions',
+			sortName: '05 Audio - 03 Dante Functions',
 			description: 'Reboots or factory-resets the Dante card, or bulk-renames Receiver/Transmitter channels. Reboot and Factory Reset can cause temporary Dante connection loss - only do this in a live situation if you know what you are doing; it is best suited for setting up a personal default preset ahead of time. KNOWN LIMITATION: renaming does not currently take effect on the device - kept here as a field-structure experiment only, not yet usable.',
 			options: [
 				...(devices > 1 ? [{
@@ -6679,7 +7273,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceTestpatterns: AWJaction<DeviceTestpatterns> = {
 			name,
-			sortName: `09 ${name}`,
+			sortName: `07 ${name}`,
 			description: 'Turns a Testpattern on or off (or "Inhibit"s it) for a Screen Canvas, Output, or Input Group.',
 			options: [...deviceTestpatternsOptions, ...outputExtraOptions],
 			callback: (action) => {
@@ -6800,7 +7394,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceTestpatternRasterBox: AWJaction<DeviceTestpatternRasterBox> = {
 			name,
-			sortName: `09 ${name}`,
+			sortName: `07 ${name}`,
 			description: 'Turns a Raster Box (Format/AOI markers) on or off for an Output.',
 			options: [
 				{
@@ -6947,7 +7541,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const cstawjcmd: AWJaction<Cstawjcmd> = {
 			name: 'Custom Commands - Send custom AWJ replace command',
-			sortName: '10 Custom Commands - Send custom AWJ replace command',
+			sortName: '09 Custom Commands - Send custom AWJ replace command',
 			description:
 				'Sends a command directly to the device using its own internal protocol - for advanced setups that the built-in actions don\'t cover. Nothing you enter here is checked, so a typo in Path or Value simply does nothing (or the wrong thing) without any warning. Tip: the T-Bar side ("A"/"B") swaps between Program and Preview with every Take - if you want your command to always affect whichever side is currently Program or Preview instead of a fixed side, type "PGM" or "PRW" (the earlier "PVW" still works too) in the Path instead of "A"/"B".',
 			options: [
@@ -7074,7 +7668,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		
 		const cstawjgetcmd: AWJaction<Cstawjgetcmd> = {
 			name: 'Custom Commands - Send custom AWJ get command',
-			sortName: '10 Custom Commands - Send custom AWJ get command',
+			sortName: '09 Custom Commands - Send custom AWJ get command',
 			description:
 				'Reads a single value directly from the device using its own internal protocol - for advanced setups that the built-in feedbacks/variables don\'t cover. The Path is not checked, so a typo simply returns nothing without any warning. Tip: the T-Bar side ("A"/"B") swaps between Program and Preview with every Take - if you want to always read whichever side is currently Program or Preview instead of a fixed side, type "PGM" or "PRW" (the earlier "PVW" still works too) in the Path instead of "A"/"B".',
 			options: [
@@ -7140,19 +7734,26 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 	/**
 	 * Shared firmware-version gate for features that exist on this same Aquilon hardware line (LivePremier/
-	 * LivePremier4) but only from a certain firmware generation onward - Backup (V6+) and Layer Properties -
-	 * Keying (V6+, same threshold - both live-confirmed together on a real V6.2.73 Aquilon, never confirmed
-	 * below V6) are the first two uses. Below the required version, the action stays visible (so a user on old
-	 * firmware can still find it and learn why it doesn't work) but swaps all its real options for a single
-	 * notice via firmwareGateOptions(), instead of disappearing outright. `LOCAL/deviceFirmwareGeneration` is
-	 * set once per connect in connection.ts as `V${major}` (or '' if unparseable) - reads live/fresh here since
-	 * action getters re-run every time allActions is rebuilt (on every updateInstance(), including right after
-	 * connect), so no separate reactivity mechanism is needed.
+	 * LivePremier4) but only from a certain firmware version onward - Layer Properties - Keying (5.0.128+, per
+	 * Analog Way's own release notes, live-confirmed working there) and Backup (6.0.4+ - Analog Way's release
+	 * notes suggested 5.0.128 too, but live-testing on a real 5.0.128 Aquilon found the `group` field entirely
+	 * missing from backup.control.pp there, breaking the Backup Set dropdown/variables; 6.0.4 is where this was
+	 * actually confirmed working) were the first uses; Effects - Strobe (6.0.4+), individual Layer Freeze and
+	 * Anchor Point control (4.04.77+), and the TIMER{n}.value variable (4.03.38+) followed. Below the required
+	 * version, the action stays visible (so a user on old firmware can
+	 * still find it and learn why it doesn't work) but swaps all its real options for a single notice via
+	 * firmwareGateOptions(), instead of disappearing outright - never hide the concept, always explain what
+	 * firmware unlocks it. `LOCAL/deviceFirmwareVersion` is set once per connect in connection.ts as the
+	 * device's raw reported version string (e.g. "6.2.73") - reads live/fresh here since action getters re-run
+	 * every time allActions is rebuilt (on every updateInstance(), including right after connect), so no
+	 * separate reactivity mechanism is needed.
 	 * Note: this only applies to features missing on OLD firmware of a platform that otherwise has the
 	 * concept. Where the concept is structurally absent on a whole different platform (Backup and Keying are
 	 * BOTH also missing on Midra/Alta entirely, live-confirmed 2026-08-28 against a Zenith 200 simulator, fw
 	 * 1.3.7) that platform instead removes the action from its own actionsToUse entirely - this check is never
-	 * reached there. isFirmwareAtLeast itself moved to choices.ts (public) so feedbacks can share the same gate.
+	 * reached there. isFirmwareAtLeast itself moved to choices.ts (public, and platform-neutral - Midra/Alta
+	 * can reuse the exact same version-compare logic once their own version-gated features are identified) so
+	 * both actions and feedbacks can gate on the same firmware check.
 	 */
 	private firmwareGateOptions(minVersion: string): SomeAWJactionInputfield<any>[] {
 		return [
@@ -7262,19 +7863,19 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	get deviceBackupSetSource() {
 		type DeviceBackupSetSource = { target: string, source: string }
 
-		if (!this.choices.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast('6.0.4')) {
 			return {
-				name: 'Backups - Set Backup Set to Source',
-				sortName: '09 Backups - Set Backup Set to Source',
+				name: 'Backups - Set Backup Set to Source (Aquilon)',
+				sortName: '08 Backups - Set Backup Set to Source',
 				description: 'Switches a Backup Set (or every Set in a Backup Group) to show its Primary source, Backup 1, or Backup 2 - the same manual override WebRCS offers per Backup Set.',
-				options: this.firmwareGateOptions('V6'),
+				options: this.firmwareGateOptions('6.0.4'),
 				callback: () => {},
 			}
 		}
 
 		const deviceBackupSetSource: AWJaction<DeviceBackupSetSource> = {
-			name: 'Backups - Set Backup Set to Source',
-			sortName: '09 Backups - Set Backup Set to Source',
+			name: 'Backups - Set Backup Set to Source (Aquilon)',
+			sortName: '08 Backups - Set Backup Set to Source',
 			description: 'Switches a Backup Set (or every Set in a Backup Group) to show its Primary source, Backup 1, or Backup 2 - the same manual override WebRCS offers per Backup Set.',
 			options: [
 				{
@@ -7322,19 +7923,19 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	get deviceBackupAutoMode() {
 		type DeviceBackupAutoMode = { target: string, mode: string }
 
-		if (!this.choices.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast('6.0.4')) {
 			return {
-				name: 'Backups - Set Auto Mode',
-				sortName: '09 Backups - Set Auto Mode',
+				name: 'Backups - Set Auto Mode (Aquilon)',
+				sortName: '08 Backups - Set Auto Mode',
 				description: 'Turns Auto Mode on, off, or toggles it for a Backup Set (or every Set in a Backup Group) - when on, the device automatically switches to a Backup source if the Primary signal is lost.',
-				options: this.firmwareGateOptions('V6'),
+				options: this.firmwareGateOptions('6.0.4'),
 				callback: () => {},
 			}
 		}
 
 		const deviceBackupAutoMode: AWJaction<DeviceBackupAutoMode> = {
-			name: 'Backups - Set Auto Mode',
-			sortName: '09 Backups - Set Auto Mode',
+			name: 'Backups - Set Auto Mode (Aquilon)',
+			sortName: '08 Backups - Set Auto Mode',
 			description: 'Turns Auto Mode on, off, or toggles it for a Backup Set (or every Set in a Backup Group) - when on, the device automatically switches to a Backup source if the Primary signal is lost.',
 			options: [
 				{
@@ -7380,6 +7981,77 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	}
 
 	/**
+	 * MARK: Preconfig - Set Background Set Source
+	 * Assigns the content (a live input or a still image) that a given Background Set slot (1-8) shows on
+	 * every physical output of every Screen, in one single action - live-confirmed (2026-09-08) on a real
+	 * linked Aquilon system: unlike Live layers, a Background Set has no processing engine in front of it
+	 * (routed through 1:1 unfiltered, only layers get composited on top), so there is no single place to unify
+	 * multiple outputs into one "Screen background" - content is assigned per physical output instead. No
+	 * per-Screen selection here on purpose (per explicit user decision, 2026-09-08): since "Background Set N"
+	 * is the same concept across every Screen, one action call setting all of them for a chosen Background Set
+	 * at once is more useful in practice than scoping to a single Screen - and it has a real side benefit: with
+	 * no `isVisibleExpression` needed anywhere (nothing here is conditionally shown based on another field),
+	 * none of these fields need `disableAutoExpression` either, so - unlike most other dynamic-per-target field
+	 * groups in this module - every output field here stays fully expression/variable-capable. Aux screens have
+	 * no Background Sets at all, so only real Screens' outputs are offered.
+	 */
+	get devicePreconfigBackgroundSetSource() {
+		type DevicePreconfigBackgroundSetSource = { bgset: string }
+
+		const bgsetChoices = Array.from({ length: 8 }, (_, i) => ({ id: (i + 1).toString(), label: `Background Set ${i + 1}` }))
+		// 'NONE' deliberately excluded - live-confirmed (2026-09-08) it can't actually be set this way: after
+		// resetting a Background Set via WebRCS (which has no direct "set to None" of its own either, only a
+		// full reset), every one of its outputs reports content 'NONE', but that state isn't reachable through
+		// a plain content write like every other value here is. Still a real, valid value to check FOR though -
+		// see the matching feedback, which keeps 'NONE' in its own choices for exactly that.
+		const contentChoices = [{ id: 'keep', label: "Don't change" }, ...this.choices.getBackgroundSetContentChoices().filter((c) => c.id !== 'NONE')]
+		const screenOutputs = this.choices.getScreensArray().map((screen) => ({ screen, outputs: this.choices.getScreenOutputArray(screen.id) }))
+
+		const devicePreconfigBackgroundSetSource: AWJaction<DevicePreconfigBackgroundSetSource> = {
+			name: 'Preconfig - Set Background Set Source (Aquilon)',
+			sortName: '06 Preconfig - Set Background Set Source',
+			description: 'Assigns the content (Live Input or Still Image) that a given Background Set (1-8) shows on every physical output of every Screen, all in one action. A Background Set has no processing in front of it, so a Screen spanning several outputs needs one source per output rather than a single one for the whole Screen - to check whether a whole multi-output Screen matches a specific combination of sources, combine this action\'s matching feedback (Preconfig - Background Set Source Status) once per output into an AND feedback. Clearing a Background Set back to empty (None) isn\'t offered here - WebRCS itself has no direct way to set that either, only a full Background Set reset, which is out of scope for this action. A solid color background is set via a Screen Preset, not here.',
+			options: [
+				{
+					id: 'bgset',
+					type: 'dropdown',
+					label: 'Background Set',
+					choices: bgsetChoices,
+					default: '1',
+				},
+				...screenOutputs.flatMap(({ screen, outputs }) => [
+					{ id: `screenHeader_${screen.id}`, type: 'static-text' as const, label: '', value: `---\n**${screen.id}**`, disableAutoExpression: true },
+					...outputs.map((out) => ({
+						id: `output_${screen.id}_${out.id}`,
+						type: 'dropdown' as const,
+						label: out.label,
+						choices: contentChoices,
+						default: 'keep',
+					})),
+				]),
+			],
+			callback: (action) => {
+				for (const { screen, outputs } of screenOutputs) {
+					for (const out of outputs) {
+						const shortValue = action.options[`output_${screen.id}_${out.id}`] as string
+						if (!shortValue || shortValue === 'keep') continue
+						const value = this.choices.shortSourceToBackgroundContent(shortValue)
+						const path = this.choices.getBackgroundSetOutputContentPath(screen.id, action.options.bgset, out.id)
+						this.connection.sendWSmessage(path, value)
+						// Without this, the device leaves the assignment reporting isContentValid: false forever -
+						// see getBackgroundContentUseOnOutputPath()'s own doc comment for why.
+						const useOnOutputPath = this.choices.getBackgroundContentUseOnOutputPath(value)
+						if (useOnOutputPath) this.connection.sendWSmessage(useOnOutputPath, out.id)
+					}
+				}
+				this.instance.sendXupdate()
+			},
+		}
+
+		return devicePreconfigBackgroundSetSource
+	}
+
+	/**
 	 * MARK: Device Power
 	 */
 	get devicePower() {
@@ -7388,7 +8060,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const devicePower: AWJaction<DevicePower> = {
 			name: 'Device - Power',
-			sortName: '08 Device - Power',
+			sortName: '07 Device - Power',
 			description: 'Switches the device on (Wake on LAN), off, or reboots it. On a linked system (e.g. Aquilon), Wake on LAN also wakes every Follower device whose MAC address was detected on a previous connection (see the connection\'s config fields), not just the Leader.',
 			options: [
 				{
@@ -7444,7 +8116,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 
 		const deviceFailoverToHotBackup: AWJaction<DeviceFailoverToHotBackup> = {
 			name: 'Device - Failover to Hot Backup',
-			sortName: '08 Device - Failover to Hot Backup',
+			sortName: '07 Device - Failover to Hot Backup',
 			description: 'Swaps the Hot Backup Device address with the current Device Network Address, then reconnects to what was the Hot Backup Device - use this immediately if the main device fails during a show. The old main device becomes the new Hot Backup Device address, so this action is also how you swap back afterwards. Requires "Enable Hot Backup Device" to be checked and a valid Hot Backup Device Address configured; does nothing otherwise.',
 			options: [
 				{

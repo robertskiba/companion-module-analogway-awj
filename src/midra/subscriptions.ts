@@ -28,6 +28,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'selectedLayerOpacityChange',
 		'selectedLayerCroppingChange',
 		'layerPropertyStatusChange',
+		'layerSourceStatusChange',
+		// 'layerCutFillSourceStatusChange', // Aquilon only for now - matches deviceLayerCutFillV3's own registration
+		'inputKeyingStatusChange',
 		'selectedScreenChange',
 		'hotBackupSelectionChange',
 		'selectedScreenTbarChange',

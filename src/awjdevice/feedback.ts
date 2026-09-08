@@ -81,6 +81,8 @@ export default class Feedbacks {
 		'presetToggle',
 		'globalAnchorPoint',
 		'deviceLayerPropertyStatus',
+		'deviceLayerSourceStatus',
+		'deviceLayerCutFillSourceStatus',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
 		'deviceScreenMemorySlotStatus',
@@ -132,7 +134,7 @@ export default class Feedbacks {
 		const syncselection: CompanionBooleanFeedbackDefinition = {
 			type: 'boolean',
 			name: 'Device - Synchronization of the selection',
-			sortName: '08 Device - 05 Synchronization of the selection',
+			sortName: '07 Device - 05 Synchronization of the selection',
 			description: 'Shows whether this client synchronizes its selection to the device',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -228,7 +230,7 @@ export default class Feedbacks {
 			type: 'boolean',
 			name: 'Layer Properties - Property Status',
 			sortName: '03 Layer Properties - 10 Property Status',
-			description: 'Shows whether a given on/off-style Layer Property (Border, Effects/Filter/Transform/Strobe, Keying, Mask, Aspect Override, Transitions) is currently active on a Layer. The two "Allow Cross Effect/Depth" properties mirror an action whose flags mapping is not yet confirmed live - see that action\'s own description.',
+			description: 'Shows whether a given on/off-style Layer Property (Border, Effects/Filter/Transform/Strobe, Keying, Cut&Fill Enable, Mask, Aspect Override, Transitions) is currently active on a Layer. See "Layer Properties - Layer Source"/"Layer Properties - Cut&Fill Source" for checking a specific Source value rather than just on/off. The two "Allow Cross Effect/Depth" properties mirror an action whose flags mapping is not yet confirmed live - see that action\'s own description.',
 			defaultStyle: {
 				color: this.config.color_dark,
 				bgcolor: this.config.color_highlight,
@@ -246,7 +248,8 @@ export default class Feedbacks {
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset],
+					tooltip: '"Both (AND)" is true only if the checked property currently matches on both Program and Preview at once. "Both (OR)" is true if it matches on either.',
+					choices: [{ id: 'sel', label: 'Selected' }, ...this.choices.choicesPreset, { id: 'both_and', label: 'Both (Preview AND Program)' }, { id: 'both_or', label: 'Both (Preview OR Program)' }],
 					allowInvalidValues: true,
 					default: 'sel',
 				},
@@ -274,8 +277,9 @@ export default class Feedbacks {
 						{ id: 'filterSolar', label: 'Effects - Filter Solarize' },
 						{ id: 'transformFlipH', label: 'Effects - Transform Flip Horizontal' },
 						{ id: 'transformFlipV', label: 'Effects - Transform Flip Vertical' },
-						{ id: 'strobeEnable', label: 'Effects - Strobe Active' },
-						{ id: 'keyingEnable', label: 'Keying Enabled (firmware V6+)' },
+						{ id: 'strobeEnable', label: this.choices.isFirmwareAtLeast('6.0.4') ? 'Effects - Strobe Active' : 'Effects - Strobe Active (requires at least firmware 6.0.4)' },
+						{ id: 'keyingEnable', label: this.choices.isFirmwareAtLeast('5.0.128') ? 'Keying Enabled' : 'Keying Enabled (requires at least firmware 5.0.128)' },
+						{ id: 'cutFillEnable', label: 'Cut&Fill - Enabled' },
 						{ id: 'maskActive', label: 'Mask Active' },
 						{ id: 'aspect1_1', label: 'Aspect Override - 1:1' },
 						{ id: 'aspectCentered', label: 'Aspect Override - Centered' },
@@ -289,48 +293,272 @@ export default class Feedbacks {
 			],
 			callback: (feedback) => {
 				const screeninfo = this.choices.getScreenInfo(feedback.options.screen)
-				const preset = this.choices.getPreset(feedback.options.screen, feedback.options.preset)
-				const path = [
-					'DEVICE',
-					...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-					'items', feedback.options.screen,
-					'presetList', 'items', preset,
-					...this.choices.getLayerPath(feedback.options.layer),
-				]
-				switch (feedback.options.property) {
-					case 'edgeEnable': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('EDGE')
-					case 'edgeRound': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('ROUNDED')
-					case 'edgeSmooth': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('SMOOTH')
-					case 'shadowEnable': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('EDGE')
-					case 'shadowRound': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('ROUNDED')
-					case 'shadowSmooth': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('SMOOTH')
-					case 'filterBlackWhite': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('BLACK_N_WHITE')
-					case 'filterNegative': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('NEGATIVE')
-					case 'filterSepia': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('SEPIA')
-					case 'filterSolar': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('SOLAR')
-					case 'transformFlipH': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('FLIP_H')
-					case 'transformFlipV': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('FLIP_V')
-					case 'strobeEnable': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('STROBE')
-					case 'keyingEnable': return !!this.state.get([...path, 'keying', 'pp', 'enable'])
-					case 'maskActive': {
-						const top = this.state.get([...path, 'cropping', 'mask', 'pp', 'top']) ?? 0
-						const bottom = this.state.get([...path, 'cropping', 'mask', 'pp', 'bottom']) ?? 0
-						const left = this.state.get([...path, 'cropping', 'mask', 'pp', 'left']) ?? 0
-						const right = this.state.get([...path, 'cropping', 'mask', 'pp', 'right']) ?? 0
-						return top !== 0 || bottom !== 0 || left !== 0 || right !== 0
+
+				// "Both" checks Program AND Preview - true only if the property currently matches on both.
+				const evaluateForPreset = (rawPreset: string): boolean => {
+					const preset = this.choices.getPreset(feedback.options.screen, rawPreset)
+					const path = [
+						'DEVICE',
+						...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+						'items', feedback.options.screen,
+						'presetList', 'items', preset,
+						...this.choices.getLayerPath(feedback.options.layer),
+					]
+					switch (feedback.options.property) {
+						case 'edgeEnable': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('EDGE')
+						case 'edgeRound': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('ROUNDED')
+						case 'edgeSmooth': return (this.state.get([...path, 'border', 'edge', 'pp', 'style']) ?? []).includes('SMOOTH')
+						case 'shadowEnable': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('EDGE')
+						case 'shadowRound': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('ROUNDED')
+						case 'shadowSmooth': return (this.state.get([...path, 'border', 'shadow', 'pp', 'style']) ?? []).includes('SMOOTH')
+						case 'filterBlackWhite': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('BLACK_N_WHITE')
+						case 'filterNegative': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('NEGATIVE')
+						case 'filterSepia': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('SEPIA')
+						case 'filterSolar': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('SOLAR')
+						case 'transformFlipH': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('FLIP_H')
+						case 'transformFlipV': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('FLIP_V')
+						case 'strobeEnable': return (this.state.get([...path, 'effects', 'pp', 'flags']) ?? []).includes('STROBE')
+						case 'keyingEnable': return !!this.state.get([...path, 'keying', 'pp', 'enable'])
+						case 'cutFillEnable': {
+							// canUseMask is a historically-misnamed flag that actually tracks whether Cut&Fill (once
+							// internally called "Mask") is available on this Layer at all - live-confirmed
+							// (2026-09-08). A Layer with canUseMask false cannot do Cut&Fill regardless of any
+							// stored Enable state.
+							const canUseCutFill = this.state.get(['DEVICE', ...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath), 'items', feedback.options.screen, 'layerList', 'items', feedback.options.layer, 'status', 'pp', 'canUseMask'])
+							return !!canUseCutFill && this.state.get([...path, 'cutNFill', 'pp', 'type']) === 'CUT_N_FILL'
+						}
+						case 'maskActive': {
+							const top = this.state.get([...path, 'cropping', 'mask', 'pp', 'top']) ?? 0
+							const bottom = this.state.get([...path, 'cropping', 'mask', 'pp', 'bottom']) ?? 0
+							const left = this.state.get([...path, 'cropping', 'mask', 'pp', 'left']) ?? 0
+							const right = this.state.get([...path, 'cropping', 'mask', 'pp', 'right']) ?? 0
+							return top !== 0 || bottom !== 0 || left !== 0 || right !== 0
+						}
+						case 'aspect1_1': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === '1_1'
+						case 'aspectCentered': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CENTERED'
+						case 'aspectFullscreen': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'FULLSCREEN'
+						case 'aspectCropped': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CROPPED'
+						case 'allowCrossEffect': return (this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).includes('FORCE_CROSS')
+						case 'allowCrossDepth': return !(this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).some((f: string) => f.startsWith('DEPTH_CUT_'))
+						default: return false
 					}
-					case 'aspect1_1': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === '1_1'
-					case 'aspectCentered': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CENTERED'
-					case 'aspectFullscreen': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'FULLSCREEN'
-					case 'aspectCropped': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CROPPED'
-					case 'allowCrossEffect': return (this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).includes('FORCE_CROSS')
-					case 'allowCrossDepth': return !(this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).some((f: string) => f.startsWith('DEPTH_CUT_'))
-					default: return false
 				}
+
+				if (feedback.options.preset === 'both_and') return evaluateForPreset('pgm') && evaluateForPreset('prw')
+				if (feedback.options.preset === 'both_or') return evaluateForPreset('pgm') || evaluateForPreset('prw')
+				return evaluateForPreset(feedback.options.preset)
 			},
 		}
 
 		return deviceLayerPropertyStatus
+	}
+
+	/**
+	 * MARK: deviceLayerSourceStatus / deviceLayerCutFillSourceStatus
+	 * Two dedicated feedbacks for checking a specific Layer's own Source value - "Layer Properties - Property
+	 * Status" only covers on/off-style checks, not a value comparison, and a "Cut&Fill - Source Assigned"
+	 * on/off check (tried first) wasn't considered useful enough to keep, per explicit user decision
+	 * (2026-09-08) - checking the actual expected Source value is what's actually needed.
+	 * "Layer Properties - Cut&Fill Source" deliberately does NOT gate on Cut&Fill's Enable state - the raw
+	 * `cut.pp.inputNum` value persists in the device's own config even while Cut&Fill is off, and shows
+	 * exactly what it would use if turned on, so this reports that stored value regardless, per explicit
+	 * user decision ("soll auch einen Wert haben, wenn CF aus ist und Wert in der config steht").
+	 * Both share the same Screen/Preset/Layer resolution as "Layer Properties - Cut&Fill" (Layer field
+	 * supports 'All Layers' and a concatenated Expression Mode string like 'L1L2', existence-guarded per
+	 * Screen) - true only if EVERY resolved Layer currently shows the expected Source, consistent with this
+	 * module's other multi-target feedbacks (e.g. "LIVE - Screen Freeze").
+	 */
+	get deviceLayerSourceStatus() {
+		type DeviceLayerSourceStatus = { screen: string, preset: string, layersel: string, source: string }
+
+		const resolveLayers = (opt: { screen: string, layersel: string }): { screenAuxKey: string, layerKey: string }[] => {
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					: this.choices.getChosenScreenAuxes(opt.screen)
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			if (opt.layersel === 'all') return targetScreens.flatMap((screenAuxKey) => this.choices.getLayersAsArray(screenAuxKey, false).map((l) => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap((screenAuxKey) => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map((l) => l.id))
+				return layerKeys.filter((k) => realIds.has(k)).map((layerKey) => ({ screenAuxKey, layerKey }))
+			})
+		}
+
+		const layerOptions = [
+			{
+				id: 'screen',
+				allowInvalidValues: true,
+				type: 'dropdown' as const,
+				label: 'Screen / Aux',
+				choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+				default: 'first',
+			},
+			{
+				id: 'preset',
+				type: 'dropdown' as const,
+				label: 'Preset (Program/Preview)',
+				tooltip: '"Both (AND)" is true only if the Source currently matches on both Program and Preview at once. "Both (OR)" is true if it matches on either.',
+				choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'both_and', label: 'Both (Preview AND Program)' }, { id: 'both_or', label: 'Both (Preview OR Program)' }],
+				allowInvalidValues: true,
+				default: 'prw',
+			},
+			{
+				id: 'layersel',
+				allowInvalidValues: true,
+				type: 'dropdown' as const,
+				label: 'Layer',
+				tooltip: 'To check multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+				choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({ length: this.choices.getMaxConfiguredLayerCount() }, (_i, e: number) => ({ id: (e + 1).toString(), label: `Layer ${e + 1}` }))],
+				default: 'first',
+			},
+		]
+
+		const deviceLayerSourceStatus: AWJfeedback<DeviceLayerSourceStatus> = {
+			type: 'boolean',
+			name: 'Layer Properties - Layer Source',
+			sortName: '03 Layer Properties - 01a Layer Source',
+			description: 'Shows whether a Layer\'s own Source (not Cut&Fill\'s - see "Layer Properties - Cut&Fill Source" for that) currently matches the selected value.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				...layerOptions,
+				{
+					id: 'source',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Source',
+					tooltip: 'This module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
+					choices: this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })),
+					default: 'NONE',
+				},
+			],
+			callback: (feedback) => {
+				const layers = resolveLayers(feedback.options).filter((layer) => layer.layerKey.match(/^\d+$/))
+				if (layers.length === 0) return false
+				const expected = this.choices.shortSourceToBackgroundContent(feedback.options.source)
+				const matchesAllLayersForPreset = (preset: string): boolean => layers.every((layer) => {
+					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+					const path = [
+						'DEVICE',
+						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+						'items', screenInfo.platformId,
+						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+						...this.choices.getLayerPath(layer.layerKey),
+					]
+					return this.state.get([...path, 'source', 'pp', 'inputNum']) === expected
+				})
+				if (feedback.options.preset === 'both_and') return matchesAllLayersForPreset('pgm') && matchesAllLayersForPreset('prw')
+				if (feedback.options.preset === 'both_or') return matchesAllLayersForPreset('pgm') || matchesAllLayersForPreset('prw')
+				return matchesAllLayersForPreset(feedback.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : feedback.options.preset)
+			},
+		}
+
+		return deviceLayerSourceStatus
+	}
+
+	get deviceLayerCutFillSourceStatus() {
+		type DeviceLayerCutFillSourceStatus = { screen: string, preset: string, layersel: string, source: string }
+
+		const resolveLayers = (opt: { screen: string, layersel: string }): { screenAuxKey: string, layerKey: string }[] => {
+			const targetScreens = opt.screen === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: opt.screen === 'sel'
+					? this.choices.getSelectedScreens()
+					: this.choices.getChosenScreenAuxes(opt.screen)
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			if (opt.layersel === 'all') return targetScreens.flatMap((screenAuxKey) => this.choices.getLayersAsArray(screenAuxKey, false).map((l) => ({ screenAuxKey, layerKey: l.id })))
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			return targetScreens.flatMap((screenAuxKey) => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map((l) => l.id))
+				return layerKeys.filter((k) => realIds.has(k)).map((layerKey) => ({ screenAuxKey, layerKey }))
+			})
+		}
+
+		const layerOptions = [
+			{
+				id: 'screen',
+				allowInvalidValues: true,
+				type: 'dropdown' as const,
+				label: 'Screen / Aux',
+				choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+				default: 'first',
+			},
+			{
+				id: 'preset',
+				type: 'dropdown' as const,
+				label: 'Preset (Program/Preview)',
+				tooltip: '"Both (AND)" is true only if the Source currently matches on both Program and Preview at once. "Both (OR)" is true if it matches on either.',
+				choices: [{ id: 'sel', label: 'Selected Preset' }, ...this.choices.choicesPreset, { id: 'both_and', label: 'Both (Preview AND Program)' }, { id: 'both_or', label: 'Both (Preview OR Program)' }],
+				allowInvalidValues: true,
+				default: 'prw',
+			},
+			{
+				id: 'layersel',
+				allowInvalidValues: true,
+				type: 'dropdown' as const,
+				label: 'Layer',
+				tooltip: 'To check multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+				choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({ length: this.choices.getMaxConfiguredLayerCount() }, (_i, e: number) => ({ id: (e + 1).toString(), label: `Layer ${e + 1}` }))],
+				default: 'first',
+			},
+		]
+
+		const deviceLayerCutFillSourceStatus: AWJfeedback<DeviceLayerCutFillSourceStatus> = {
+			type: 'boolean',
+			name: 'Layer Properties - Cut&Fill Source (Aquilon)',
+			sortName: '03 Layer Properties - 04b Cut&Fill Source',
+			description: 'Shows whether a Layer\'s Cut&Fill key Source currently matches the selected value - reports the stored value regardless of whether Cut&Fill is currently enabled (see "Layer Properties - Property Status" > "Cut&Fill - Enabled" for that).',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				...layerOptions,
+				{
+					id: 'source',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Source',
+					tooltip: 'This module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
+					choices: this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })),
+					default: 'NONE',
+				},
+			],
+			callback: (feedback) => {
+				const layers = resolveLayers(feedback.options).filter((layer) => layer.layerKey.match(/^\d+$/))
+				if (layers.length === 0) return false
+				const expected = this.choices.shortSourceToBackgroundContent(feedback.options.source)
+				const matchesAllLayersForPreset = (preset: string): boolean => layers.every((layer) => {
+					const screenInfo = this.choices.getScreenInfo(layer.screenAuxKey)
+					// canUseMask is a historically-misnamed flag - live-confirmed (2026-09-08) it actually
+					// tracks whether Cut&Fill (once internally called "Mask", predating the current separate
+					// Mask/cropping feature) is available on this Layer at all, NOT the current Mask feature
+					// (which works regardless). A Layer with canUseMask false cannot do Cut&Fill, so any stored
+					// Source there is meaningless - report false rather than the stored value.
+					if (!this.state.get(['DEVICE', ...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath), 'items', screenInfo.platformId, 'layerList', 'items', layer.layerKey, 'status', 'pp', 'canUseMask'])) return false
+					const path = [
+						'DEVICE',
+						...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+						'items', screenInfo.platformId,
+						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
+						...this.choices.getLayerPath(layer.layerKey),
+						'cutNFill',
+					]
+					return this.state.get([...path, 'cut', 'pp', 'inputNum']) === expected
+				})
+				if (feedback.options.preset === 'both_and') return matchesAllLayersForPreset('pgm') && matchesAllLayersForPreset('prw')
+				if (feedback.options.preset === 'both_or') return matchesAllLayersForPreset('pgm') || matchesAllLayersForPreset('prw')
+				return matchesAllLayersForPreset(feedback.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : feedback.options.preset)
+			},
+		}
+
+		return deviceLayerCutFillSourceStatus
 	}
 
 	// MARK: Master Memory
@@ -518,7 +746,7 @@ export default class Feedbacks {
 		
 		const deviceAuxMemory: AWJfeedback<{ screens: string[], preset: string, memory: string, unmodified: number }> = {
 			type: 'boolean',
-			name: 'LIVE - Aux Memory (Midra only)',
+			name: 'LIVE - Aux Memory (Midra/Alta)',
 			sortName: '01 LIVE - 04 Aux Memory',
 			description: 'Shows whether an Aux Memory is loaded on an auxscreen',
 			defaultStyle: {
@@ -605,7 +833,7 @@ export default class Feedbacks {
 	// MARK: deviceSourceTally
 	get deviceSourceTally() {
 		
-		const deviceSourceTally: AWJfeedback<{ screens: string[], preset: string, source: string }> = {
+		const deviceSourceTally: AWJfeedback<{ screens: string, preset: string, source: string }> = {
 			type: 'boolean',
 			name: 'LIVE - Source Tally',
 			sortName: '01 LIVE - 05 Source Tally',
@@ -620,93 +848,121 @@ export default class Feedbacks {
 					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Screens / Auxscreens',
-					choices: [{ id: 'all', label: 'Any Screen' }, ...this.choices.getScreenAuxChoices()],
-					multiple: true,
-					tags: true,
-					regex: '/^(S|A)([1-9]|[1-3][0-9]|4[0-8])$/',
-					default: ['all'],
-				} as any, // TODO: fix type of dropdown with multiple: true property
+					tooltip: 'To target multiple specific Screens other than "Any Screen" or "Selected Screens", switch to Expression Mode and use a format like \'S1S2A1\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'all', label: 'Any Screen' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenAuxChoices()],
+					default: 'all',
+				},
 				{
 					id: 'preset',
 					type: 'dropdown',
 					label: 'Preset (Program/Preview)',
-					choices: this.choices.choicesPreset,
+					tooltip: '"Both (AND)" is true only if the source is currently tallied on both Program and Preview at once. "Both (OR)" is true if it\'s tallied on either.',
+					choices: [...this.choices.choicesPreset, { id: 'both_and', label: 'Both (Preview AND Program)' }, { id: 'both_or', label: 'Both (Preview OR Program)' }],
 					allowInvalidValues: true,
 					default: 'pgm',
 				},
 				{
 					id: 'source',
+					allowInvalidValues: true,
 					type: 'dropdown',
 					label: 'Source',
-					choices: [...this.choices.getSourceChoices(), ...this.choices.choicesBackgroundSources],
+					tooltip: 'This module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
+					choices: [...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources],
 					default: 'NONE',
 				},
 			],
-			unsubscribe: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string[], preset: string, source: string } }) => {
-				const sortedScreens = [...feedback.options.screens].sort()
+			unsubscribe: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string, preset: string, source: string } }) => {
+				const targetScreens = feedback.options.screens === 'first' ? this.choices.getSelectedScreens().slice(0, 1) : this.choices.getChosenScreenAuxes(feedback.options.screens)
+				const sortedScreens = [...targetScreens].sort()
 				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
 				this.instance.removeVariable(feedback.id, varName)
 			},
 			callback: (feedback) => {
-				const sortedScreens = [...feedback.options.screens].sort()
+				// Screens field follows the module's usual "S1S2A1" concatenated Expression Mode convention
+				// (see resolveTargets-style helpers elsewhere) rather than Companion's own native multi-select,
+				// per explicit user decision - 'first' isn't understood by getChosenScreenAuxes() itself, so it's
+				// resolved the same way every other "Screens" field in this module already does.
+				const targetScreens = feedback.options.screens === 'first' ? this.choices.getSelectedScreens().slice(0, 1) : this.choices.getChosenScreenAuxes(feedback.options.screens)
+				const sortedScreens = [...targetScreens].sort()
 				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
 				this.instance.addVariable({
 					id: feedback.id,
 					variableId: varName,
 					name: `Tally for ${feedback.options.source} at screens ${sortedScreens.join(', ')}, preset ${feedback.options.preset}`,
 				})
-				const checkTally = (): boolean => {
-					// go thru the screens
-					for (const screen of this.choices.getChosenScreenAuxes(feedback.options.screens)) {
-						const screeninfo = this.choices.getScreenInfo(screen)
-						const preset = this.choices.getPreset(screen, feedback.options.preset)
-						for (const layer of this.choices.getLayerChoices(screen)) {
-							const screenpath = [
-								'DEVICE',
-								...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-								'items',
-								screen
-							]
-							const presetpath = [...screenpath, 'presetList', 'items', preset]
-							const layerpath = [...presetpath, ...this.choices.getLayerPath(layer.id)]
-							
-							if (
-								(feedback.options.source === 'NONE' || feedback.options.source?.toString().startsWith('BACKGROUND'))
-								&& this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === feedback.options.source
-							) {
+				// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n) the
+				// device actually stores - anything else (NONE/COLOR/SCREEN_n/NATIVE_n, or an already-raw id
+				// typed directly via Expression Mode) passes through unchanged.
+				const expectedSource = this.choices.shortSourceToBackgroundContent(feedback.options.source)
+				// True if the source is showing somewhere on this one Screen/Aux (OR across its Layers - any one
+				// Layer showing it is enough for the Screen to count).
+				const screenHasSource = (screen: string, rawPreset: string): boolean => {
+					const screeninfo = this.choices.getScreenInfo(screen)
+					const preset = this.choices.getPreset(screen, rawPreset)
+					for (const layer of this.choices.getLayerChoices(screen)) {
+						const screenpath = [
+							'DEVICE',
+							...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+							'items',
+							screen
+						]
+						const presetpath = [...screenpath, 'presetList', 'items', preset]
+						const layerpath = [...presetpath, ...this.choices.getLayerPath(layer.id)]
+
+						if (
+							(expectedSource === 'NONE' || expectedSource?.toString().startsWith('BACKGROUND'))
+							&& this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === expectedSource
+						) {
+							return true
+						}
+						if (this.state.get([...layerpath, 'source', 'pp', 'inputNum']) === expectedSource) {
+							const invisible = (
+								this.state.get([...layerpath, 'position', 'pp', 'sizeH']) === 0 ||
+								this.state.get([...layerpath, 'position', 'pp', 'sizeV']) === 0 ||
+								this.state.get([...layerpath, 'opacity', 'pp', 'opacity']) === 0 ||
+								this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'top']) +
+									this.state.get([...layerpath,'cropping', 'classic', 'pp', 'bottom']) >
+									65528 ||
+								this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'left']) +
+									this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'right']) >
+									65528 ||
+								this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'top']) +
+									this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'bottom']) >
+									65528 ||
+								this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'left']) +
+									this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'right']) >
+									65528 ||
+								this.state.get([...layerpath, 'position', 'pp', 'posH']) + this.state.get([...layerpath, 'position', 'pp', 'sizeH']) / 2 <= 0 ||
+								this.state.get([...layerpath, 'position', 'pp', 'posV']) + this.state.get([...layerpath, 'position', 'pp', 'sizeV']) / 2 <= 0 ||
+								this.state.get([...layerpath, 'position', 'pp', 'posH']) - this.state.get([...layerpath, 'position', 'pp', 'sizeH']) / 2 >=
+									this.state.get([...screenpath, 'status', 'size', 'pp', 'sizeH']) ||
+								this.state.get([...layerpath, 'position', 'pp', 'posV']) - this.state.get([...layerpath, 'position', 'pp', 'sizeV']) / 2 >=
+									this.state.get([...screenpath, 'status', 'size', 'pp', 'sizeV'])
+							)
+							if (!invisible) {
 								return true
-							}
-							if (this.state.get([...layerpath, 'source', 'pp', 'inputNum']) === feedback.options.source) {
-								const invisible = (
-									this.state.get([...layerpath, 'position', 'pp', 'sizeH']) === 0 ||
-									this.state.get([...layerpath, 'position', 'pp', 'sizeV']) === 0 ||
-									this.state.get([...layerpath, 'opacity', 'pp', 'opacity']) === 0 ||
-									this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'top']) +
-										this.state.get([...layerpath,'cropping', 'classic', 'pp', 'bottom']) >
-										65528 ||
-									this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'left']) +
-										this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'right']) >
-										65528 ||
-									this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'top']) +
-										this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'bottom']) >
-										65528 ||
-									this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'left']) +
-										this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'right']) >
-										65528 ||
-									this.state.get([...layerpath, 'position', 'pp', 'posH']) + this.state.get([...layerpath, 'position', 'pp', 'sizeH']) / 2 <= 0 ||
-									this.state.get([...layerpath, 'position', 'pp', 'posV']) + this.state.get([...layerpath, 'position', 'pp', 'sizeV']) / 2 <= 0 ||
-									this.state.get([...layerpath, 'position', 'pp', 'posH']) - this.state.get([...layerpath, 'position', 'pp', 'sizeH']) / 2 >=
-										this.state.get([...screenpath, 'status', 'size', 'pp', 'sizeH']) ||
-									this.state.get([...layerpath, 'position', 'pp', 'posV']) - this.state.get([...layerpath, 'position', 'pp', 'sizeV']) / 2 >=
-										this.state.get([...screenpath, 'status', 'size', 'pp', 'sizeV'])
-								)
-								if (!invisible) {
-									return true
-								}
 							}
 						}
 					}
 					return false
+				}
+
+				// Parameterized on the resolved preset ('pgm'/'prw') rather than reading feedback.options.preset
+				// directly, so "Both" can run this same check once per preset and AND/OR the two results -
+				// 'both_and'/'both_or' themselves are never valid input to getPreset(). Screens combine with AND
+				// (true only if every selected Screen/Aux currently shows the source), per explicit user
+				// decision (2026-09-08) - unlike Layers within one Screen, which stay OR.
+				const checkTallyForPreset = (rawPreset: string): boolean => {
+					// every() is vacuously true on an empty array - explicitly guard so "no Screen resolved"
+					// (e.g. "Selected Screens" with nothing selected) reads as false, not a false-positive true.
+					if (targetScreens.length === 0) return false
+					return targetScreens.every((screen) => screenHasSource(screen, rawPreset))
+				}
+
+				const checkTally = (): boolean => {
+					if (feedback.options.preset === 'both_and') return checkTallyForPreset('pgm') && checkTallyForPreset('prw')
+					if (feedback.options.preset === 'both_or') return checkTallyForPreset('pgm') || checkTallyForPreset('prw')
+					return checkTallyForPreset(feedback.options.preset)
 				}
 
 				const tally = checkTally()
@@ -998,8 +1254,8 @@ export default class Feedbacks {
 		
 		const deviceInputFreeze: AWJfeedback<{input: string}> = {
 			type: 'boolean',
-			name: 'Freeze - Input',
-			sortName: '05 Freeze - 01 Input',
+			name: 'LIVE - Input Freeze',
+			sortName: '01 LIVE - 15 Freeze - Input',
 			description: 'Shows whether an input currently is frozen',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -1012,19 +1268,20 @@ export default class Feedbacks {
 					id: 'input',
 					type: 'dropdown',
 					label: 'Input',
-					choices: this.choices.getLiveInputChoices(),
-					default: this.choices.getLiveInputChoices()[0]?.id,
+					// Canonical/default value is this module's own short 'IN{n}' convention, but the callback
+					// also accepts a bare number or the old V2-style 'IN_n' - see deviceInputFreeze action's
+					// own matching comment for why (2026-09-08).
+					choices: this.choices.getLiveInputArray().map((inp) => ({ id: `IN${inp.index}`, label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}` })),
+					default: `IN${this.choices.getLiveInputArray()[0]?.index ?? ''}`,
+					allowInvalidValues: true,
 				},
 			],
 			callback: (feedback) => {
-				const input = feedback.options.input?.toString().replace('LIVE', 'IN') || ''
-				const freeze = this.state.get('DEVICE/device/inputList/items/' + input + '/control/pp/freeze')
-				if (freeze) {
-					this.instance.setVariableValues({ ['frozen_' + input]: '*'})
-				} else {
-					this.instance.setVariableValues({ ['frozen_' + input]: ' '})
-				}
-				return freeze
+				const match = (feedback.options.input ?? '').toString().match(/^(?:IN_?)?(\d+)$/i)
+				const input = match ? `IN_${match[1]}` : ''
+				// The IN{n}.freeze variable itself is maintained for every available input independently of
+				// this feedback (subscriptions.inputFreeze), so nothing to do here beyond the boolean result.
+				return input ? !!this.state.get('DEVICE/device/inputList/items/' + input + '/control/pp/freeze') : false
 			},
 		}
 
@@ -1037,7 +1294,7 @@ export default class Feedbacks {
 		const deviceInputSignalStatus: AWJfeedback<{input: string}> = {
 			type: 'boolean',
 			name: 'Device - Input Signal Present',
-			sortName: '08 Device - 06 Input Signal Present',
+			sortName: '07 Device - 06 Input Signal Present',
 			description: 'Shows whether a live signal is currently present on an Input (based on its currently active plug).',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1075,7 +1332,7 @@ export default class Feedbacks {
 		const deviceLayerSignalStatus: AWJfeedback<DeviceLayerSignalStatus> = {
 			type: 'boolean',
 			name: 'Device - Layer Signal Present',
-			sortName: '08 Device - 07 Layer Signal Present',
+			sortName: '07 Device - 07 Layer Signal Present',
 			description: 'Shows whether the source currently shown by a Layer has a live signal - always true unless the Layer shows a live Input that has lost its signal.',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1148,7 +1405,7 @@ export default class Feedbacks {
 		const deviceHealthStatus: AWJfeedback<DeviceHealthStatus> = {
 			type: 'boolean',
 			name: 'Device - Health Alarm',
-			sortName: '08 Device - 08 Health Alarm',
+			sortName: '07 Device - 08 Health Alarm',
 			description: 'Shows whether the device currently reports a Temperature or Fan alarm/warning.',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -1194,7 +1451,7 @@ export default class Feedbacks {
 		const deviceConnectionStatus: AWJfeedback<DeviceConnectionStatus> = {
 			type: 'boolean',
 			name: 'Device - Connection Status',
-			sortName: '08 Device - 09 Connection Status',
+			sortName: '07 Device - 09 Connection Status',
 			description: 'Shows whether the Main Device or the (currently simulated) Hot Backup Device connection is in a given status.',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -1247,8 +1504,8 @@ export default class Feedbacks {
 		
 		const deviceLayerFreeze: AWJfeedback<{screen: string}> = {
 			type: 'boolean',
-			name: 'Freeze - Layer (Midra only)',
-			sortName: '05 Freeze - 02 Layer',
+			name: 'Freeze - Layer (Midra/Alta)',
+			sortName: '01 LIVE - 16 Freeze - Layer',
 			description: 'Shows whether a layer currently is frozen',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -1332,8 +1589,8 @@ export default class Feedbacks {
 		
 		const deviceScreenFreeze: AWJfeedback<{screen: string}> = {
 			type: 'boolean',
-			name: 'Freeze - Screen (Midra only)',
-			sortName: '05 Freeze - 03 Screen',
+			name: 'Freeze - Screen (Midra/Alta)',
+			sortName: '01 LIVE - 17 Freeze - Screen',
 			description: 'Shows whether a screen currently is frozen',
 			defaultStyle: {
 				color: this.config.color_bright,
@@ -1369,6 +1626,47 @@ export default class Feedbacks {
 		}
 
 		return deviceScreenFreeze
+	}
+
+	/**
+	 * MARK: deviceOutputFreeze
+	 * Aquilon only for now (LivePremier4's feedbacksToUse) - not yet confirmed whether Midra/Alta have an
+	 * equivalent per-output freeze, so left unregistered there until tested (2026-09-08).
+	 */
+	get deviceOutputFreeze() {
+
+		const outputChoices = this.choices.getOutputArray().map((out) => ({ id: `OUT${out.index}`, label: `Output ${out.index}${out.label ? ' - ' + out.label : ''}` }))
+
+		const deviceOutputFreeze: AWJfeedback<{output: string}> = {
+			type: 'boolean',
+			name: 'LIVE - Output Freeze (Aquilon)',
+			sortName: '01 LIVE - 18 Freeze - Output',
+			description: 'Shows whether a physical Output currently is frozen',
+			defaultStyle: {
+				color: this.config.color_bright,
+				bgcolor: combineRgb(0, 0, 100),
+				png64:
+					'iVBORw0KGgoAAAANSUhEUgAAADcAAAA3AQMAAACSFUAFAAABS2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxMzggNzkuMTU5ODI0LCAyMDE2LzA5LzE0LTAxOjA5OjAxICAgICAgICAiPgogPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIi8+CiA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgo8P3hwYWNrZXQgZW5kPSJyIj8+IEmuOgAAAARnQU1BAACxjwv8YQUAAAABc1JHQgCuzhzpAAAABlBMVEUAAABfXKLsUQDeAAAAAXRSTlMAQObYZgAAAM9JREFUGNONkTEOwjAMRX9UpDC1nIBwEKRyJCMGmNogDsCRyMY1wg26ESTUYLc1sEGWp1h2/vcPABDG84MrWoxXOgxcUycol7tbEFb748Aim4HmKZyXSCZsUFpQwQ1OeIqorsxzQHFnXgCTmT3PtczErD1ZEXCBXJR6RzXXzSNR3wA2NrvkPCpf52gDZnDZw3Oj7Ue/xfObM9gMSL/LgfttbHPH8+bRb+U9tIla0XVx1FP9yY/6U7/qX/fR/XRf3f+Th+Yz5aX5vfPUfP/6jxdhImTMvNrBOgAAAABJRU5ErkJggg==',
+			},
+			options: [
+				{
+					id: 'output',
+					type: 'dropdown',
+					label: 'Output',
+					choices: outputChoices,
+					default: outputChoices[0]?.id,
+					allowInvalidValues: true,
+				},
+			],
+			callback: (feedback) => {
+				const match = (feedback.options.output ?? '').toString().match(/^(?:OUT)?(\d+)$/i)
+				// The OUT{n}.freeze variable itself is maintained for every available output independently of
+				// this feedback (subscriptions.outputFreeze), so nothing to do here beyond the boolean result.
+				return match ? !!this.state.get('DEVICE/device/outputList/items/' + match[1] + '/control/pp/freeze') : false
+			},
+		}
+
+		return deviceOutputFreeze
 	}
 
 	// MARK: timerState
@@ -1421,8 +1719,8 @@ export default class Feedbacks {
 		
 		const deviceGpioOut: AWJfeedback<{gpo: number, state: number }> = {
 			type: 'boolean',
-			name: 'Device - GPO State (LivePremier(≤V3)/LivePremier only)',
-			sortName: '08 Device - 01 GPO State',
+			name: 'Device - GPO State (Aquilon)',
+			sortName: '07 Device - 01 GPO State',
 			description: 'Shows whether a general purpose output is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1464,8 +1762,8 @@ export default class Feedbacks {
 		
 		const deviceGpioIn: AWJfeedback<{gpi: number, state: number }> = {
 			type: 'boolean',
-			name: 'Device - GPI State (LivePremier(≤V3)/LivePremier only)',
-			sortName: '08 Device - 02 GPI State',
+			name: 'Device - GPI State (Aquilon)',
+			sortName: '07 Device - 02 GPI State',
 			description: 'Shows whether a general purpose input is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1517,7 +1815,7 @@ export default class Feedbacks {
 		const deviceCustom: AWJfeedback<FeedbackDeviceCustomOptions> = {
 			type: 'boolean',
 			name: 'Custom Feedback',
-			sortName: '10 Custom Feedback',
+			sortName: '09 Custom Feedback',
 			description: 'Generates feedback and a variable from a custom AWJ path',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1802,7 +2100,7 @@ export default class Feedbacks {
 		const deviceTestpatternActive: AWJfeedback<DeviceTestpatternActive> = {
 			type: 'boolean',
 			name: `Device - ${name}`,
-			sortName: `08 Device - 03 ${name}`,
+			sortName: `07 Device - 03 ${name}`,
 			description: 'Shows whether the selected Testpattern is currently active on the selected screen/output/input',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -1835,7 +2133,7 @@ export default class Feedbacks {
 		const deviceTestpatternRasterBoxActive: AWJfeedback<DeviceTestpatternRasterBoxActive> = {
 			type: 'boolean',
 			name: `Device - ${name}`,
-			sortName: `08 Device - 04 ${name}`,
+			sortName: `07 Device - 04 ${name}`,
 			description: 'Shows whether the selected Raster Box (Format/AOI) is currently enabled on the selected output',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -2082,17 +2380,17 @@ export default class Feedbacks {
 	 * MARK: Backups - Active Backup Source
 	 * Mirrors "Backups - Set Backup Set to Source" (deviceBackupSetSource action) - same target resolution
 	 * (choices.getBackupControlPath) and the same underlying xSelectSlot state field. First draft: LivePremier/
-	 * LivePremier4 only (Backup does not exist on Midra), firmware V6+ (see choices.isFirmwareAtLeast).
+	 * LivePremier4 only (Backup does not exist on Midra), firmware 6.0.4+ (see choices.isFirmwareAtLeast).
 	 */
 	get deviceBackupSetSourceStatus() {
 		type DeviceBackupSetSourceStatus = { target: string, source: string }
 
-		if (!this.choices.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast('6.0.4')) {
 			const deviceBackupSetSourceStatus: CompanionBooleanFeedbackDefinition = {
 				type: 'boolean',
-				name: 'Backups - Active Backup Source',
-				sortName: '09 Backups - 01 Active Backup Source',
-				description: 'Shows which source (Primary/Backup1/Backup2) is currently active for a Backup Set (or every Set in a Backup Group). Requires device firmware V6 or newer.',
+				name: 'Backups - Active Backup Source (Aquilon)',
+				sortName: '08 Backups - 01 Active Backup Source',
+				description: 'Shows which source (Primary/Backup1/Backup2) is currently active for a Backup Set (or every Set in a Backup Group). Requires device firmware 6.0.4 or newer.',
 				defaultStyle: {
 					color: this.config.color_dark,
 					bgcolor: this.config.color_highlight,
@@ -2105,8 +2403,8 @@ export default class Feedbacks {
 
 		const deviceBackupSetSourceStatus: AWJfeedback<DeviceBackupSetSourceStatus> = {
 			type: 'boolean',
-			name: 'Backups - Active Backup Source',
-			sortName: '09 Backups - 01 Active Backup Source',
+			name: 'Backups - Active Backup Source (Aquilon)',
+			sortName: '08 Backups - 01 Active Backup Source',
 			description: 'Shows which source (Primary/Backup1/Backup2) is currently active for a Backup Set (or every Set in a Backup Group).',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -2150,17 +2448,17 @@ export default class Feedbacks {
 	/**
 	 * MARK: Backups - Auto Mode Status
 	 * Mirrors "Backups - Set Auto Mode" (deviceBackupAutoMode action) - same target resolution and the same
-	 * underlying enableAutoSelect state field. First draft: LivePremier/LivePremier4 only, firmware V6+.
+	 * underlying enableAutoSelect state field. First draft: LivePremier/LivePremier4 only, firmware 6.0.4+.
 	 */
 	get deviceBackupAutoModeStatus() {
 		type DeviceBackupAutoModeStatus = { target: string, mode: string }
 
-		if (!this.choices.isFirmwareAtLeast(6)) {
+		if (!this.choices.isFirmwareAtLeast('6.0.4')) {
 			const deviceBackupAutoModeStatus: CompanionBooleanFeedbackDefinition = {
 				type: 'boolean',
-				name: 'Backups - Auto Mode Status',
-				sortName: '09 Backups - 02 Auto Mode Status',
-				description: 'Shows whether Auto Mode is currently on or off for a Backup Set (or every Set in a Backup Group). Requires device firmware V6 or newer.',
+				name: 'Backups - Auto Mode Status (Aquilon)',
+				sortName: '08 Backups - 02 Auto Mode Status',
+				description: 'Shows whether Auto Mode is currently on or off for a Backup Set (or every Set in a Backup Group). Requires device firmware 6.0.4 or newer.',
 				defaultStyle: {
 					color: this.config.color_dark,
 					bgcolor: this.config.color_highlight,
@@ -2173,8 +2471,8 @@ export default class Feedbacks {
 
 		const deviceBackupAutoModeStatus: AWJfeedback<DeviceBackupAutoModeStatus> = {
 			type: 'boolean',
-			name: 'Backups - Auto Mode Status',
-			sortName: '09 Backups - 02 Auto Mode Status',
+			name: 'Backups - Auto Mode Status (Aquilon)',
+			sortName: '08 Backups - 02 Auto Mode Status',
 			description: 'Shows whether Auto Mode is currently on or off for a Backup Set (or every Set in a Backup Group) - when on, the device automatically switches to a Backup source if the Primary signal is lost.',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -2209,5 +2507,130 @@ export default class Feedbacks {
 		}
 
 		return deviceBackupAutoModeStatus
+	}
+
+	/**
+	 * MARK: Preconfig - Background Set Source Status
+	 * Mirrors "Preconfig - Set Background Set Source" - shows whether one specific output of a given
+	 * Background Set currently shows the given content. Deliberately checks exactly one output at a time, not
+	 * a whole multi-output Screen at once (per explicit user decision) - combine several instances of this
+	 * feedback (one per output) into an AND feedback to check a whole Screen. No per-Screen selection here, same
+	 * reasoning and the same real benefit as the matching action (2026-09-08): a single flat "Output" dropdown,
+	 * in this module's own `OUT{n}` naming convention (choices.getBackgroundScreenOutputChoices()), listing
+	 * every real output of every Screen needs no isVisibleExpression at all, so - unlike most other
+	 * dynamic-per-target fields in this module - it stays fully expression/variable-capable, which matters here
+	 * specifically to allow programming a whole dynamic Stream Deck page of Background Set sources from
+	 * variables rather than one static button per output. Which Screen a given output belongs to is resolved
+	 * live at callback time (choices.getScreenForOutput()) rather than encoded in the option id.
+	 */
+	get devicePreconfigBackgroundSetSourceStatus() {
+		type DevicePreconfigBackgroundSetSourceStatus = { bgset: string, output: string, content: string }
+
+		const bgsetChoices = Array.from({ length: 8 }, (_, i) => ({ id: (i + 1).toString(), label: `Background Set ${i + 1}` }))
+		const outputChoices = this.choices.getBackgroundScreenOutputChoices()
+
+		const devicePreconfigBackgroundSetSourceStatus: AWJfeedback<DevicePreconfigBackgroundSetSourceStatus> = {
+			type: 'boolean',
+			name: 'Preconfig - Background Set Source Status (Aquilon)',
+			sortName: '06 Preconfig - Background Set Source Status',
+			description: 'Shows whether one specific output of a given Background Set currently shows the given content (Live Input, Still Image, or None). Checks exactly one output at a time - combine several instances of this feedback (one per output) into an AND feedback to check a whole multi-output Screen.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'bgset',
+					type: 'dropdown',
+					label: 'Background Set',
+					choices: bgsetChoices,
+					default: '1',
+				},
+				{
+					id: 'output',
+					type: 'dropdown',
+					label: 'Output',
+					choices: outputChoices,
+					default: outputChoices[0]?.id,
+					allowInvalidValues: true,
+				},
+				{
+					id: 'content',
+					type: 'dropdown',
+					label: 'Expected Source',
+					choices: this.choices.getBackgroundSetContentChoices(),
+					default: 'NONE',
+				},
+			],
+			callback: (feedback) => {
+				// Accepts both the dropdown's own 'OUT{n}' choices and a bare number (e.g. from an expression
+				// that only has the raw output number available) - same leniency spirit as allowInvalidValues.
+				const output = (feedback.options.output ?? '').replace(/^OUT/i, '')
+				const screen = this.choices.getScreenForOutput(output)
+				if (!screen) return false
+				const path = this.choices.getBackgroundSetOutputContentPath(screen, feedback.options.bgset, output)
+				const content = this.choices.shortSourceToBackgroundContent(feedback.options.content)
+				return this.state.get(['DEVICE', ...path]) === content
+			},
+		}
+
+		return devicePreconfigBackgroundSetSourceStatus
+	}
+
+	/**
+	 * MARK: Preconfig - Inputs - Input Keying Status
+	 * Mirrors "Preconfig - Inputs - Set Input Keying" - shows whether an Input's own Chroma/Luma keying mode
+	 * currently matches the selected value.
+	 */
+	get deviceInputKeyingStatus() {
+		type DeviceInputKeyingStatus = { input: string, mode: string }
+
+		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({ id: `IN${inp.index}`, label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}` }))
+
+		const deviceInputKeyingStatus: AWJfeedback<DeviceInputKeyingStatus> = {
+			type: 'boolean',
+			name: 'Preconfig - Inputs - Input Keying Status',
+			sortName: '06 Preconfig - Inputs - Input Keying Status',
+			description: 'Shows whether an Input\'s own Chroma/Luma/CremaTTe3D/Cut&Fill keying mode currently matches the selected value.',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'input',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Input',
+					tooltip: 'This module\'s own short id convention (IN{n}) - a bare number, or the raw AWJ id (e.g. IN_1/LIVE_1), is also accepted.',
+					choices: inputChoices,
+					default: inputChoices[0]?.id,
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: [
+						{ id: 'DISABLE', label: 'Keying Disabled' },
+						{ id: 'CHROMA', label: 'Chroma Key' },
+						{ id: 'LUMA', label: 'Luma Key' },
+						{ id: 'CREMATTE3D', label: 'CremaTTe3D' },
+						// Analog Way's release notes: input-level Cut&Fill was added in firmware 4.0.254 -
+						// live-confirmed (2026-09-08) this is that same feature, not a separate protocol area.
+						{ id: 'CUT_AND_FILL', label: this.choices.isFirmwareAtLeast('4.0.254') ? 'Cut&Fill' : 'Cut&Fill (requires at least firmware 4.0.254)' },
+					],
+					default: 'DISABLE',
+				},
+			],
+			callback: (feedback) => {
+				const match = (feedback.options.input ?? '').match(/^(?:IN_?|LIVE_)?(\d+)$/i)
+				if (!match) return false
+				const input = `IN_${match[1]}`
+				const plug = this.state.get('DEVICE/device/inputList/items/' + input + '/status/pp/plug')
+				return this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', plug, 'settings', 'keying', 'control', 'pp', 'mode']) === feedback.options.mode
+			},
+		}
+
+		return deviceInputKeyingStatus
 	}
 }

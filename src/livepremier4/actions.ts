@@ -57,8 +57,9 @@ export default class ActionsLivepremier4 extends Actions {
 		'deviceScreenEncoderAdjustV3',
 		'deviceInputKeying',
 		'deviceInputFreeze',
-		// 'deviceLayerFreeze',
-		// 'deviceScreenFreeze',
+		'deviceOutputFreeze',
+		'deviceScreenFreezeOutputs',
+		'deviceLayerFreezeV3',
 		'deviceAssignImageLibraryToStore',
 		'deviceSelectSource',
 		'devicePositionSize',
@@ -66,6 +67,7 @@ export default class ActionsLivepremier4 extends Actions {
 		'devicePositionSizeV3',
 		'deviceLayerTransitionsV3',
 		'deviceLayerKeyingV3',
+		'deviceLayerCutFillV3',
 		'deviceLayerOpacityV3',
 		'deviceLayerAspectCropV3',
 		'deviceLayerMaskV3',
@@ -102,7 +104,8 @@ export default class ActionsLivepremier4 extends Actions {
 		'devicePower',
 		'deviceFailoverToHotBackup',
 		'deviceBackupSetSource',
-		'deviceBackupAutoMode'
+		'deviceBackupAutoMode',
+		'devicePreconfigBackgroundSetSource'
 	]
 	
 	constructor (instance: AWJinstance) {
@@ -647,7 +650,19 @@ export default class ActionsLivepremier4 extends Actions {
 			if (opt.layer === 'sel') {
 				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			}
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(opt.layer)}))
+			if (opt.layer === 'all') {
+				return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, true).map(l => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(l.id)})))
+			}
+			// Expression Mode also accepts a concatenated multi-Layer string like 'L1L2' (getChosenLayers() -
+			// same convention as "LIVE - Layer Selection"/"LIVE - Layer Freeze" elsewhere in the module; 'BG' is
+			// already converted to 'NATIVE' by getChosenLayers() itself) - a plain numeric value from the
+			// dropdown passes through unchanged. Only a Layer that actually exists on that specific Screen right
+			// now is targeted, per Screen (see GUIDELINES.md's "never write to a target that doesn't exist").
+			const layerKeys = this.choices.getChosenLayers(opt.layer)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, true).map(l => this.choices.normalizeLayerId(l.id)))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({screenAuxKey, layerKey}))
+			})
 		}
 
 		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
@@ -657,7 +672,10 @@ export default class ActionsLivepremier4 extends Actions {
 			if (targets.length === 0) return undefined
 			const target = targets[0]
 
-			const preset = this.choices.getPresetSelection()
+			// getPresetSelection() returns 'pvw', but the "Preset" option's own choices use 'prw' for Preview -
+			// convert before writing it into an option value (see the same fix in awjdevice/actions.ts's learn
+			// handlers).
+			const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 			const isAux = target.screenAuxKey.startsWith('A')
 			const presetpath = [
 				'device', isAux ? 'auxiliaryList' : 'screenList', 'items', target.screenAuxKey,
@@ -675,8 +693,10 @@ export default class ActionsLivepremier4 extends Actions {
 
 			const isBackground = target.layerKey === 'NATIVE' || target.layerKey === 'BKG'
 			// background layers store just the bare digit ("3"), not "NATIVE_3" - same reverse mapping the
-			// callback's own `source.replace(/\D/g, '')` does in the other direction
-			newoptions.sourceLayer = (isBackground && /^\d+$/.test(raw)) ? `NATIVE_${raw}` : raw
+			// callback's own `source.replace(/\D/g, '')` does in the other direction. Otherwise convert the
+			// raw AWJ id (e.g. STILL_3) to this module's own short id (IMG3) - backgroundContentToShortSource()
+			// passes anything else (NONE/COLOR/SCREEN_n) through unchanged.
+			newoptions.sourceLayer = (isBackground && /^\d+$/.test(raw)) ? `NATIVE_${raw}` : this.choices.backgroundContentToShortSource(raw)
 
 			if (raw === 'COLOR') {
 				const colorpath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'color', 'pp']
@@ -690,50 +710,58 @@ export default class ActionsLivepremier4 extends Actions {
 		}
 
 		deviceSelectSourceV3.callback = (action) => {
-			const preset = action.options.preset
-			const source = action.options.sourceLayer
-			if (source === 'keep') return
-			for (const target of resolveTargets(action.options)) {
-				let unlockedByUs = false
-				if (this.choices.isLocked(target.screenAuxKey, preset)) {
-					if (!parseBoolean(action.options.unlockIfLocked)) continue
-					this.choices.setScreenLock(target.screenAuxKey, preset, false)
-					unlockedByUs = true
-				}
-				const isAux = target.screenAuxKey.startsWith('A')
-				const presetpath = [
-					'device', isAux ? 'auxiliaryList' : 'screenList', 'items', target.screenAuxKey,
-					'presetList', 'items', this.choices.getPreset(target.screenAuxKey, preset),
-				]
-				const inputNumPath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'pp', 'inputNum']
-				const colorpath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'color', 'pp']
-				const sendColor = (r: number, g: number, b: number) => {
-					this.connection.sendWSmessage([...colorpath, 'red'], r)
-					this.connection.sendWSmessage([...colorpath, 'green'], g)
-					this.connection.sendWSmessage([...colorpath, 'blue'], b)
-				}
-				const isBackground = target.layerKey === 'NATIVE' || target.layerKey === 'BKG'
-				if (isBackground) {
-					if (source === 'NONE') {
-						this.connection.sendWSmessage(inputNumPath, 'NONE')
-						sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
-					} else if (source === 'COLOR') {
-						this.connection.sendWSmessage(inputNumPath, 'COLOR')
-						const color = Number(action.options.sourceColor)
-						sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
-					} else if (/^NATIVE_\d+$/.test(source)) {
-						this.connection.sendWSmessage(inputNumPath, source.replace(/\D/g, ''))
+			if (action.options.sourceLayer === 'keep') return
+			// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n) the
+			// device expects - anything else (NONE/COLOR/SCREEN_n/NATIVE_n, or an already-raw id typed directly
+			// via Expression Mode) passes through unchanged.
+			const source = this.choices.shortSourceToBackgroundContent(action.options.sourceLayer)
+			// 'all' (Both) isn't a real preset bank - getPreset()/isLocked() only understand pgm/prw/A/B/sel,
+			// so it's expanded into an explicit list up front rather than passed through.
+			const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset]
+			const targets = resolveTargets(action.options)
+			for (const preset of presetsToApply) {
+				for (const target of targets) {
+					let unlockedByUs = false
+					if (this.choices.isLocked(target.screenAuxKey, preset)) {
+						if (!parseBoolean(action.options.unlockIfLocked)) continue
+						this.choices.setScreenLock(target.screenAuxKey, preset, false)
+						unlockedByUs = true
 					}
-					// anything else picked from the shared list isn't valid for a background layer - no-op
-				} else {
-					this.connection.sendWSmessage(inputNumPath, source)
-					if (source === 'COLOR') {
-						const color = Number(action.options.sourceColor)
-						sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+					const isAux = target.screenAuxKey.startsWith('A')
+					const presetpath = [
+						'device', isAux ? 'auxiliaryList' : 'screenList', 'items', target.screenAuxKey,
+						'presetList', 'items', this.choices.getPreset(target.screenAuxKey, preset),
+					]
+					const inputNumPath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'pp', 'inputNum']
+					const colorpath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'color', 'pp']
+					const sendColor = (r: number, g: number, b: number) => {
+						this.connection.sendWSmessage([...colorpath, 'red'], r)
+						this.connection.sendWSmessage([...colorpath, 'green'], g)
+						this.connection.sendWSmessage([...colorpath, 'blue'], b)
 					}
-				}
-				if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
-					this.choices.setScreenLock(target.screenAuxKey, preset, true)
+					const isBackground = target.layerKey === 'NATIVE' || target.layerKey === 'BKG'
+					if (isBackground) {
+						if (source === 'NONE') {
+							this.connection.sendWSmessage(inputNumPath, 'NONE')
+							sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
+						} else if (source === 'COLOR') {
+							this.connection.sendWSmessage(inputNumPath, 'COLOR')
+							const color = Number(action.options.sourceColor)
+							sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+						} else if (/^NATIVE_\d+$/.test(source)) {
+							this.connection.sendWSmessage(inputNumPath, source.replace(/\D/g, ''))
+						}
+						// anything else picked from the shared list isn't valid for a background layer - no-op
+					} else {
+						this.connection.sendWSmessage(inputNumPath, source)
+						if (source === 'COLOR') {
+							const color = Number(action.options.sourceColor)
+							sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+						}
+					}
+					if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
+						this.choices.setScreenLock(target.screenAuxKey, preset, true)
+					}
 				}
 			}
 			this.instance.sendXupdate()
@@ -1088,7 +1116,7 @@ export default class ActionsLivepremier4 extends Actions {
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '06 Audio - Route (Block)',
+			sortName: '05 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
@@ -1196,7 +1224,7 @@ export default class ActionsLivepremier4 extends Actions {
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '06 Audio - Route (Channels)',
+			sortName: '05 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
@@ -1508,7 +1536,7 @@ export default class ActionsLivepremier4 extends Actions {
 	 * MARK: Testpattern Raster Box - LivePremier4
 	 */
 	get deviceTestpatternRasterBox() {
-		return this.deviceTestpatternRasterBox_common('Device - Set LivePremier Testpattern Raster Box')
+		return this.deviceTestpatternRasterBox_common('Device - Set LivePremier Testpattern Raster Box (Aquilon)')
 	}
 
 	/**
@@ -1527,8 +1555,8 @@ export default class ActionsLivepremier4 extends Actions {
 		} 
 		
 		const deviceGPO: AWJaction<DeviceGPO> = {
-			name: 'Device - Set GPO',
-			sortName: '08 Device - Set GPO',
+			name: 'Device - Set GPO (Aquilon)',
+			sortName: '07 Device - Set GPO',
 			description: 'Turns a General Purpose Output (GPO) on, off, or toggles it.',
 			options: [
 				{
@@ -1576,5 +1604,231 @@ export default class ActionsLivepremier4 extends Actions {
 		return deviceGPO
 	}
 
+	/**
+	 * MARK: Change screen freeze (Aquilon) - emulated via Output Freeze
+	 * Aquilon has no native single "freeze this screen" command - live-confirmed on a real Aquilon (2026-09-08):
+	 * device/screenList/items/{id}/control/pp only has label/transitionGroup, no freeze field at all, unlike
+	 * Midra which writes one flag directly (the base deviceScreenFreeze this replaces). Instead this
+	 * freezes/unfreezes/toggles every physical Output assigned to the chosen Screen(s)/Auxscreen(s)
+	 * (choices.getScreenOutputArray()) - the same underlying mechanism as "LIVE - Output Freeze", just applied
+	 * to a whole Screen's outputs at once. Toggle is a single shared decision across every one of those outputs, not an independent
+	 * per-output toggle (unlike deviceLayerFreeze's per-layer toggle): if ANY of them is currently frozen,
+	 * Toggle unfreezes all of them; only if NONE are frozen does it freeze them all - explicit user decision
+	 * (2026-09-08), since toggling each output independently could leave a Screen only partially frozen after
+	 * a single press.
+	 * Not a super.deviceScreenFreeze override - a fully independent implementation, since the "screens" field
+	 * uses the module's other established single-dropdown + Expression Mode pattern for multi-target Screen
+	 * selection (matching e.g. deviceTakeScreen's "screens" option: 'all'/'sel' keywords plus a real screen/
+	 * aux id, resolved via choices.getChosenScreenAuxes() - which also transparently accepts a concatenated
+	 * Expression Mode string like 'S1S2A1') instead of the base's native Companion multi-select dropdown -
+	 * explicit user decision (2026-09-08).
+	 */
+	get deviceScreenFreezeOutputs() {
+		type DeviceScreenFreeze = {screens: string, mode: number}
+
+		const deviceScreenFreezeOutputs: AWJaction<DeviceScreenFreeze> = {
+			name: 'LIVE - Screen Freeze (Aquilon)',
+			sortName: '01 LIVE - 21 Freeze - Screen',
+			description: 'Freezes, unfreezes, or toggles every physical Output assigned to the selected Screen(s)/Auxscreen(s). Aquilon has no native whole-screen freeze command, so this is a collective "LIVE - Output Freeze" over all of the Screen\'s outputs - the individual outputs can still be frozen/unfrozen on their own via "LIVE - Output Freeze". Toggle is a single shared decision across all of those outputs: if any of them is currently frozen, Toggle unfreezes all of them; only if none are frozen does it freeze them all.',
+			options: [
+				{
+					id: 'screens',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screens / Auxscreens',
+					tooltip: 'To target multiple specific screens other than "All Screens" or "Selected Screens", switch to Expression Mode and use a format like \'S1S2A1\' (in quotes, so it is recognized as text).',
+					choices: [
+						{ id: 'all', label: 'All Screens' },
+						{ id: 'sel', label: 'Selected Screens' },
+						...this.choices.getScreenAuxChoices(),
+					],
+					default: 'sel',
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: [
+						{ id: 1, label: 'Freeze' },
+						{ id: 0, label: 'Unfreeze' },
+						{ id: 2, label: 'Toggle' },
+					],
+					default: 2,
+				},
+			],
+			callback: (action) => {
+				const outputs = this.choices.getChosenScreenAuxes(action.options.screens).flatMap((screen) => this.choices.getScreenOutputArray(screen))
+				let val = false
+				if (action.options.mode === 1) {
+					val = true
+				} else if (action.options.mode === 2) {
+					val = !outputs.some((out) => !!this.state.get(['DEVICE', 'device', 'outputList', 'items', out.id, 'control', 'pp', 'freeze']))
+				}
+				for (const out of outputs) {
+					this.connection.sendWSmessage(['device', 'outputList', 'items', out.id, 'control', 'pp', 'freeze'], val)
+				}
+			},
+		}
+		return deviceScreenFreezeOutputs
+	}
+
+	/**
+	 * MARK: Change layer freeze (Aquilon)
+	 * Built like a "Layer Properties" action (Screen/Preset/Layer field structure, per explicit user decision
+	 * 2026-09-08 - "es ist im Grunde eine Layer Property, nur anders dargestellt im WebRCS") rather than like
+	 * the other Freeze actions. Live-confirmed on a real Aquilon (2026-09-08): unlike every other property in
+	 * this family, freeze here is NOT nested under presetList/items/{A|B}/... - it lives flatly at
+	 * device/screenList/items/{screen}/layerList/items/{layer}/control/pp/freeze, and its value is an ARRAY of
+	 * up to two tokens, 'UP'/'DOWN' (e.g. `["DOWN"]`, `[]` for unfrozen), not a boolean - matching the raw
+	 * AWJ path `$screen/@items/S1/$layer/@items/1/control/@props/freeze` captured live from WebRCS's own
+	 * traffic. 'UP'/'DOWN' identify a PHYSICAL preset bank slot (whichever currently sits at the T-Bar's Up or
+	 * Down position for that Screen), not the logical Program/Preview role - live-confirmed a layer frozen
+	 * while it was Program stays frozen (still holding its physical slot's token) after a Take swaps which
+	 * slot is Program, and the same holds in reverse for Preview. So this resolves the requested Preset
+	 * (Program/Preview/Both) to its CURRENT physical token via choices.getPreset() + presetUp at the moment
+	 * the action runs, then adds/removes only that specific token from the array (read-modify-write) - Program
+	 * and Preview are otherwise completely independent of each other here (explicit user decision, 2026-09-08:
+	 * "das sollte einfach unabhängig voneinander bleiben"), so freezing one must never touch the other's
+	 * token. Aux screens have no layerList/control/pp/freeze at all (live-confirmed, 2026-09-08) - the "Screen"
+	 * field is therefore restricted to real Screens only, and any Auxscreen reaching this via a raw Expression
+	 * Mode id (e.g. 'A1' or a concatenated 'S1A1') is silently filtered out and ignored, per explicit user
+	 * instruction, rather than causing an error.
+	 * Toggle is a single shared decision across every targeted (Layer, Preset direction) combination, not an
+	 * independent per-Layer toggle - live-testing an 'L1L2' multi-Layer target showed independent per-Layer
+	 * toggling fighting itself (one freezing while the other unfreezes on the same press); if ANY targeted
+	 * combination is currently frozen, Toggle unfreezes all of them, only if NONE are frozen does it freeze
+	 * them all - same reasoning as "LIVE - Screen Freeze"'s toggle, extended across multiple Layers (explicit
+	 * user decision, 2026-09-08). This only changes how the shared decision is computed - the write itself
+	 * still only ever touches the specifically targeted token(s) per Layer, so Program/Preview independence
+	 * is unaffected.
+	 * No dedicated variable (see layerFreezeV3 subscription's own comment for why).
+	 */
+	get deviceLayerFreezeV3() {
+		type DeviceLayerFreezeV3 = {screen: string, preset: string, layersel: string, mode: number}
+
+		const resolveScreens = (screen: string): string[] => {
+			const targets = screen === 'first'
+				? this.choices.getSelectedScreens()
+				: this.choices.getChosenScreenAuxes(screen)
+			// Aux has no layer freeze at all (live-confirmed) - filter out and ignore rather than error.
+			const realScreens = targets.filter((s) => s.startsWith('S'))
+			return screen === 'first' ? realScreens.slice(0, 1) : realScreens
+		}
+
+		const resolveLayers = (opt: {screen: string, layersel: string}): {screenAuxKey: string, layerKey: string}[] => {
+			const targetScreens = resolveScreens(opt.screen)
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			if (opt.layersel === 'all') return targetScreens.flatMap((screenAuxKey) => this.choices.getLayersAsArray(screenAuxKey, false).map((l) => ({ screenAuxKey, layerKey: l.id })))
+			// Expression Mode also accepts a concatenated multi-Layer string like 'L1L2' (getChosenLayers() -
+			// same convention as "LIVE - Layer Selection" elsewhere in the module); a plain numeric value from
+			// the dropdown itself passes through unchanged.
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			// Only ever target a Layer that actually exists on that specific Screen right now - live-confirmed
+			// (2026-09-08) the device silently accepts a freeze write to a Layer index beyond the Screen's
+			// current layerCount instead of rejecting it, and that write can persist and resurface
+			// already-frozen if the Layer count is later increased to include it. A nonexistent Layer number
+			// is therefore silently dropped per Screen, exactly like 'all' already only resolves to real
+			// Layers - checked per Screen since different Screens can have different Layer counts.
+			return targetScreens.flatMap((screenAuxKey) => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map((l) => l.id))
+				return layerKeys.filter((layerKey) => realIds.has(layerKey)).map((layerKey) => ({ screenAuxKey, layerKey }))
+			})
+		}
+
+		// Resolves which physical bank ('UP' or 'DOWN') currently holds the requested Program/Preview content
+		// for one specific Screen, at this exact moment - reuses the already-fixed getPreset()/presetUp
+		// (same fields the screenPreset subscription bugfix relies on) instead of re-deriving the T-Bar's
+		// AT_UP/AT_DOWN transition state independently.
+		const getFreezeToken = (screen: string, preset: 'pgm' | 'pvw'): 'UP' | 'DOWN' => {
+			const bank = this.choices.getPreset(screen, preset)
+			const presetUp = this.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'presetUp'])
+			return bank === presetUp ? 'UP' : 'DOWN'
+		}
+
+		const deviceLayerFreezeV3: AWJaction<DeviceLayerFreezeV3> = {
+			name: 'LIVE - Layer Freeze (Aquilon)',
+			sortName: '01 LIVE - 20 Freeze - Layer',
+			description: 'Freezes, unfreezes, or toggles a Layer\'s Program and/or Preview content - Program and Preview stay independent of each other, but Toggle is a single shared decision across every targeted Layer: if any of them is currently frozen, Toggle unfreezes all of them; only if none are frozen does it freeze them all. Aquilon only supports this on real Screens, never Auxscreens.',
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenChoices()],
+					default: 'first',
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset (Program/Preview)',
+					choices: [...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
+					allowInvalidValues: true,
+					default: 'prw',
+				},
+				{
+					id: 'layersel',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Layer',
+					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({ length: this.choices.getMaxConfiguredLayerCount() }, (_i, e: number) => ({ id: (e + 1).toString(), label: `Layer ${e + 1}` }))],
+					default: 'first',
+				},
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Mode',
+					choices: [
+						{ id: 1, label: 'Freeze' },
+						{ id: 0, label: 'Unfreeze' },
+						{ id: 2, label: 'Toggle' },
+					],
+					default: 2,
+				},
+			],
+			callback: (action) => {
+				const presetTargets: ('pgm' | 'pvw')[] = action.options.preset === 'all' ? ['pgm', 'pvw'] : [action.options.preset as 'pgm' | 'pvw']
+				const layers = resolveLayers(action.options)
+				const targets = layers.flatMap((layer) => presetTargets.map((preset) => ({ layer, token: getFreezeToken(layer.screenAuxKey, preset) })))
+
+				let val: boolean
+				if (action.options.mode === 1) {
+					val = true
+				} else if (action.options.mode === 0) {
+					val = false
+				} else {
+					// Toggle is a single shared decision across every targeted (Layer, Preset direction)
+					// combination, not an independent per-Layer toggle - if ANY of them is currently frozen,
+					// Toggle unfreezes all of them; only if NONE are frozen does it freeze them all. Same
+					// reasoning as "LIVE - Screen Freeze"'s toggle, extended across multiple Layers - explicit
+					// user decision (2026-09-08) after live-testing L1L2 showed independent per-Layer toggling
+					// fighting itself. Program/Preview stay independent regardless (see the write loop below,
+					// which only ever touches the specifically targeted token(s) per Layer) - this only
+					// changes how the shared Freeze-vs-Unfreeze decision itself is computed.
+					val = !targets.some(({ layer, token }) => {
+						const current: string[] = this.state.get(['DEVICE', 'device', 'screenList', 'items', layer.screenAuxKey, 'layerList', 'items', layer.layerKey, 'control', 'pp', 'freeze']) ?? []
+						return current.includes(token)
+					})
+				}
+
+				for (const layer of layers) {
+					const path = ['device', 'screenList', 'items', layer.screenAuxKey, 'layerList', 'items', layer.layerKey, 'control', 'pp', 'freeze']
+					const current: string[] = this.state.get(['DEVICE', ...path]) ?? []
+					const next = new Set(current)
+					for (const preset of presetTargets) {
+						const token = getFreezeToken(layer.screenAuxKey, preset)
+						if (val) next.add(token)
+						else next.delete(token)
+					}
+					this.connection.sendWSmessage(path, [...next])
+				}
+				this.instance.sendXupdate()
+			},
+		}
+
+		return deviceLayerFreezeV3
+	}
 
 }

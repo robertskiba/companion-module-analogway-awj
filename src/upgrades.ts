@@ -122,6 +122,33 @@ const UpgradeScripts = [
 			updatedFeedbacks: [],
 		}
 	},
+	// "LIVE - Source Tally"'s "Screens / Auxscreens" field used to be a Companion-native multi-select
+	// (`multiple: true`, storing an array like ['S1', 'S2']) - switched to this module's usual single-value
+	// dropdown + concatenated Expression Mode string ('S1S2', matching the 'S1S2A1' convention every other
+	// "Screens" field already uses), per explicit user decision (2026-09-08): consistency across the module
+	// matters more than this one field's native-multi-select convenience. The old array's own choices only
+	// ever produced 'all' or literal Screen/Aux ids (never 'sel'/'first', which didn't exist on the old
+	// field) - an empty array or one containing 'all' becomes 'all' (its old meaning, "Any Screen"), anything
+	// else is joined with no separator into a single concatenated string.
+	function updateSourceTallyScreensToExpressionSyntax(_context, props: LooseObj) {
+		const feedbacks = props.feedbacks
+		const feedbacksToUpdate: LooseObj[] = []
+
+		feedbacks
+			.filter((feedback: LooseObj) => feedback.feedbackId === 'deviceSourceTally' && Array.isArray(feedback.options.screens))
+			.forEach((oldFeedback: LooseObj) => {
+				const feedback = { ...oldFeedback, options: { ...oldFeedback.options } }
+				const arr: string[] = feedback.options.screens
+				feedback.options.screens = (arr.length === 0 || arr.includes('all')) ? 'all' : arr.join('')
+				feedbacksToUpdate.push(feedback)
+			})
+
+		return {
+			updatedConfig: null,
+			updatedActions: [],
+			updatedFeedbacks: feedbacksToUpdate,
+		}
+	},
 ]
 
 export { UpgradeScripts }

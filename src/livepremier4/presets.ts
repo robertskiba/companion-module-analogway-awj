@@ -90,7 +90,7 @@ export default class PresetsLivepremier4 extends Presets {
 					{
 						feedbackId: 'deviceSourceTally',
 						options: {
-							screens: ['all'],
+							screens: 'all',
 							preset: 'prw',
 							source: input.id,
 						},
@@ -102,7 +102,7 @@ export default class PresetsLivepremier4 extends Presets {
 					{
 						feedbackId: 'deviceSourceTally',
 						options: {
-							screens: ['all'],
+							screens: 'all',
 							preset: 'pgm',
 							source: input.id,
 						},

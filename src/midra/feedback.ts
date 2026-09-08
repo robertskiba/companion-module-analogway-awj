@@ -31,6 +31,8 @@ export default class FeedbacksMidra extends Feedbacks  {
 		'presetToggle',
 		'globalAnchorPoint',
 		'deviceLayerPropertyStatus',
+		'deviceLayerSourceStatus',
+		// 'deviceLayerCutFillSourceStatus', // Aquilon only for now - matches deviceLayerCutFillV3's own registration
 		'deviceMasterMemory',
 		'deviceScreenMemory',
 		'deviceScreenMemorySlotStatus',
@@ -55,6 +57,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		'deviceStreaming',
 		'deviceStreamAudioMuteStatus',
 		'deviceInputPlugStatus',
+		'deviceInputKeyingStatus',
 		'deviceAudioRouteChannelsStatus',
 		'deviceAudioRouteBlockStatus',
 		'deviceTestpatternActive',
@@ -98,84 +101,115 @@ export default class FeedbacksMidra extends Feedbacks  {
 	get deviceSourceTally() {
 		const deviceSourceTally = super.deviceSourceTally
 
-		deviceSourceTally.callback = (feedback) => {  
-			const checkTally = (): boolean => {
-				// go thru the screens
-				for (const screen of this.choices.getChosenScreenAuxes(feedback.options.screens)) {
-					const screeninfo = this.choices.getScreenInfo(screen)
-					const preset = this.choices.getPreset(screen, feedback.options.preset)
-					for (const layer of this.choices.getLayerChoices(screen)) {
-						const screenpath = [
-							'DEVICE',
-							...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-							'items',
-							screeninfo.numstr
-						]
-						const presetpath = [...screenpath, 'presetList', 'items', preset]
-						
-						// check if source is used in background set on a screen
-						if (layer.id === 'BG' && screeninfo.isScreen) {
-							const set = this.state.get([...presetpath, 'background', 'source', 'pp', 'set'])
-							if (set === 'NONE') continue
-							const setinput = this.state.get([...screenpath, 'backgroundSetList', 'items', set, 'control', 'pp', 'singleContent']) // TODO: check input format
-							if (setinput === feedback.options.source) return true
-							else continue
-						}
+		deviceSourceTally.callback = (feedback) => {
+			// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n) the
+			// device actually stores - anything else (NONE/COLOR/NATIVE_n, or an already-raw id typed directly
+			// via Expression Mode) passes through unchanged. NOTE: Midra's own getSourceChoices() override
+			// currently builds its Input choice ids as `INPUT_n` (src/midra/choices.ts), which this conversion
+			// does NOT recognize (only LIVE_n/STILL_n) - so on Midra this dropdown still shows raw `INPUT_n`
+			// values instead of `IN{n}`, same as every other Source field built from getSourceChoices() there
+			// (e.g. "Layer Properties - Source"). Not fixed here - needs Midra's actual wire-level Input id
+			// live-verified first (is it really `INPUT_n`, or `LIVE_n` like LivePremier4?) - see the Midra/Alta
+			// Known Gaps section in CHANGELOG.md/README.md.
+			const expectedSource = this.choices.shortSourceToBackgroundContent(feedback.options.source)
+			// Screens field follows the module's usual "S1S2A1" concatenated Expression Mode convention rather
+			// than Companion's own native multi-select, per explicit user decision - 'first' isn't understood by
+			// getChosenScreenAuxes() itself, so it's resolved the same way every other "Screens" field does.
+			const targetScreens = feedback.options.screens === 'first' ? this.choices.getSelectedScreens().slice(0, 1) : this.choices.getChosenScreenAuxes(feedback.options.screens)
+			// True if the source is showing somewhere on this one Screen/Aux (OR across its Layers - any one
+			// Layer showing it is enough for the Screen to count).
+			const screenHasSource = (screen: string, rawPreset: string): boolean => {
+				const screeninfo = this.choices.getScreenInfo(screen)
+				const preset = this.choices.getPreset(screen, rawPreset)
+				for (const layer of this.choices.getLayerChoices(screen)) {
+					const screenpath = [
+						'DEVICE',
+						...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+						'items',
+						screeninfo.numstr
+					]
+					const presetpath = [...screenpath, 'presetList', 'items', preset]
 
-						// check if source is used in background layer on an aux
-						else if (layer.id === 'BG' && screeninfo.isAux) {
-							const bkginput = this.state.get([...presetpath, 'background', 'source', 'pp', 'content'])
-							if (bkginput === feedback.options.source) return true
-							else continue
-						}
-	
-						// check if source is used in top layer
-						else if (layer.id === 'TOP') {
-							const frginput = this.state.get([...presetpath, 'top', 'source', 'pp', 'frame'])
-							if (frginput === feedback.options.source) return true
-							else continue
-						}
-						
-						if ((feedback.options.source === 'NONE' || feedback.options.source?.toString().startsWith('BACKGROUND') && this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === feedback.options.source)) {
+					// check if source is used in background set on a screen
+					if (layer.id === 'BG' && screeninfo.isScreen) {
+						const set = this.state.get([...presetpath, 'background', 'source', 'pp', 'set'])
+						if (set === 'NONE') continue
+						const setinput = this.state.get([...screenpath, 'backgroundSetList', 'items', set, 'control', 'pp', 'singleContent']) // TODO: check input format
+						if (setinput === expectedSource) return true
+						else continue
+					}
+
+					// check if source is used in background layer on an aux
+					else if (layer.id === 'BG' && screeninfo.isAux) {
+						const bkginput = this.state.get([...presetpath, 'background', 'source', 'pp', 'content'])
+						if (bkginput === expectedSource) return true
+						else continue
+					}
+
+					// check if source is used in top layer
+					else if (layer.id === 'TOP') {
+						const frginput = this.state.get([...presetpath, 'top', 'source', 'pp', 'frame'])
+						if (frginput === expectedSource) return true
+						else continue
+					}
+
+					if ((expectedSource === 'NONE' || expectedSource?.toString().startsWith('BACKGROUND') && this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === expectedSource)) {
+						return true
+					}
+
+					const layerpath = [...presetpath, 'liveLayerList', 'items', layer.id]
+					if (this.state.get([...layerpath, 'source', 'pp', 'input']) === expectedSource) {
+						const invisible = (
+							this.state.get([...layerpath, 'size', 'pp', 'sizeH']) === 0 ||
+							this.state.get([...layerpath, 'size', 'pp', 'sizeV']) === 0 ||
+							this.state.get([...layerpath, 'opacity', 'pp', 'opacity']) === 0 ||
+							this.state.get([...layerpath, 'crop', 'pp', 'top']) +
+								this.state.get([...layerpath,'crop', 'pp', 'bottom']) >
+								65528 ||
+							this.state.get([...layerpath, 'crop', 'pp', 'left']) +
+								this.state.get([...layerpath, 'crop', 'pp', 'right']) >
+								65528 ||
+							this.state.get([...layerpath, 'mask', 'pp', 'top']) +
+								this.state.get([...layerpath, 'mask', 'pp', 'bottom']) >
+								65528 ||
+							this.state.get([...layerpath, 'mask', 'pp', 'left']) +
+								this.state.get([...layerpath, 'mask', 'pp', 'right']) >
+								65528 ||
+							this.state.get([...layerpath, 'position', 'pp', 'posH']) + this.state.get([...layerpath, 'size', 'pp', 'sizeH']) / 2 <= 0 ||
+							this.state.get([...layerpath, 'position', 'pp', 'posV']) + this.state.get([...layerpath, 'size', 'pp', 'sizeV']) / 2 <= 0 ||
+							this.state.get([...layerpath, 'position', 'pp', 'posH']) - this.state.get([...layerpath, 'size', 'pp', 'sizeH']) / 2 >=
+								this.state.get([...screenpath, 'canvas', 'status', 'size', 'pp', 'sizeH']) ||
+							this.state.get([...layerpath, 'position', 'pp', 'posV']) - this.state.get([...layerpath, 'size', 'pp', 'sizeV']) / 2 >=
+								this.state.get([...screenpath, 'canvas', 'status', 'size', 'pp', 'sizeV'])
+						)
+						if (!invisible) {
 							return true
-						}
-						
-						const layerpath = [...presetpath, 'liveLayerList', 'items', layer.id]
-						if (this.state.get([...layerpath, 'source', 'pp', 'input']) === feedback.options.source) {
-							const invisible = (
-								this.state.get([...layerpath, 'size', 'pp', 'sizeH']) === 0 ||
-								this.state.get([...layerpath, 'size', 'pp', 'sizeV']) === 0 ||
-								this.state.get([...layerpath, 'opacity', 'pp', 'opacity']) === 0 ||
-								this.state.get([...layerpath, 'crop', 'pp', 'top']) +
-									this.state.get([...layerpath,'crop', 'pp', 'bottom']) >
-									65528 ||
-								this.state.get([...layerpath, 'crop', 'pp', 'left']) +
-									this.state.get([...layerpath, 'crop', 'pp', 'right']) >
-									65528 ||
-								this.state.get([...layerpath, 'mask', 'pp', 'top']) +
-									this.state.get([...layerpath, 'mask', 'pp', 'bottom']) >
-									65528 ||
-								this.state.get([...layerpath, 'mask', 'pp', 'left']) +
-									this.state.get([...layerpath, 'mask', 'pp', 'right']) >
-									65528 ||
-								this.state.get([...layerpath, 'position', 'pp', 'posH']) + this.state.get([...layerpath, 'size', 'pp', 'sizeH']) / 2 <= 0 ||
-								this.state.get([...layerpath, 'position', 'pp', 'posV']) + this.state.get([...layerpath, 'size', 'pp', 'sizeV']) / 2 <= 0 ||
-								this.state.get([...layerpath, 'position', 'pp', 'posH']) - this.state.get([...layerpath, 'size', 'pp', 'sizeH']) / 2 >=
-									this.state.get([...screenpath, 'canvas', 'status', 'size', 'pp', 'sizeH']) ||
-								this.state.get([...layerpath, 'position', 'pp', 'posV']) - this.state.get([...layerpath, 'size', 'pp', 'sizeV']) / 2 >=
-									this.state.get([...screenpath, 'canvas', 'status', 'size', 'pp', 'sizeV'])
-							)
-							if (!invisible) {
-								return true
-							}
 						}
 					}
 				}
 				return false
 			}
 
+			// Parameterized on the resolved preset ('pgm'/'prw') rather than reading feedback.options.preset
+			// directly, so "Both" can run this same check once per preset and AND/OR the two results -
+			// 'both_and'/'both_or' themselves are never valid input to getPreset(). Screens combine with AND
+			// (true only if every selected Screen/Aux currently shows the source), per explicit user decision
+			// (2026-09-08) - unlike Layers within one Screen, which stay OR.
+			const checkTallyForPreset = (rawPreset: string): boolean => {
+				// every() is vacuously true on an empty array - explicitly guard so "no Screen resolved" (e.g.
+				// "Selected Screens" with nothing selected) reads as false, not a false-positive true.
+				if (targetScreens.length === 0) return false
+				return targetScreens.every((screen) => screenHasSource(screen, rawPreset))
+			}
+
+			const checkTally = (): boolean => {
+				if (feedback.options.preset === 'both_and') return checkTallyForPreset('pgm') && checkTallyForPreset('prw')
+				if (feedback.options.preset === 'both_or') return checkTallyForPreset('pgm') || checkTallyForPreset('prw')
+				return checkTallyForPreset(feedback.options.preset)
+			}
+
 			const tally = checkTally()
-			const sortedScreens = [...feedback.options.screens].sort()
+			const sortedScreens = [...targetScreens].sort()
 			const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
 			let varValue = '0'
 			if (tally) {
@@ -257,7 +291,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		
 		const deviceStreaming: AWJfeedback<{state: string}> = {
 			type: 'boolean',
-			name: 'LIVE - Stream Running State (Midra only)',
+			name: 'LIVE - Stream Running State (Midra/Alta)',
 			sortName: '01 LIVE - 11 Stream Running State',
 			description: 'Shows status of streaming',
 			defaultStyle: {
@@ -304,7 +338,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 
 		const deviceStreamAudioMuteStatus: AWJfeedback<DeviceStreamAudioMuteStatus> = {
 			type: 'boolean',
-			name: 'LIVE - Stream Audio Mute Status (Midra only)',
+			name: 'LIVE - Stream Audio Mute Status (Midra/Alta)',
 			sortName: '01 LIVE - 14 Stream Audio Mute Status',
 			description: 'Shows whether the streaming output\'s audio is currently muted.',
 			defaultStyle: {
@@ -422,8 +456,8 @@ export default class FeedbacksMidra extends Feedbacks  {
 
 		const deviceInputPlugStatus: AWJfeedback<DeviceInputPlugStatus> = {
 			type: 'boolean',
-			name: 'Preconfig - Input Plug Status (Midra only)',
-			sortName: '07 Preconfig - 02 Input Plug Status',
+			name: 'Preconfig - Input Plug Status (Midra/Alta)',
+			sortName: '06 Preconfig - 02 Input Plug Status',
 			description: 'Shows which physical plug is currently active for an Input.',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -482,7 +516,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		const deviceAudioRouteChannelsStatus: AWJfeedback<DeviceAudioRouteChannelsStatus> = {
 			type: 'boolean',
 			name: 'Audio - Routing Status',
-			sortName: '06 Audio - 01 Routing Status',
+			sortName: '05 Audio - 01 Routing Status',
 			description: 'Shows whether one or more Audio Input Channels are currently routed to the corresponding, consecutive Custom Block Output Channels, starting at a given first Output Channel - mirrors "Audio - Route (Channels)".',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -544,7 +578,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		const deviceAudioRouteBlockStatus: AWJfeedback<DeviceAudioRouteBlockStatus> = {
 			type: 'boolean',
 			name: 'Audio - Block Routing Status',
-			sortName: '06 Audio - 02 Block Routing Status',
+			sortName: '05 Audio - 02 Block Routing Status',
 			description: 'Shows whether a contiguous Block of Audio Output Channels (starting at a given first Output Channel, for the configured Block Size) is currently routed exactly to the corresponding, consecutive Input Channels starting at a given first Input Channel - mirrors "Audio - Route (Block)".',
 			defaultStyle: {
 				color: this.config.color_dark,

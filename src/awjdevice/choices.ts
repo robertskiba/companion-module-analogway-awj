@@ -1,7 +1,8 @@
 import { AWJinstance } from '../index.js'
 import { State } from '../../types/State.js'
 import Constants from './constants.js'
-import { formatAquilonModel } from '../util.js'
+import { formatAquilonModel, compareFirmwareVersions } from '../util.js'
+import { RECOMMENDED_FIRMWARE } from '../config.js'
 
 type Dropdown<t> = {id: t, label: string}
 
@@ -104,8 +105,8 @@ export default class Choices {
 	// fully equivalent regardless (see e.g. getPresetSelection()'s regex, or the inline `=== 'prw' ? 'pvw' :`
 	// normalization in a few action callbacks).
 	choicesPreset: Dropdown<string>[] = [
-		{ id: 'pgm', label: 'Program' },
 		{ id: 'prw', label: 'Preview' },
+		{ id: 'pgm', label: 'Program' },
 	]
 
 	choicesPresetLong: Dropdown<string>[] = [
@@ -398,16 +399,27 @@ export default class Choices {
 
 	/**
 	 * Shared firmware-version gate for features that exist on this same Aquilon hardware line (LivePremier/
-	 * LivePremier4) but only from a certain firmware generation onward - Backup and Layer Properties - Keying
-	 * are the first uses (both V6+, live-confirmed together on a real V6.2.73 Aquilon, never confirmed below V6).
-	 * `LOCAL/deviceFirmwareGeneration` is set once per connect in connection.ts as `V${major}` (or '' if
-	 * unparseable) - reads live/fresh here, no separate reactivity mechanism needed. Public/shared (moved from
-	 * actions.ts) so both actions and feedbacks can gate on the same firmware check.
+	 * LivePremier4) but only from a certain firmware version onward (Backup, Layer Properties - Keying, Effects
+	 * - Strobe, individual Layer Freeze, Anchor Point control, the TIMER{n}.value variable, ...). Compares the
+	 * full dotted version (e.g. "5.0.128"), not just the major number, via the same compareFirmwareVersions()
+	 * used by config.ts's isFirmwareBelow() - so a gate can require e.g. "4.04.77", not only a whole major
+	 * version. Reads `LOCAL/deviceFirmwareVersion` (set once per connect in connection.ts as the device's raw
+	 * reported version, e.g. "6.2.73") live/fresh here - no separate reactivity mechanism needed, since action/
+	 * feedback getters re-run every time allActions/allFeedbacks is rebuilt (on every updateInstance(),
+	 * including right after connect). Public/shared (moved from actions.ts) so both actions and feedbacks can
+	 * gate on the same firmware check.
+	 * Before a real device has ever connected (no `LOCAL/deviceFirmwareVersion` known yet), this optimistically
+	 * assumes the newest firmware this module knows about (config.ts's RECOMMENDED_FIRMWARE, currently ahead of
+	 * every gate in use) rather than the most conservative "not supported" - per explicit user decision: a show
+	 * gets pre-programmed offline before ever touching the real device, and every gated action/feedback should
+	 * stay fully configurable during that, not silently reduced to a firmware-notice placeholder just because
+	 * nothing is connected yet. Once a real connection lands, the actual reported version takes over immediately
+	 * (see this getter's own doc comment above on why no separate reactivity mechanism is needed for that).
 	 */
-	public isFirmwareAtLeast(minMajor: number): boolean {
-		const fwGen: string = this.instance.state.get('LOCAL/deviceFirmwareGeneration') ?? ''
-		const fwMajor = parseInt(fwGen.replace('V', ''))
-		return !isNaN(fwMajor) && fwMajor >= minMajor
+	public isFirmwareAtLeast(minVersion: string): boolean {
+		const fwVersion: string = this.instance.state.get('LOCAL/deviceFirmwareVersion') ?? ''
+		if (!fwVersion) return compareFirmwareVersions(RECOMMENDED_FIRMWARE, minVersion) >= 0
+		return compareFirmwareVersions(fwVersion, minVersion) >= 0
 	}
 
 	/**
@@ -441,7 +453,10 @@ export default class Choices {
 		const inputKeys: string[] = this.state.get(['DEVICE', 'device', 'inputList', 'itemKeys']) ?? []
 		for (const key of inputKeys) {
 			const backupControl = this.state.get(['DEVICE', 'device', 'inputList', 'items', key, 'backup', 'control', 'pp'])
-			if (!backupControl?.enable || backupControl.group !== 'NONE') continue
+			// `group` may be entirely absent (not just 'NONE') on some firmware, e.g. live-observed on 6.0.4 -
+			// a missing group field means "not in a group" just as much as an explicit 'NONE' does, so only
+			// exclude when a group is actually, positively set to something else.
+			if (!backupControl?.enable || (backupControl.group !== undefined && backupControl.group !== 'NONE')) continue
 			const primaryLabel = this.state.get(['DEVICE', 'device', 'inputList', 'items', key, 'control', 'pp', 'label'])
 			const parts = [`Primary: ${key.replace(/^\w+_/, 'Input ')}${primaryLabel ? ' - ' + primaryLabel : ''}`]
 			for (const slot of ['1', '2']) {
@@ -458,11 +473,16 @@ export default class Choices {
 		// same control/status/slotList shape as an input's own backup, but the "sources" being backed up are
 		// other Background Sets (NATIVE_n) on the SAME screen, not live inputs. Scoped to real/enabled screens
 		// only (not all 24 theoretical ones), matching this module's established registration-scope rule.
-		for (const scr of this.getScreensArray()) {
+		// Requires firmware 6.1.57+ (Analog Way's release notes: Background Set backup didn't exist before -
+		// only Input backup did, since 5.0.128). Explicitly gated here rather than relying on `enable` staying
+		// false on old firmware, so an entry never silently appears from stale/cached state.
+		for (const scr of this.isFirmwareAtLeast('6.1.57') ? this.getScreensArray() : []) {
 			for (const setNum of ['1', '2', '3', '4', '5', '6', '7', '8']) {
 				const bgPath = ['DEVICE', 'device', 'preconfig', 'backgrounds', 'screenList', 'items', scr.id, 'backgroundSetList', 'items', setNum, 'backup']
 				const backupControl = this.state.get([...bgPath, 'control', 'pp'])
-				if (!backupControl?.enable || backupControl.group !== 'NONE') continue
+				// See the matching comment in the Input Backup loop above - a missing `group` field counts as
+				// ungrouped too, not just an explicit 'NONE'.
+				if (!backupControl?.enable || (backupControl.group !== undefined && backupControl.group !== 'NONE')) continue
 				const parts = [`Primary: ${scr.id} Background Set ${setNum}`]
 				for (const slot of ['1', '2']) {
 					const source = this.state.get([...bgPath, 'slotList', 'items', slot, 'control', 'pp', 'source'])
@@ -484,6 +504,112 @@ export default class Choices {
 			ret.push({ id: `GROUP:${key}`, label: `Backup Group ${num}${label ? ' - ' + label : ''}` })
 		}
 		return this.placeholderIfEmpty(ret, 'No Backup Set configured')
+	}
+
+	/**
+	 * DEVICE-relative path (prefix 'device' included, matching getBackupControlPath()'s own convention - callers
+	 * prepend 'DEVICE' themselves for state reads) to a Background Set's per-output content control field, e.g.
+	 * device/preconfig/backgrounds/screenList/items/S1/backgroundSetList/items/2/outputList/items/4/control/pp/
+	 * content. Live-confirmed (2026-09-08) on a real Aquilon: `outputList` under a Background Set lists every
+	 * physical output in the whole (possibly linked, up to 96) system, not just the ones belonging to this
+	 * screen - see getScreenOutputArray() for the piece that actually scopes this down to a given screen's real
+	 * outputs.
+	 */
+	public getBackgroundSetOutputContentPath(screen: string, bgSet: string, output: string): string[] {
+		return ['device', 'preconfig', 'backgrounds', 'screenList', 'items', screen, 'backgroundSetList', 'items', bgSet, 'outputList', 'items', output, 'control', 'pp', 'content']
+	}
+
+	/**
+	 * The physical outputs actually feeding a given Screen (never an Aux - Background Sets don't exist there),
+	 * live-derived from each output's own `canvas.status.pp.usedInScreenAux` field rather than assumed from the
+	 * Background Set's own outputList (which - see getBackgroundSetOutputContentPath()'s comment - always lists
+	 * every output in the whole system, linked chassis included, regardless of which screen actually uses it).
+	 * Scoped to outputs that are actually available in the currently connected system, not the theoretical max.
+	 */
+	public getScreenOutputArray(screen: string): Choicemeta[] {
+		const outputKeys: string[] = this.state.get(['DEVICE', 'device', 'outputList', 'itemKeys']) ?? []
+		return outputKeys
+			.filter((key) => this.state.get(['DEVICE', 'device', 'outputList', 'items', key, 'canvas', 'status', 'pp', 'usedInScreenAux']) === screen)
+			.map((key) => ({ id: key, label: `Output ${key}` }))
+	}
+
+	/** Which real Screen (never an Aux - Background Sets don't exist there) a physical output currently feeds,
+	 * or undefined if it isn't feeding any Screen right now - the reverse lookup of getScreenOutputArray(). */
+	public getScreenForOutput(output: string): string | undefined {
+		const usedIn: string | undefined = this.state.get(['DEVICE', 'device', 'outputList', 'items', output, 'canvas', 'status', 'pp', 'usedInScreenAux'])
+		return usedIn?.startsWith('S') ? usedIn : undefined
+	}
+
+	/** Every physical output currently feeding any real Screen, across the whole (possibly linked) system, in
+	 * this module's own `OUT{n}` naming convention (matches the `OUT{n}.*` variables) rather than the plain
+	 * numeric output keys getOutputChoices() elsewhere in the module uses - meant for a single flat "Output"
+	 * picker that doesn't need a separate "Screen" field (see devicePreconfigBackgroundSetSourceStatus). */
+	public getBackgroundScreenOutputChoices(): Dropdown<string>[] {
+		const outputKeys: string[] = this.state.get(['DEVICE', 'device', 'outputList', 'itemKeys']) ?? []
+		return outputKeys
+			.filter((key) => this.getScreenForOutput(key) !== undefined)
+			.map((key) => ({ id: `OUT${key}`, label: `Output ${key} (${this.getScreenForOutput(key)})` }))
+	}
+
+	/**
+	 * DEVICE-relative path to a Background Set source's own `useOnOutput` control field - live-confirmed
+	 * (2026-09-08): setting a Background Set output's `content` (getBackgroundSetOutputContentPath()) alone
+	 * leaves it reporting `isContentValid: false` until this is ALSO set once, to any output number the source
+	 * is compatible with (device/preconfig/backgrounds/inputList-or-stillList/items/{key}/status/pp/
+	 * outputsCompatibility lists which). This is a property of the *source* itself, not of one particular
+	 * Screen/Background Set/output triple - setting it once validates every existing reference to that source
+	 * sharing a compatible output format, confirmed live: assigning Input 8 to 4 different outputs, then setting
+	 * useOnOutput just once for Input 8, flipped isContentValid to true on all 4 simultaneously. Returns
+	 * undefined for 'NONE' (no source to validate) - callers should skip sending anything in that case.
+	 */
+	public getBackgroundContentUseOnOutputPath(content: string): string[] | undefined {
+		if (content === 'NONE') return undefined
+		if (content.startsWith('LIVE_')) return ['device', 'preconfig', 'backgrounds', 'inputList', 'items', `IN_${content.replace('LIVE_', '')}`, 'control', 'pp', 'useOnOutput']
+		if (content.startsWith('STILL_')) return ['device', 'preconfig', 'backgrounds', 'stillList', 'items', content.replace('STILL_', ''), 'control', 'pp', 'useOnOutput']
+		return undefined
+	}
+
+	/**
+	 * Converts a Background Set output's raw AWJ `content` id ('LIVE_n', 'STILL_n' - see
+	 * getBackgroundSetOutputContentPath()) to this module's own short source naming convention ('IN{n}',
+	 * 'IMG{n}') used everywhere else a source is exposed to the user (variables, other actions/feedbacks) -
+	 * mirrors subscriptions.ts's formatSourceShort(), the canonical definition of this mapping (not reused
+	 * directly - that one is private to the Subscriptions class and covers more kinds (NATIVE/SCREEN/TIMER)
+	 * than this needs). 'NONE' stays 'NONE'; anything unrecognized is passed through unchanged.
+	 */
+	public backgroundContentToShortSource(content: string): string {
+		const match = content.match(/^(LIVE|STILL)_(\d+)$/)
+		if (!match) return content
+		return match[1] === 'LIVE' ? `IN${match[2]}` : `IMG${match[2]}`
+	}
+
+	/**
+	 * The reverse of backgroundContentToShortSource() - converts this module's short source id ('IN8', 'IMG3')
+	 * back to the raw AWJ `content` id ('LIVE_8', 'STILL_3') a Background Set output's `content` field actually
+	 * expects. 'NONE' stays 'NONE'; anything unrecognized (including 'COLOR', not offered as a Background Set
+	 * choice - see getBackgroundSetContentChoices()) is passed through unchanged.
+	 */
+	public shortSourceToBackgroundContent(shortId: string): string {
+		const match = shortId.match(/^(IN|IMG)(\d+)$/)
+		if (!match) return shortId
+		return match[1] === 'IN' ? `LIVE_${match[2]}` : `STILL_${match[2]}`
+	}
+
+	/**
+	 * The value vocabulary for a Background Set output's `content` field, in this module's own short source
+	 * naming convention (see backgroundContentToShortSource()) rather than the raw AWJ ids - 'NONE', 'IN{n}'
+	 * for a live input, 'IMG{n}' for an Image Store slot (stillList's own item keys are plain numbers, e.g.
+	 * '3' - this prefixes them; NOT the same id as the Still Store dropdown elsewhere in the module uses).
+	 * 'COLOR' deliberately excluded per explicit user decision - WebRCS's own Backgrounds page never offers it
+	 * as a per-output content choice here; a solid color background is only ever set via a Screen Preset, a
+	 * different concept entirely.
+	 */
+	public getBackgroundSetContentChoices(): Dropdown<string>[] {
+		return [
+			{ id: 'NONE', label: 'None' },
+			...this.getLiveInputChoices('LIVE').map((c) => ({ id: this.backgroundContentToShortSource(c.id), label: c.label })),
+			...this.getStillsArray().map((still) => ({ id: `IMG${still.id}`, label: `Still ${still.id}${still.label ? ' - ' + still.label : ''}` })),
+		]
 	}
 
 	public getMasterMemoryArray(): Choicemeta[] {

@@ -73,6 +73,7 @@ export default class ActionsMidra extends Actions {
 		// Keying" (deviceInputKeying, chroma/luma mode directly on an input) is a different, unrelated concept
 		// that DOES exist here (device/inputList/items/X/plugList/items/Y/settings/keying) and stays enabled.
 		// 'deviceLayerKeyingV3',
+		// 'deviceLayerCutFillV3', // Aquilon only for now - not yet live-verified on Midra (2026-09-08)
 		'deviceLayerOpacityV3',
 		'deviceLayerAspectCropV3',
 		'deviceLayerMaskV3',
@@ -658,6 +659,7 @@ export default class ActionsMidra extends Actions {
 		if (layerField) {
 			layerField['choices'] = [
 				{ id: 'first', label: 'First/Only Selected Layer' },
+				{ id: 'all', label: 'All Layers' },
 				{ id: 'sel', label: 'All Selected Layers' },
 				...this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true, true),
 			]
@@ -709,7 +711,20 @@ export default class ActionsMidra extends Actions {
 			if (opt.layer === 'sel') {
 				return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			}
-			return targetScreens.map(screenAuxKey => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(opt.layer)}))
+			if (opt.layer === 'all') {
+				return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, true).map(l => ({screenAuxKey, layerKey: this.choices.normalizeLayerId(l.id)})))
+			}
+			// Expression Mode also accepts a concatenated multi-Layer string like 'L1L2' (getChosenLayers() -
+			// same convention as "LIVE - Layer Selection"/"LIVE - Layer Freeze" elsewhere in the module; 'BG' is
+			// already converted to 'NATIVE' by getChosenLayers() itself, 'TOP' passes through unchanged since it
+			// isn't part of that shared token vocabulary) - a plain value from the dropdown passes through
+			// unchanged. Only a Layer that actually exists on that specific Screen right now is targeted, per
+			// Screen (see GUIDELINES.md's "never write to a target that doesn't exist").
+			const layerKeys = this.choices.getChosenLayers(opt.layer)
+			return targetScreens.flatMap(screenAuxKey => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, true).map(l => this.choices.normalizeLayerId(l.id)))
+				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({screenAuxKey, layerKey}))
+			})
 		}
 
 		// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
@@ -720,7 +735,10 @@ export default class ActionsMidra extends Actions {
 			const target = targets[0]
 			const screen = this.choices.getScreenInfo(target.screenAuxKey)
 
-			const preset = this.choices.getPresetSelection()
+			// getPresetSelection() returns 'pvw', but the "Preset" option's own choices use 'prw' for Preview -
+			// convert before writing it into an option value (see the same fix in awjdevice/actions.ts's learn
+			// handlers).
+			const preset = this.choices.getPresetSelection().replace('pvw', 'prw')
 			const presetpath = [
 				'device',
 				screen.prefixverylong + 'List',
@@ -756,76 +774,89 @@ export default class ActionsMidra extends Actions {
 			if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
 				const raw = this.state.get(['DEVICE', ...presetpath, 'background', 'source', 'pp', 'set'])
 				if (typeof raw !== 'string') return newoptions
-				newoptions.sourceLayer = /^\d+$/.test(raw) ? `NATIVE_${raw}` : raw
+				// background layers store just the bare digit ("3"), not "NATIVE_3" - same reverse mapping the
+				// callback's own `source.replace(/\D/g, '')` does in the other direction. Otherwise convert the
+				// raw AWJ id (e.g. STILL_3) to this module's own short id (IMG3) - backgroundContentToShortSource()
+				// passes anything else (NONE/COLOR) through unchanged.
+				newoptions.sourceLayer = /^\d+$/.test(raw) ? `NATIVE_${raw}` : this.choices.backgroundContentToShortSource(raw)
 				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'background', 'source', 'color', 'pp'])
 				return newoptions
 			}
 
 			const raw = this.state.get(['DEVICE', ...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'])
 			if (typeof raw === 'string') {
-				newoptions.sourceLayer = raw
+				newoptions.sourceLayer = this.choices.backgroundContentToShortSource(raw)
 				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp'])
 			}
 			return newoptions
 		}
 
 		deviceSelectSourceV3.callback = (action) => {
-			const preset = action.options.preset
-			for (const target of resolveTargets(action.options)) {
-				const screen = this.choices.getScreenInfo(target.screenAuxKey)
-				let unlockedByUs = false
-				if (this.choices.isLocked(screen.id, preset)) {
-					if (!parseBoolean(action.options.unlockIfLocked)) continue
-					this.choices.setScreenLock(screen.id, preset, false)
-					unlockedByUs = true
-				}
-				const presetpath = [
-					'device',
-					screen.prefixverylong + 'List',
-					'items', screen.platformId,
-					'presetList', 'items', this.choices.getPreset(screen.id, preset)
-				]
-				// on Midra, aux screens only have a background - there is no per-layer addressing at all
-				if (screen.isAux) {
-					if (action.options['sourceBack'] !== '') {
-						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
+			// 'all' (Both) isn't a real preset bank - getPreset()/isLocked() only understand pgm/prw/A/B/sel,
+			// so it's expanded into an explicit list up front rather than passed through.
+			const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset]
+			const targets = resolveTargets(action.options)
+			for (const preset of presetsToApply) {
+				for (const target of targets) {
+					const screen = this.choices.getScreenInfo(target.screenAuxKey)
+					let unlockedByUs = false
+					if (this.choices.isLocked(screen.id, preset)) {
+						if (!parseBoolean(action.options.unlockIfLocked)) continue
+						this.choices.setScreenLock(screen.id, preset, false)
+						unlockedByUs = true
 					}
-				} else if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
-					const source = action.options['sourceLayer']
-					// NOT live-verified on Midra (only confirmed on a LivePremier4 device: color lives at
-					// .../source/color/pp/{red,green,blue}, sibling to .../source/pp/{inputNum|set|input}) -
-					// assumed to follow the same sibling-of-source convention here, please verify before relying on it
-					const colorpath = [...presetpath, 'background', 'source', 'color', 'pp']
-					const sendColor = (r: number, g: number, b: number) => {
-						this.connection.sendWSmessage([...colorpath, 'red'], r)
-						this.connection.sendWSmessage([...colorpath, 'green'], g)
-						this.connection.sendWSmessage([...colorpath, 'blue'], b)
+					const presetpath = [
+						'device',
+						screen.prefixverylong + 'List',
+						'items', screen.platformId,
+						'presetList', 'items', this.choices.getPreset(screen.id, preset)
+					]
+					// on Midra, aux screens only have a background - there is no per-layer addressing at all
+					if (screen.isAux) {
+						if (action.options['sourceBack'] !== '') {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
+						}
+					} else if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
+						// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n)
+						// the device expects - anything else (NONE/COLOR/NATIVE_n, or an already-raw id typed
+						// directly via Expression Mode) passes through unchanged.
+						const source = this.choices.shortSourceToBackgroundContent(action.options['sourceLayer'])
+						// NOT live-verified on Midra (only confirmed on a LivePremier4 device: color lives at
+						// .../source/color/pp/{red,green,blue}, sibling to .../source/pp/{inputNum|set|input}) -
+						// assumed to follow the same sibling-of-source convention here, please verify before relying on it
+						const colorpath = [...presetpath, 'background', 'source', 'color', 'pp']
+						const sendColor = (r: number, g: number, b: number) => {
+							this.connection.sendWSmessage([...colorpath, 'red'], r)
+							this.connection.sendWSmessage([...colorpath, 'green'], g)
+							this.connection.sendWSmessage([...colorpath, 'blue'], b)
+						}
+						if (source === 'NONE') {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'NONE')
+							sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
+						} else if (source === 'COLOR') {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'COLOR')
+							const color = Number(action.options['sourceColor'])
+							sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+						} else if (/^NATIVE_\d+$/.test(source)) {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], source.replace(/\D/g, ''))
+						}
+						// anything else picked from the shared list isn't valid for a background layer - no-op
+					} else if (target.layerKey === 'TOP' && action.options['sourceFront'] !== '') {
+						this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], action.options['sourceFront'].replace(/\D/g, ''))
+					} else if (action.options['sourceLayer'] !== 'keep') {
+						const source = this.choices.shortSourceToBackgroundContent(action.options['sourceLayer'])
+						this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'], source)
+						if (source === 'COLOR') {
+							const color = Number(action.options['sourceColor'])
+							const colorpath = [...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp']
+							this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
+							this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
+							this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+						}
 					}
-					if (source === 'NONE') {
-						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'NONE')
-						sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
-					} else if (source === 'COLOR') {
-						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'COLOR')
-						const color = Number(action.options['sourceColor'])
-						sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
-					} else if (/^NATIVE_\d+$/.test(source)) {
-						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], source.replace(/\D/g, ''))
+					if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
+						this.choices.setScreenLock(screen.id, preset, true)
 					}
-					// anything else picked from the shared list isn't valid for a background layer - no-op
-				} else if (target.layerKey === 'TOP' && action.options['sourceFront'] !== '') {
-					this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], action.options['sourceFront'].replace(/\D/g, ''))
-				} else if (action.options['sourceLayer'] !== 'keep') {
-					this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'], action.options['sourceLayer'])
-					if (action.options['sourceLayer'] === 'COLOR') {
-						const color = Number(action.options['sourceColor'])
-						const colorpath = [...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp']
-						this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
-						this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
-						this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
-					}
-				}
-				if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
-					this.choices.setScreenLock(screen.id, preset, true)
 				}
 			}
 			this.instance.sendXupdate()
@@ -909,8 +940,8 @@ export default class ActionsMidra extends Actions {
 		type DeviceInputPlug = Record<string,string>
 
 		const deviceInputPlug: AWJaction<DeviceInputPlug> = {
-			name: 'Preconfig - Set Input Plug',
-			sortName: '07 Preconfig - Set Input Plug',
+			name: 'Preconfig - Set Input Plug (Midra/Alta)',
+			sortName: '06 Preconfig - Set Input Plug',
 			description: 'Assigns which physical plug an Input uses (Midra only).',
 			options: [
 				{
@@ -1295,7 +1326,7 @@ export default class ActionsMidra extends Actions {
 		type DeviceStreamControl = {stream: string}
 		
 		const deviceStreamControl: AWJaction<DeviceStreamControl> = {
-			name: 'LIVE - Stream Control',
+			name: 'LIVE - Stream Control (Midra/Alta)',
 			sortName: '01 LIVE - 15 Stream Control',
 			description: 'Starts, stops, or toggles the device\'s streaming output.',
 			options: [
@@ -1338,8 +1369,8 @@ export default class ActionsMidra extends Actions {
 		type DeviceStreamAudioMute = {stream: string}
 		
 		const deviceStreamAudioMute: AWJaction<DeviceStreamAudioMute> = {
-			name: 'Audio - Mute Stream',
-			sortName: '06 Audio - Mute Stream',
+			name: 'Audio - Mute Stream (Midra/Alta)',
+			sortName: '05 Audio - Mute Stream',
 			description: 'Mutes, unmutes, or toggles the audio of the device\'s streaming output.',
 			options: [
 				{
@@ -1379,7 +1410,7 @@ export default class ActionsMidra extends Actions {
 
 		const deviceAudioRouteBlock: AWJaction<DeviceAudioRouteBlock> = {
 			name: 'Audio - Route (Block)',
-			sortName: '06 Audio - Route (Block)',
+			sortName: '05 Audio - Route (Block)',
 			description: 'Routes a contiguous block of audio input channels to a contiguous block of output channels in one step.',
 			options: [
 				{
@@ -1482,7 +1513,7 @@ export default class ActionsMidra extends Actions {
 		
 		const deviceAudioRouteChannels: AWJaction<DeviceAudioRouteChannels> = {
 			name: 'Audio - Route (Channels)',
-			sortName: '06 Audio - Route (Channels)',
+			sortName: '05 Audio - Route (Channels)',
 			description: 'Routes individual audio input channels to individual output channels, up to four pairs per call.',
 			options: [
 				{
@@ -1694,7 +1725,7 @@ export default class ActionsMidra extends Actions {
 		
 		const devicePower: AWJaction<DevicePower> = {
 			name: 'Device - Power',
-			sortName: '08 Device - Power',
+			sortName: '07 Device - Power',
 			description: 'Switches the device on (Wake on LAN), off, or reboots it.',
 			options: [
 				{
@@ -1742,8 +1773,8 @@ export default class ActionsMidra extends Actions {
 		const libraryChoices = [{ id: 'NONE', label: 'None (clear)' }, ...this.choices.getStillLibraryChoices()]
 
 		const deviceAssignImageLibraryToFrame: AWJaction<DeviceAssignImageLibraryToFrame> = {
-			name: 'Preconfig - Assign Image from Library to Foreground/Background Frame',
-			sortName: '07 Preconfig - Assign Image from Library to Foreground/Background Frame',
+			name: 'Preconfig - Assign Image from Library to Foreground/Background Frame (Midra/Alta)',
+			sortName: '06 Preconfig - Assign Image from Library to Foreground/Background Frame',
 			description: 'Assigns an image from the Image Library to the Foreground or Background Frame (Midra only), so it becomes available as a Layer source.',
 			options: [
 				{

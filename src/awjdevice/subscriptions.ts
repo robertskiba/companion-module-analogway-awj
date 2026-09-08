@@ -378,13 +378,93 @@ export default class Subscriptions {
 	}
 
 	/** Any of the on/off-style Layer Properties fields deviceLayerPropertyStatus checks (Border Edge/Shadow
-	 * style flags, Effects flags, Keying enable, Mask crop values) - same Layer-path prefix convention as
-	 * selectedLayerCroppingChange above, covering every platform's screenList/auxiliaryScreenList/auxiliaryList
-	 * and layerList/liveLayerList naming. */
+	 * style flags, Effects flags, Keying enable, Cut&Fill enable, Mask crop values) - same Layer-path
+	 * prefix convention as selectedLayerCroppingChange above, covering every platform's screenList/
+	 * auxiliaryScreenList/auxiliaryList and layerList/liveLayerList naming. */
 	get layerPropertyStatusChange():Subscription {
 		return {
-			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(?:border/(?:edge|shadow)/pp/style|effects/pp/flags|keying/pp/enable|cropping/mask/pp/(?:top|bottom|left|right)|cropping/classic/pp/aspectOverride|transition/pp/flags)',
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(?:border/(?:edge|shadow)/pp/style|effects/pp/flags|keying/pp/enable|cutNFill/pp/type|cropping/mask/pp/(?:top|bottom|left|right)|cropping/classic/pp/aspectOverride|transition/pp/flags)',
 			fbk: 'deviceLayerPropertyStatus',
+		}
+	}
+
+	/** A Layer's own Source changes - live-updates "Layer Properties - Layer Source". Same Layer-path prefix
+	 * convention as layerPropertyStatusChange above. */
+	get layerSourceStatusChange():Subscription {
+		return {
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/source/pp/inputNum',
+			fbk: 'deviceLayerSourceStatus',
+		}
+	}
+
+	/** A Layer's Cut&Fill key Source changes - live-updates "Layer Properties - Cut&Fill Source". Fires
+	 * regardless of whether Cut&Fill is currently enabled, matching that feedback's own "report the stored
+	 * value either way" design. Same Layer-path prefix convention as layerPropertyStatusChange above. */
+	get layerCutFillSourceStatusChange():Subscription {
+		return {
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/cutNFill/cut/pp/inputNum',
+			fbk: 'deviceLayerCutFillSourceStatus',
+		}
+	}
+
+	/** An Input's own Chroma/Luma keying mode changes - live-updates "Preconfig - Inputs - Input Keying Status".
+	 * A generic `\\w+` for both the Input and Plug id segments, since the native prefix differs by platform
+	 * (`IN_n` on LivePremier4, confirmed `IN_n` here too on Midra despite `getSourceChoices()` using a
+	 * different `INPUT_n` convention for its own, unrelated source-selection ids - see "deviceInputFreeze" for
+	 * the same assumption already relied on elsewhere). */
+	get inputKeyingStatusChange():Subscription {
+		return {
+			pat: 'device/inputList/items/(\\w+)/plugList/items/(\\w+)/settings/keying/control/pp/mode',
+			fbk: 'deviceInputKeyingStatus',
+		}
+	}
+
+	/** A Layer's `canUseMask` capability flag changes - live-confirmed (2026-09-08) this historically-misnamed
+	 * flag actually tracks whether Cut&Fill (once internally called "Mask") is available on that Layer at
+	 * all, toggled by a Preconfig change (e.g. switching a Layer between Mixer/Split mode) rather than live
+	 * operation - live-updates both "Layer Properties - Property Status" (> Cut&Fill - Enabled) and "Layer
+	 * Properties - Cut&Fill Source", which both gate on it. Lives under the flat (non-Preset-scoped) Layer
+	 * status, unlike every other Cut&Fill-related subscription above. */
+	get layerCanUseMaskChange():Subscription {
+		// If a Layer's canUseMask drops to false while its Cut&Fill Enable state was still 'CUT_N_FILL' from
+		// an earlier moment when it was possible (checked on both Preset banks A/B, since cutNFill itself is
+		// Preset-scoped), force it back to 'NONE' - a Layer that can't do Cut&Fill shouldn't be left reporting
+		// itself as enabled. Purely a safety measure against a stale Enable state resurfacing unexpectedly if
+		// canUseMask later flips back to true (explicit user decision, 2026-09-08 - "schützt vor
+		// Überraschungen im Zweifel und schadet nicht") - never touches Source/Filter/Transform/Curve/Crop,
+		// only the Enable flag itself.
+		const disableStaleCutFill = (screenAuxKey: string, layerKey: string) => {
+			const screenInfo = this.instance.choices.getScreenInfo(screenAuxKey)
+			const listPath = screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath
+			for (const preset of ['A', 'B']) {
+				const path = [...listPath, 'items', screenInfo.platformId, 'presetList', 'items', preset, ...this.instance.choices.getLayerPath(layerKey), 'cutNFill']
+				if (this.instance.state.get(['DEVICE', ...path, 'pp', 'type']) === 'CUT_N_FILL') {
+					this.instance.connection.sendWSmessage([...path, 'pp', 'type'], 'NONE')
+				}
+			}
+		}
+
+		return {
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/layerList/items/(\\d{1,3}|NATIVE)/status/pp/canUseMask',
+			fbk: ['deviceLayerPropertyStatus', 'deviceLayerCutFillSourceStatus'],
+			ini: () => {
+				for (const screen of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
+					const screenInfo = this.instance.choices.getScreenInfo(screen.id)
+					const listPath = screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath
+					for (const layer of this.instance.choices.getLayersAsArray(screen.id, false)) {
+						const canUseMask = this.instance.state.get(['DEVICE', ...listPath, 'items', screenInfo.platformId, 'layerList', 'items', layer.id, 'status', 'pp', 'canUseMask'])
+						if (!canUseMask) disableStaleCutFill(screen.id, layer.id)
+					}
+				}
+				return []
+			},
+			fun: (path) => {
+				if (typeof path !== 'string') return false
+				const match = path.match(/(?:auxiliaryScreen|screen|auxiliary)List\/items\/([SA]\d{1,3})\/layerList\/items\/(\d{1,3}|NATIVE)\/status\/pp\/canUseMask/)
+				if (!match) return false
+				if (this.instance.state.get(path) === false) disableStaleCutFill(match[1], match[2])
+				return false
+			},
 		}
 	}
 
@@ -627,8 +707,10 @@ export default class Subscriptions {
 			const primaryStatus = getPrimaryStatus(key)
 			const backup1Status = slotStatus(slot1?.control?.pp?.source, slot1?.status?.pp?.status)
 			const backup2Status = slotStatus(slot2?.control?.pp?.source, slot2?.status?.pp?.status)
-			const groupKey: string = backup.control.pp.group
-			if (groupKey !== 'NONE') {
+			// `group` may be entirely absent (not just 'NONE') on some firmware, e.g. live-observed on 6.0.4 - a
+			// missing group field means "not in a group" just as much as an explicit 'NONE' does.
+			const groupKey: string | undefined = backup.control.pp.group
+			if (groupKey !== undefined && groupKey !== 'NONE') {
 				(backupSlotStatusByGroup[groupKey] ??= []).push({ backup1: backup1Status, backup2: backup2Status, primary: primaryStatus })
 				continue
 			}
@@ -676,8 +758,10 @@ export default class Subscriptions {
 				const primaryStatus = hasContentLoss ? 'INVALID' : 'VALID'
 				const backup1Status = slotStatus(slot1?.control?.pp?.source, slot1?.status?.pp?.status)
 				const backup2Status = slotStatus(slot2?.control?.pp?.source, slot2?.status?.pp?.status)
-				const groupKey: string = backup.control.pp.group
-				if (groupKey !== 'NONE') {
+				// See the matching comment in the Input Backup loop above - a missing `group` field counts as
+				// ungrouped too, not just an explicit 'NONE'.
+				const groupKey: string | undefined = backup.control.pp.group
+				if (groupKey !== undefined && groupKey !== 'NONE') {
 					(backupSlotStatusByGroup[groupKey] ??= []).push({ backup1: backup1Status, backup2: backup2Status, primary: primaryStatus })
 					continue
 				}
@@ -834,6 +918,17 @@ export default class Subscriptions {
 		}
 	}
 
+	/** A Background Set output's assigned content changes - live-updates "Preconfig - Background Set Source
+	 * Status" (deviceBackupSetSourceStatus is a different, unrelated feedback despite the similar name - this
+	 * one is devicePreconfigBackgroundSetSourceStatus). No debounce needed - unlike refreshBackupVariables()
+	 * this doesn't rebuild a whole derived variable set, just re-runs the one feedback's own cheap state read. */
+	get preconfigBackgroundSetOutputChange():Subscription {
+		return {
+			pat: 'device/preconfig/backgrounds/screenList/items/\\w+/backgroundSetList/items/\\d+/outputList/items/\\d+/control/pp/content',
+			fbk: ['devicePreconfigBackgroundSetSourceStatus'],
+		}
+	}
+
 	/** The selected preset (program or preview) changes */
 	get selectedPreset():Subscription {
 		return {
@@ -850,11 +945,66 @@ export default class Subscriptions {
 		}
 	}
 
-	/** Freeze status of an input changes */
+	/** Freeze status of an input changes - also maintains IN{n}.freeze for every available input regardless of
+	 * whether a "Freeze - Input" feedback happens to be placed on a button for it (same registration-scope
+	 * reasoning as inputStatus above). */
 	get inputFreeze():Subscription {
+		const availablePath = (num: string) => `DEVICE/device/inputList/items/IN_${num}/status/pp/isAvailable`
+
 		return {
-			pat: 'device/inputList/items/(\\w+?)/control/pp/freeze',
+			pat: 'device/inputList/items/IN_(\\d+)/control/pp/freeze',
 			fbk: 'deviceInputFreeze',
+			ini: () => {
+				this.instance.removeVariable('inputFreeze')
+				for (let i = 1; i <= this.constants.maxInputs; i += 1) {
+					if (!this.instance.state.get(availablePath(i.toString()))) continue
+					this.instance.addVariable({ id: 'inputFreeze', variableId: `IN${i}.freeze`, name: `Freeze state of Input ${i}` })
+					this.instance.setVariableValues({ [`IN${i}.freeze`]: !!this.instance.state.get(`DEVICE/device/inputList/items/IN_${i}/control/pp/freeze`) })
+				}
+				return []
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				const match = path.match(/inputList\/items\/IN_(\d+)\/control\/pp\/freeze/)
+				if (!match) return false
+				if (!this.instance.state.get(availablePath(match[1]))) return false
+				this.instance.setVariableValues({ [`IN${match[1]}.freeze`]: !!this.instance.state.get(path) })
+				return false
+			},
+		}
+	}
+
+	/** Freeze status of a physical Output changes - also maintains OUT{n}.freeze for every available output
+	 * regardless of whether a "Freeze - Output" feedback happens to be placed on a button for it (same
+	 * registration-scope reasoning as inputStatus/inputFreeze above). Aquilon only for now - only registered
+	 * in LivePremier4's subscriptionsToUse until Midra/Alta support is confirmed (2026-09-08). */
+	get outputFreeze():Subscription {
+		const availablePath = (num: string) => `DEVICE/device/outputList/items/${num}/status/pp/isAvailable`
+
+		return {
+			pat: 'device/outputList/items/(\\d+)/control/pp/freeze',
+			// deviceScreenFreezeOutputs (LivePremier4-only, defined in src/livepremier4/feedback.ts) derives
+			// its whole result from these same per-output freeze values, so it needs the same live trigger -
+			// otherwise it only ever gets evaluated once (button creation/connect) and never again.
+			fbk: ['deviceOutputFreeze', 'deviceScreenFreezeOutputs'],
+			ini: () => {
+				this.instance.removeVariable('outputFreeze')
+				// 96 matches choices.ts's own getOutputArray() - no dedicated max-Outputs constant exists.
+				for (let i = 1; i <= 96; i += 1) {
+					if (!this.instance.state.get(availablePath(i.toString()))) continue
+					this.instance.addVariable({ id: 'outputFreeze', variableId: `OUT${i}.freeze`, name: `Freeze state of Output ${i}` })
+					this.instance.setVariableValues({ [`OUT${i}.freeze`]: !!this.instance.state.get(`DEVICE/device/outputList/items/${i}/control/pp/freeze`) })
+				}
+				return []
+			},
+			fun: (path) => {
+				if (!path || typeof path !== 'string') return false
+				const match = path.match(/outputList\/items\/(\d+)\/control\/pp\/freeze/)
+				if (!match) return false
+				if (!this.instance.state.get(availablePath(match[1]))) return false
+				this.instance.setVariableValues({ [`OUT${match[1]}.freeze`]: !!this.instance.state.get(path) })
+				return false
+			},
 		}
 	}
 
@@ -929,6 +1079,21 @@ export default class Subscriptions {
 			pat: 'DEVICE/device/masterPresetBank/status/lastUsed/presetModeList/items/(PROGRAM|PREVIEW)/pp/memoryId',
 			ini: ['PROGRAM', 'PREVIEW'],
 			fbk: 'deviceMasterMemory',
+		}
+	}
+
+	/** Keying preset (Keyer Bank) added, renamed, or removed - "Layer Properties - Keying"'s "Keying Preset"
+	 * dropdown (choices.getKeyingPresetChoices()) is built fresh from live state every updateInstance(), so
+	 * the only thing missing was a trigger to actually call updateInstance() again when the Keyer Bank
+	 * changes - without this, a newly-created Keying Memory never appeared in the dropdown until something
+	 * unrelated happened to cause a refresh (e.g. a platform change). No `ini`/variables needed here, unlike
+	 * the other *MemoryLabel subscriptions - this only ever needs to trigger a rebuild, not track values.
+	 * LivePremier4 only (Midra has no `keyerBank` at all, live-confirmed against a Zenith 200 simulator).
+	 */
+	get keyingMemoryLabel():Subscription {
+		return {
+			pat: 'DEVICE/device/keyerBank/bankList/items/(SLOT_\\d+)/(?:control/pp/label|status/pp/isValid)',
+			fun: () => true,
 		}
 	}
 

@@ -19,27 +19,21 @@ import { initVariables, TrackedVariable } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { StateMachine } from './state.js'
 import Constants from './awjdevice/constants.js'
-import ConstantsLivepremier from './livepremier/constants.js'
 import ConstantsLivepremier4 from './livepremier4/constants.js'
 import ConstantsMidra from './midra/constants.js'
 import Choices from './awjdevice/choices.js'
-import ChoicesLivepremier from './livepremier/choices.js'
 import ChoicesLivepremier4 from './livepremier4/choices.js'
 import ChoicesMidra from './midra/choices.js'
 import Actions from './awjdevice/actions.js'
-import ActionsLivepremier from './livepremier/actions.js'
 import ActionsLivepremier4 from './livepremier4/actions.js'
 import ActionsMidra from './midra/actions.js'
 import Feedbacks from './awjdevice/feedback.js'
-import FeedbacksLivepremier from './livepremier/feedback.js'
 import FeedbacksLivepremier4 from './livepremier4/feedback.js'
 import FeedbacksMidra from './midra/feedback.js'
 import Presets from './awjdevice/presets.js'
-import PresetsLivepremier from './livepremier/presets.js'
 import PresetsLivepremier4 from './livepremier4/presets.js'
 import PresetsMidra from './midra/presets.js'
 import Subscriptions from './awjdevice/subscriptions.js'
-import SubscriptionsLivepremier from './livepremier/subscriptions.js'
 import SubscriptionsLivepremier4 from './livepremier4/subscriptions.js'
 import SubscriptionsMidra from './midra/subscriptions.js'
 export const regexAWJpath = '^DeviceObject(?:\\/(@items|@props|\\$?[A-Za-z0-9_-]+))+$'
@@ -60,8 +54,8 @@ export const regexAWJpath = '^DeviceObject(?:\\/(@items|@props|\\$?[A-Za-z0-9_-]
  * @class AWJconnection - methods for connecting to an AWJ device with REST and websocket
  * @class AWJState - methods of holding and manipulating state
  * @class AWJdevice - actually doing all the stuff needed for Companion, derived from State
- * @class AWJLivePremier - derived from AWJdevice, overriding some stuff for LivePremier devices up to v3
- * @class AWJLivePremier4 - derived from AWJdevice, overriding some stuff for LivePremier devices with v4
+ * @class AWJLivePremier4 - derived from AWJdevice, overriding some stuff for LivePremier devices (firmware V4+;
+ *   below V4 is no longer supported - AWJconnection refuses the connection outright, see its Aquilon branch)
  * @class AWJMidra - derived from AWJdevice, overriding some stuff for Midra and Alta devices
  */
 
@@ -301,15 +295,6 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		if (platform !== this.state.platform) {
 			this.state.platform = platform
 			switch (platform) {
-				case 'livepremier':
-					this.constants = ConstantsLivepremier // instanciate first because other classes may need the constants
-					this.choices = new ChoicesLivepremier(this) // instanciate second because actions/feedbacks need choices
-					this.actions = new ActionsLivepremier(this)
-					this.feedbacks = new FeedbacksLivepremier(this)
-					this.presets = new PresetsLivepremier(this)
-					this.subscriptions = new SubscriptionsLivepremier(this)
-					break
-
 				case 'livepremier4':
 					this.constants = ConstantsLivepremier4 // instanciate first because other classes may need the constants
 					this.choices = new ChoicesLivepremier4(this) // instanciate second because actions/feedbacks need choices
@@ -408,6 +393,28 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			if (this.connection.isLocalAddress(this.config.deviceaddr) && !this.config.simulatedDevice) {
 				this.config.simulatedDevice = true
 				this.saveConfig(this.config)
+			}
+
+			// If the hostname itself actually changed (a genuinely new device typed in, not just some other
+			// field toggled) and it's not a known-local address (handled above already), probe live whether
+			// it's reachable as a simulator or a real device instead of leaving the "Simulated Device?"
+			// checkbox at whatever it was - e.g. switching from a local simulator (still on port 3000) to a
+			// real Aquilon on the LAN would otherwise keep port 3000 forced onto the new address below, since
+			// the checkbox itself doesn't get cleared automatically. See detectDevicePort()'s own doc comment.
+			if (!this.config.secureHttp && !this.connection.isLocalAddress(this.config.deviceaddr)) {
+				const oldHostname = this.connection.getURLobj(oldconfig.deviceaddr)?.hostname()
+				const newUrlObj = this.connection.getURLobj(this.config.deviceaddr)
+				const newHostname = newUrlObj?.hostname()
+				if (newHostname && newHostname !== oldHostname) {
+					const currentPort = newUrlObj?.port() === '3000' ? 3000 : 80
+					const detected = await this.connection.detectDevicePort(newHostname, currentPort)
+					if (detected) {
+						this.config.simulatedDevice = detected.isSimulated
+						newUrlObj?.port(detected.port.toString())
+						if (newUrlObj) this.config.deviceaddr = newUrlObj.toString()
+						this.saveConfig(this.config)
+					}
+				}
 			}
 
 			// Confirmed live (2026-09-05): the simulator's HTTPS is selectable but doesn't actually work and
@@ -562,6 +569,17 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.variables = newvars
 			this.updateVariableDefinitions()
 		}
+	}
+
+	/**
+	 * Drops every dynamically-added variable (e.g. from a previous platform's subscriptions) back to the
+	 * static base set from initVariables() and republishes the variable definitions - used when falling back
+	 * to the generic (platform-unknown) device after a connection gets refused post-connect (e.g. unsupported
+	 * firmware), so a stale, no-longer-applicable variable list doesn't linger.
+	 */
+	public resetVariablesToBase(): void {
+		this.variables = initVariables(this)
+		this.updateVariableDefinitions()
 	}
 
 	/**

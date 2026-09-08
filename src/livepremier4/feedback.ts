@@ -3,6 +3,7 @@ import {AWJinstance} from '../index.js'
 import {
 	CompanionFeedbackDefinition,
 	CompanionInputFieldDropdown,
+	combineRgb,
 } from '@companion-module/base'
 
 
@@ -31,6 +32,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'presetToggle',
 		'globalAnchorPoint',
 		'deviceLayerPropertyStatus',
+		'deviceLayerSourceStatus',
+		'deviceLayerCutFillSourceStatus',
 		'deviceMasterMemory',
 		'deviceScreenMemory',
 		'deviceScreenMemorySlotStatus',
@@ -43,12 +46,13 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'remoteLayerSelection',
 		'remoteWidgetSelection',
 		'deviceInputFreeze',
+		'deviceOutputFreeze',
 		'deviceInputSignalStatus',
 		'deviceLayerSignalStatus',
 		'deviceHealthStatus',
 		'deviceConnectionStatus',
-		// 'deviceLayerFreeze',
-		// 'deviceScreenFreeze',
+		'deviceScreenFreezeOutputs',
+		'deviceLayerFreezeV3',
 		'timerState',
 		'deviceGpioOut',
 		'deviceGpioIn',
@@ -59,6 +63,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		'deviceThumbnail',
 		'deviceBackupSetSourceStatus',
 		'deviceBackupAutoModeStatus',
+		'devicePreconfigBackgroundSetSourceStatus',
+		'deviceInputKeyingStatus',
 		'deviceAudioRouteChannelsStatus',
 		'deviceAudioRouteBlockStatus',
 	]
@@ -149,8 +155,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 
 		const deviceGpioOut: AWJfeedback<{gpo: number, state: number }> = {
 			type: 'boolean',
-			name: 'Device - GPO State (LivePremier(≤V3)/LivePremier only)',
-			sortName: '08 Device - 01 GPO State',
+			name: 'Device - GPO State (Aquilon)',
+			sortName: '07 Device - 01 GPO State',
 			description: 'Shows whether a general purpose output is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -210,8 +216,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		} 
 		const deviceGpioIn: AWJfeedback<{gpi: number, state: number }> = {
 			type: 'boolean',
-			name: 'Device - GPI State (LivePremier(≤V3)/LivePremier only)',
-			sortName: '08 Device - 02 GPI State',
+			name: 'Device - GPI State (Aquilon)',
+			sortName: '07 Device - 02 GPI State',
 			description: 'Shows whether a general purpose input is currently active',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -395,7 +401,7 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 	 * MARK: Testpattern Raster Box Active - LivePremier4
 	 */
 	get deviceTestpatternRasterBoxActive() {
-		return this.deviceTestpatternRasterBoxActive_common('LivePremier Testpattern Raster Box Active')
+		return this.deviceTestpatternRasterBoxActive_common('LivePremier Testpattern Raster Box Active (Aquilon)')
 	}
 
 	/**
@@ -416,7 +422,7 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		const deviceAudioRouteChannelsStatus: AWJfeedback<DeviceAudioRouteChannelsStatus> = {
 			type: 'boolean',
 			name: 'Audio - Routing Status',
-			sortName: '06 Audio - 01 Routing Status',
+			sortName: '05 Audio - 01 Routing Status',
 			description: 'Shows whether one or more Audio Input Channels are currently routed to the corresponding, consecutive Output Channels, starting at a given first Output Channel - mirrors "Audio - Route (Channels)".',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -499,7 +505,7 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		const deviceAudioRouteBlockStatus: AWJfeedback<DeviceAudioRouteBlockStatus> = {
 			type: 'boolean',
 			name: 'Audio - Block Routing Status',
-			sortName: '06 Audio - 02 Block Routing Status',
+			sortName: '05 Audio - 02 Block Routing Status',
 			description: 'Shows whether a contiguous Block of Audio Output Channels (starting at a given first Output Channel, for the configured Block Size) is currently routed exactly to the corresponding, consecutive Input Channels starting at a given first Input Channel - mirrors "Audio - Route (Block)".',
 			defaultStyle: {
 				color: this.config.color_dark,
@@ -581,6 +587,152 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		}
 
 		return deviceAudioRouteBlockStatus
+	}
+
+	/**
+	 * MARK: deviceScreenFreeze (Aquilon) - emulated via Output Freeze
+	 * Mirrors the matching action's override: "frozen" means every physical Output assigned to the
+	 * Screen/Auxscreen is frozen (device/outputList/items/{n}/control/pp/freeze), the exact same live state
+	 * "LIVE - Output Freeze" itself reads - so this reflects an output frozen individually just as much as one
+	 * frozen via the collective action. True only if EVERY selected Screen/Auxscreen is (fully) frozen.
+	 * Not a super.deviceScreenFreeze override - a fully independent implementation using the same "screens"
+	 * single-dropdown + Expression Mode pattern as the matching action (see its own comment for why), instead
+	 * of the base's native Companion multi-select + "Any Screen" keyword.
+	 */
+	get deviceScreenFreezeOutputs() {
+		type DeviceScreenFreeze = {screens: string}
+
+		const deviceScreenFreezeOutputs: AWJfeedback<DeviceScreenFreeze> = {
+			type: 'boolean',
+			name: 'LIVE - Screen Freeze (Aquilon)',
+			sortName: '01 LIVE - 17 Freeze - Screen',
+			description: 'Shows whether every physical Output assigned to the selected Screen(s)/Auxscreen(s) is frozen - true even if the outputs were frozen individually via "LIVE - Output Freeze" rather than through the collective action.',
+			defaultStyle: {
+				color: this.config.color_bright,
+				bgcolor: combineRgb(0, 0, 100),
+				png64:
+					'iVBORw0KGgoAAAANSUhEUgAAADcAAAA3AQMAAACSFUAFAAABS2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxMzggNzkuMTU5ODI0LCAyMDE2LzA5LzE0LTAxOjA5OjAxICAgICAgICAiPgogPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIi8+CiA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgo8P3hwYWNrZXQgZW5kPSJyIj8+IEmuOgAAAARnQU1BAACxjwv8YQUAAAABc1JHQgCuzhzpAAAABlBMVEUAAABfXKLsUQDeAAAAAXRSTlMAQObYZgAAAM9JREFUGNONkTEOwjAMRX9UpDC1nIBwEKRyJCMGmNogDsCRyMY1wg26ESTUYLc1sEGWp1h2/vcPABDG84MrWoxXOgxcUycol7tbEFb748Aim4HmKZyXSCZsUFpQwQ1OeIqorsxzQHFnXgCTmT3PtczErD1ZEXCBXJR6RzXXzSNR3wA2NrvkPCpf52gDZnDZw3Oj7Ue/xfObM9gMSL/LgfttbHPH8+bRb+U9tIla0XVx1FP9yY/6U7/qX/fR/XRf3f+Th+Yz5aX5vfPUfP/6jxdhImTMvNrBOgAAAABJRU5ErkJggg==',
+			},
+			options: [
+				{
+					id: 'screens',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screens / Auxscreens',
+					tooltip: 'To check multiple specific screens other than "All Screens" or "Selected Screens", switch to Expression Mode and use a format like \'S1S2A1\' (in quotes, so it is recognized as text).',
+					choices: [
+						{ id: 'all', label: 'All Screens' },
+						{ id: 'sel', label: 'Selected Screens' },
+						...this.choices.getScreenAuxChoices(),
+					],
+					default: 'sel',
+				},
+			],
+			callback: (feedback) => {
+				const isFrozen = (screen: string): boolean => {
+					const outputs = this.choices.getScreenOutputArray(screen)
+					return outputs.length > 0 && outputs.every((out) => !!this.state.get(['DEVICE', 'device', 'outputList', 'items', out.id, 'control', 'pp', 'freeze']))
+				}
+				const screens = this.choices.getChosenScreenAuxes(feedback.options.screens)
+				return screens.length > 0 && screens.every(isFrozen)
+			},
+		}
+		return deviceScreenFreezeOutputs
+	}
+
+	/**
+	 * MARK: deviceLayerFreezeV3 (Aquilon)
+	 * Mirrors the matching action's design and comment (Screen/Preset/Layer fields, Aux screens filtered out
+	 * and ignored, 'UP'/'DOWN' physical-bank tokens resolved live via getPreset()/presetUp). True only if
+	 * EVERY resolved Layer has EVERY requested Preset direction's token present in its freeze array -
+	 * consistent with "LIVE - Screen Freeze"'s AND-across-targets semantics.
+	 */
+	get deviceLayerFreezeV3() {
+		type DeviceLayerFreezeV3 = {screen: string, preset: string, layersel: string}
+
+		const resolveScreens = (screen: string): string[] => {
+			const targets = screen === 'first'
+				? this.choices.getSelectedScreens()
+				: this.choices.getChosenScreenAuxes(screen)
+			const realScreens = targets.filter((s) => s.startsWith('S'))
+			return screen === 'first' ? realScreens.slice(0, 1) : realScreens
+		}
+
+		const resolveLayers = (opt: {screen: string, layersel: string}): {screenAuxKey: string, layerKey: string}[] => {
+			const targetScreens = resolveScreens(opt.screen)
+			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey))
+			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter((layer) => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
+			if (opt.layersel === 'all') return targetScreens.flatMap((screenAuxKey) => this.choices.getLayersAsArray(screenAuxKey, false).map((l) => ({ screenAuxKey, layerKey: l.id })))
+			// Expression Mode also accepts a concatenated multi-Layer string like 'L1L2' (getChosenLayers() -
+			// same convention as "LIVE - Layer Selection" elsewhere in the module); a plain numeric value from
+			// the dropdown itself passes through unchanged.
+			const layerKeys = this.choices.getChosenLayers(opt.layersel)
+			// Only ever consider a Layer that actually exists on that specific Screen right now - matches the
+			// action's own guard (see its comment for why), and keeps the feedback's own semantics well-defined
+			// for a nonexistent Layer number (treated as not part of the target set, same as "all" already
+			// only resolves to real Layers, rather than reading/reporting on a meaningless path).
+			return targetScreens.flatMap((screenAuxKey) => {
+				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map((l) => l.id))
+				return layerKeys.filter((layerKey) => realIds.has(layerKey)).map((layerKey) => ({ screenAuxKey, layerKey }))
+			})
+		}
+
+		const getFreezeToken = (screen: string, preset: 'pgm' | 'pvw'): 'UP' | 'DOWN' => {
+			const bank = this.choices.getPreset(screen, preset)
+			const presetUp = this.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'presetUp'])
+			return bank === presetUp ? 'UP' : 'DOWN'
+		}
+
+		const deviceLayerFreezeV3: AWJfeedback<DeviceLayerFreezeV3> = {
+			type: 'boolean',
+			name: 'LIVE - Layer Freeze (Aquilon)',
+			sortName: '01 LIVE - 16 Freeze - Layer',
+			description: 'Shows whether a Layer\'s Program and/or Preview content is currently frozen. Aquilon only supports this on real Screens, never Auxscreens.',
+			defaultStyle: {
+				color: this.config.color_bright,
+				bgcolor: combineRgb(0, 0, 100),
+				png64:
+					'iVBORw0KGgoAAAANSUhEUgAAADcAAAA3AQMAAACSFUAFAAABS2lUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxMzggNzkuMTU5ODI0LCAyMDE2LzA5LzE0LTAxOjA5OjAxICAgICAgICAiPgogPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4KICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIi8+CiA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgo8P3hwYWNrZXQgZW5kPSJyIj8+IEmuOgAAAARnQU1BAACxjwv8YQUAAAABc1JHQgCuzhzpAAAABlBMVEUAAABfXKLsUQDeAAAAAXRSTlMAQObYZgAAAM9JREFUGNONkTEOwjAMRX9UpDC1nIBwEKRyJCMGmNogDsCRyMY1wg26ESTUYLc1sEGWp1h2/vcPABDG84MrWoxXOgxcUycol7tbEFb748Aim4HmKZyXSCZsUFpQwQ1OeIqorsxzQHFnXgCTmT3PtczErD1ZEXCBXJR6RzXXzSNR3wA2NrvkPCpf52gDZnDZw3Oj7Ue/xfObM9gMSL/LgfttbHPH8+bRb+U9tIla0XVx1FP9yY/6U7/qX/fR/XRf3f+Th+Yz5aX5vfPUfP/6jxdhImTMvNrBOgAAAABJRU5ErkJggg==',
+			},
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen',
+					choices: [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'all', label: 'All Screens' }, { id: 'sel', label: 'Selected Screens' }, ...this.choices.getScreenChoices()],
+					default: 'first',
+				},
+				{
+					id: 'preset',
+					type: 'dropdown',
+					label: 'Preset (Program/Preview)',
+					choices: [...this.choices.choicesPreset, { id: 'all', label: 'Both (Preview/Program)' }],
+					allowInvalidValues: true,
+					default: 'prw',
+				},
+				{
+					id: 'layersel',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Layer',
+					tooltip: 'To check multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({ length: this.choices.getMaxConfiguredLayerCount() }, (_i, e: number) => ({ id: (e + 1).toString(), label: `Layer ${e + 1}` }))],
+					default: 'first',
+				},
+			],
+			callback: (feedback) => {
+				const presetTargets: ('pgm' | 'pvw')[] = feedback.options.preset === 'all' ? ['pgm', 'pvw'] : [feedback.options.preset as 'pgm' | 'pvw']
+				const layers = resolveLayers(feedback.options)
+				if (layers.length === 0) return false
+				return layers.every((layer) => {
+					const current: string[] = this.state.get(['DEVICE', 'device', 'screenList', 'items', layer.screenAuxKey, 'layerList', 'items', layer.layerKey, 'control', 'pp', 'freeze']) ?? []
+					return presetTargets.every((preset) => current.includes(getFreezeToken(layer.screenAuxKey, preset)))
+				})
+			},
+		}
+
+		return deviceLayerFreezeV3
 	}
 
 }

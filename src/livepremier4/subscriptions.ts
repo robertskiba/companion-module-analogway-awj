@@ -29,6 +29,10 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'selectedLayerOpacityChange',
 		'selectedLayerCroppingChange',
 		'layerPropertyStatusChange',
+		'layerSourceStatusChange',
+		'layerCutFillSourceStatusChange',
+		'layerCanUseMaskChange',
+		'inputKeyingStatusChange',
 		'selectedScreenChange',
 		'hotBackupSelectionChange',
 		'selectedScreenTbarChange',
@@ -44,11 +48,16 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'testpatternRasterBoxActive',
 		'selectedPreset',
 		'inputFreeze',
+		'outputFreeze',
+		'layerFreezeV3',
+		'inactiveLayerCleanup',
 		'timerState',
 		'screenTransitionTime',
 		'screenMemoryLabel',
 		'masterMemory',
 		'masterMemoryLabel',
+		'keyingMemoryLabel',
+		'preconfigBackgroundSetOutputChange',
 		'multiviewerMemoryLabel',
 		'layerMemoryLabel',
 		'stillLabel',
@@ -235,7 +244,13 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 	get screenPreset():Subscription {
 		return {
 			pat: 'DEVICE/device/screenAuxGroupList/items/(\\w+?)/status/pp/transition',
-			fbk: 'deviceTake',
+			// deviceLayerFreezeV3 resolves "Program"/"Preview" to whichever physical UP/DOWN bank currently
+			// holds that role (getFreezeToken()) - a Take changes that mapping without touching the freeze
+			// array itself, so the feedback's actual result can flip (a frozen Preview Layer becomes an
+			// unfrozen Program Layer, and vice versa) even though nothing at layerFreezeV3's own path changed.
+			// Without this, the feedback stays stuck showing whatever it last evaluated, live-confirmed
+			// 2026-09-08.
+			fbk: ['deviceTake', 'deviceLayerFreezeV3'],
 			ini: [
 				...this.instance.choices.getScreensArray().map((s) => s.id),
 				...this.instance.choices.getAuxArray().map((a) => a.id),
@@ -275,10 +290,23 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 				const val = this.instance.state.get(patharr)
 				const screen = patharr[4]
 				const screenList = screen.charAt(0) === 'A' ? 'auxiliaryList' : 'screenList'
+				// Which physical preset bank (A/B/C - confirmed live: a 3rd bank, "presetPrevious", also exists)
+				// is currently PGM/PVW is NOT a fixed A=down/B=up pairing - read live from the device's own
+				// presetUp/presetDown fields instead of hardcoding 'A'/'B', matching whatever it actually reports
+				// (live-confirmed: a device with "Preset Toggle" on can report e.g. presetUp: 'B', presetDown:
+				// 'A' - hardcoding the letters here previously pointed every "Layer Properties"/Effects/etc.
+				// action and feedback at a preset bank id ('PROGRAM'/'PREVIEW'-derived from an unset/wrong value)
+				// that doesn't exist in presetList/items at all, since AWJ items here are keyed 'A'/'B'/'C', not
+				// 'PROGRAM'/'PREVIEW').
+				// presetUp/presetDown live under screenAuxGroupList (same parent object as the "transition" status
+				// this subscription itself watches), NOT under screenList/auxiliaryList (that's the content/layer
+				// tree) - confirmed live via GET on a real Aquilon (2026-09-08).
+				const presetUp = this.instance.state.get(['DEVICE', 'device', 'screenAuxGroupList', 'items', screen, 'control', 'pp', 'presetUp'])
+				const presetDown = this.instance.state.get(['DEVICE', 'device', 'screenAuxGroupList', 'items', screen, 'control', 'pp', 'presetDown'])
 				let program = '', preview = ''
 				if (val === 'AT_UP') {
-					program = 'B'
-					preview = 'A'
+					program = presetUp || 'B'
+					preview = presetDown || 'A'
 					this.instance.state.set(`LOCAL/screens/${screen}/pgm/preset`, program)
 					this.instance.state.set(`LOCAL/screens/${screen}/pvw/preset`, preview)
 					this.instance.setVariableValues({
@@ -295,8 +323,8 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 					setMemoryVariables(preview, 'PVW')
 				}
 				if (val === 'AT_DOWN') {
-					program = 'A'
-					preview = 'B'
+					program = presetDown || 'A'
+					preview = presetUp || 'B'
 					this.instance.state.set(`LOCAL/screens/${screen}/pgm/preset`, program)
 					this.instance.state.set(`LOCAL/screens/${screen}/pvw/preset`, preview)
 					this.instance.setVariableValues({
@@ -537,6 +565,11 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 			ini: Array.from({ length: this.constants.maxTimers }, (_, i) => (i + 1).toString()),
 			fun: (path, _value) => {
 				if (!path) return false
+				// The device only ever sends this path from firmware 4.03.38 onward (Analog Way's release notes:
+				// "The Timer values are now sent over the network") - without this check, ini's unconditional
+				// first call (see initSubscriptions()) would still register these variables on older firmware,
+				// permanently blank ($NA), since the state path they read from would never actually get populated.
+				if (!this.instance.choices.isFirmwareAtLeast('4.03.38')) return false
 				const timer = ( Array.isArray(path) ? path[4] : path.split('/')[4] ).replaceAll(/\D/g, '')
 				const time = this.instance.state.get(path)
 
@@ -573,6 +606,95 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		return {
 			pat: 'device/audio/control/deviceList/items/\\d+/txList/items/\\w+/channelList/items/\\d+/control/pp/source',
 			fbk: ['deviceAudioRouteChannelsStatus', 'deviceAudioRouteBlockStatus'],
+		}
+	}
+
+	/** A Layer's freeze array (device/screenList/items/{screen}/layerList/items/{layer}/control/pp/freeze)
+	 * changes - live-updates "LIVE - Layer Freeze" (deviceLayerFreezeV3). No dedicated variable exists for
+	 * this (explicit user decision, 2026-09-08 - a per-Screen/Layer/Preset-direction variable set would be a
+	 * combinatorial explosion for little practical value, unlike the flat IN{n}/OUT{n}.freeze variables). */
+	get layerFreezeV3(): Subscription {
+		return {
+			pat: 'device/screenList/items/\\w+/layerList/items/\\d+/control/pp/freeze',
+			fbk: 'deviceLayerFreezeV3',
+		}
+	}
+
+	/**
+	 * Resets every Layer on one Screen/Auxscreen that is NOT currently in use (its numbered index is beyond
+	 * the Screen's own current `layerCount`) back to a safe factory-default state, on both Preset banks (A/B):
+	 * Source None, Opacity 256, centered-fullscreen Position/Size (computed from this specific Screen's own
+	 * canvas size via screenSizePath, never hardcoded - Screens can have different canvas resolutions), no
+	 * Effect flags. Live-confirmed (2026-09-08): a Screen's layerList (both the flat freeze-only one and the
+	 * full per-Preset property tree) is a fixed 128-slot array regardless of the Screen's configured
+	 * layerCount, so every property beyond the active count is still fully addressable and can carry
+	 * something left over from an earlier, larger layerCount during the show's setup - live-confirmed this
+	 * already happened with a leftover freeze array (see "LIVE - Layer Freeze"'s own existence guard) before
+	 * this cleanup existed.
+	 * Explicit user decision: this is unconditionally safe to run, since an inactive Layer is invisible
+	 * regardless of these values and gets fully repopulated by a Screen/Master Memory recall the moment it's
+	 * actually put to use - "hier besteht keinerlei Gefahr... er ist ja erstmal durchsichtig und wird durch
+	 * ein Screen Memory oder MM befüllt." Only writes a property that doesn't already match the default - the
+	 * large majority of far-out-of-range Layer slots are already pristine, so this stays cheap in practice
+	 * despite covering up to 128 Layers × 2 Preset banks per Screen; the reads themselves are free (already-
+	 * loaded local state, no network round trip).
+	 */
+	private resetInactiveLayers(screen: string): void {
+		const screeninfo = this.instance.choices.getScreenInfo(screen)
+		const listPath = screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath
+		const layerCount = this.instance.state.get(['DEVICE', ...listPath, 'items', screeninfo.platformId, 'status', 'pp', 'layerCount']) ?? 0
+		if (layerCount >= this.constants.maxLayers) return
+
+		const screenSizePath = [...listPath, 'items', screeninfo.platformId, ...this.constants.screenSizePath]
+		const screenWidth = this.instance.state.get(['DEVICE', ...screenSizePath, 'sizeH']) ?? 1920
+		const screenHeight = this.instance.state.get(['DEVICE', ...screenSizePath, 'sizeV']) ?? 1080
+		const defaultPosH = Math.round(screenWidth / 2)
+		const defaultPosV = Math.round(screenHeight / 2)
+
+		for (const preset of ['A', 'B']) {
+			const presetPath = [...listPath, 'items', screeninfo.platformId, 'presetList', 'items', preset]
+			for (let n = layerCount + 1; n <= this.constants.maxLayers; n += 1) {
+				const layerPath = [...presetPath, 'layerList', 'items', n.toString()]
+
+				const inputNum = this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum'])
+				if (inputNum !== 'NONE') this.instance.connection.sendWSmessage([...layerPath, 'source', 'pp', 'inputNum'], 'NONE')
+
+				const opacity = this.instance.state.get(['DEVICE', ...layerPath, 'opacity', 'pp', 'opacity'])
+				if (opacity !== 256) this.instance.connection.sendWSmessage([...layerPath, 'opacity', 'pp', 'opacity'], 256)
+
+				const posH = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'posH'])
+				if (posH !== defaultPosH) this.instance.connection.sendWSmessage([...layerPath, 'position', 'pp', 'posH'], defaultPosH)
+				const posV = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'posV'])
+				if (posV !== defaultPosV) this.instance.connection.sendWSmessage([...layerPath, 'position', 'pp', 'posV'], defaultPosV)
+				const sizeH = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'sizeH'])
+				if (sizeH !== screenWidth) this.instance.connection.sendWSmessage([...layerPath, 'position', 'pp', 'sizeH'], screenWidth)
+				const sizeV = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'sizeV'])
+				if (sizeV !== screenHeight) this.instance.connection.sendWSmessage([...layerPath, 'position', 'pp', 'sizeV'], screenHeight)
+
+				const flags = this.instance.state.get(['DEVICE', ...layerPath, 'effects', 'pp', 'flags']) ?? []
+				if (Array.isArray(flags) && flags.length > 0) this.instance.connection.sendWSmessage([...layerPath, 'effects', 'pp', 'flags'], [])
+			}
+		}
+	}
+
+	/** Runs resetInactiveLayers() once for every Screen/Auxscreen at connect, and again for one specific
+	 * Screen/Auxscreen whenever its own layerCount changes (a Layer that was just deactivated needs the same
+	 * cleanup as one that was already inactive at connect). */
+	get inactiveLayerCleanup(): Subscription {
+		return {
+			pat: 'device/(?:screenList|auxiliaryList)/items/(\\w+)/status/pp/layerCount',
+			ini: () => {
+				for (const s of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
+					this.resetInactiveLayers(s.id)
+				}
+				return []
+			},
+			fun: (path) => {
+				if (typeof path !== 'string') return false
+				const match = path.match(/items\/(\w+)\/status\/pp\/layerCount/)
+				if (match) this.resetInactiveLayers(match[1])
+				return false
+			},
 		}
 	}
 

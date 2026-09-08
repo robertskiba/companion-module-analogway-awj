@@ -139,3 +139,22 @@ export const formatAquilonModel = (dev: string): string => {
     const suffix = dev.replace(/^NLC_/, '')
     return `Aquilon ${AQUILON_MODEL_NAMES[suffix] ?? suffix}`
 }
+
+/**
+ * Compares two dot-separated firmware version strings (e.g. "5.0.128" vs "6") component by component,
+ * numerically, treating a missing trailing component as 0 - so "6" reads the same as "6.0.0" and is below
+ * "6.0.4". Returns a negative number if `a` < `b`, positive if `a` > `b`, 0 if equal. Shared by
+ * config.ts's isFirmwareBelow() (config-page "Update Suggested" hints) and choices.ts's isFirmwareAtLeast()
+ * (gating individual actions/feedbacks/variables that only exist from a specific firmware onward), so both
+ * places compare versions the exact same way.
+ */
+export const compareFirmwareVersions = (a: string, b: string): number => {
+    const pa = a.split('.').map((n) => parseInt(n, 10))
+    const pb = b.split('.').map((n) => parseInt(n, 10))
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const va = pa[i] ?? 0
+        const vb = pb[i] ?? 0
+        if (va !== vb) return va - vb
+    }
+    return 0
+}

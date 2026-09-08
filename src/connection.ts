@@ -7,6 +7,7 @@ import { InstanceStatus } from '@companion-module/base'
 import { formatAquilonModel } from './util.js'
 import * as os from 'os'
 import { AWJBackupConnection } from './backupConnection.js'
+import { FIRMWARE_TOO_OLD_TEXT } from './config.js'
 
 const fetchDefaultParameters = {
 	retry: 2,
@@ -184,6 +185,38 @@ class AWJconnection {
 		urlObj.protocol('https')
 		urlObj.port('443')
 		return urlObj.toString()
+	}
+
+	/**
+	 * Probes whether an AWJ device is actually reachable at `hostname` on `preferredPort` (whatever the
+	 * address currently has - typically 3000, left over from a previous simulator address), falling back to
+	 * the other well-known AWJ default (3000 for a simulator, 80 for a real device) if that didn't answer.
+	 * Used when the user types a brand new hostname/IP into "Device Network Address" (e.g. switching from a
+	 * local simulator to a real Aquilon on the LAN) - without this, index.ts's configUpdated() would blindly
+	 * trust the "Simulated Device?" checkbox (possibly still checked from the previous, simulator, session)
+	 * and keep forcing port 3000 onto the new, real address. Returns undefined if neither port answers (device
+	 * unreachable/powered off right now) - the address is then left exactly as typed, same as before this
+	 * existed; the existing connect-retry/network-scan fallback already covers that case once it does connect.
+	 * Same lightweight /auth/status probe already used by scanNetworkForDevices(), 400ms timeout, no retry,
+	 * http only (this module's own https simulator support has no live devices to probe against there anyway).
+	 */
+	async detectDevicePort(hostname: string, preferredPort: number): Promise<{ port: number; isSimulated: boolean } | undefined> {
+		const check = async (port: number): Promise<boolean> => {
+			try {
+				const authResponse = await ky.get(`http://${hostname}:${port}/auth/status`, {
+					retry: 0,
+					timeout: 400,
+				}).json<{ [name: string]: any }>()
+				return authResponse.authentication?.isAuthenticationEnabled !== undefined
+					&& (authResponse.device !== undefined || authResponse.devices?.leader !== undefined)
+			} catch {
+				return false
+			}
+		}
+		const fallbackPort = preferredPort === 3000 ? 80 : 3000
+		if (await check(preferredPort)) return { port: preferredPort, isSimulated: preferredPort === 3000 }
+		if (await check(fallbackPort)) return { port: fallbackPort, isSimulated: fallbackPort === 3000 }
+		return undefined
 	}
 
 	/**
@@ -403,18 +436,51 @@ class AWJconnection {
 						let modelName = ''
 						if (device.substring(0, 3) === 'NLC') {
 							modelName = formatAquilonModel(device)
+							const major = parseInt(fwVersion.split('.')[0])
+							// Firmware below V4 is no longer supported at all (the dedicated pre-V4 implementation
+							// was removed - see FIRMWARE_TOO_OLD_TEXT in config.ts for why) - refuse the connection
+							// outright instead of silently falling back to some other platform.
+							if (isNaN(major) || major < 4) {
+								this.instance.updateStatus(InstanceStatus.ConnectionFailure, `Firmware ${fwVersion} too old (below V4) - not supported`)
+								this.instance.log(
+									'error',
+									`Connected to ${modelName}${serialAndFirmware()}. ${FIRMWARE_TOO_OLD_TEXT}`
+								)
+								// Persist model/firmware even on this refused connection - GetConfigFields() reads
+								// config.deviceFirmware to show the "Not Supported" notice above Device Network
+								// Address (see updateSuggestedField() in config.ts), which otherwise would never
+								// appear at all: the normal place this gets saved (further below, after setDevice())
+								// is never reached here since we return before it.
+								let configChanged = false
+								if (this.instance.config.deviceModel !== modelName) {
+									this.instance.config.deviceModel = modelName
+									configChanged = true
+								}
+								if (this.instance.config.deviceFirmware !== fwVersion) {
+									this.instance.config.deviceFirmware = fwVersion
+									configChanged = true
+								}
+								if (configChanged) this.instance.saveConfig(this.instance.config)
+								// Fall back to the generic (platform-unknown) action/feedback/preset/variable set -
+								// otherwise a previous successful connection's full LivePremier4-specific set (or a
+								// stale one from before this device's firmware got downgraded) would keep being
+								// shown even though it no longer applies to anything reachable now.
+								try {
+									this.instance.setDevice('awjdevice')
+									this.instance.resetVariablesToBase()
+									await this.instance.updateInstance()
+								} catch (error: any) {
+									this.instance.log('error', `resetting to generic device set after firmware-too-old failure failed:\n${error}`)
+								}
+								return
+							}
 							this.instance.updateStatus(InstanceStatus.Ok)
 							this.instance.log(
 								'info',
 								'Connected to ' +
 								modelName + serialAndFirmware()
 							)
-							const major = parseInt(fwVersion.split('.')[0])
-							if (!isNaN(major) && major >= 4) {
-								newPlatform = `livepremier4`
-							} else {
-								newPlatform = 'livepremier'
-							}
+							newPlatform = `livepremier4`
 						} else if (device.match(/^EIKOS/)) {
 							modelName = 'Eikos 4k'
 							this.instance.updateStatus(InstanceStatus.Ok)
@@ -478,7 +544,7 @@ class AWJconnection {
 						}
 
 						this.instance.state.set('LOCAL/deviceModel', modelName)
-						this.instance.state.set('LOCAL/deviceSeries', newPlatform === 'midra' ? 'Midra 4K' : newPlatform === 'livepremier4' ? 'LivePremier' : 'LivePremier ≤ V3')
+						this.instance.state.set('LOCAL/deviceSeries', newPlatform === 'midra' ? 'Midra 4K' : 'LivePremier')
 						this.instance.state.set('LOCAL/deviceFirmwareVersion', fwVersion)
 						const fwMajor = parseInt(fwVersion.split('.')[0])
 						this.instance.state.set('LOCAL/deviceFirmwareGeneration', isNaN(fwMajor) ? '' : `V${fwMajor}`)
