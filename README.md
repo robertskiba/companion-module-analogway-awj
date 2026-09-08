@@ -2,11 +2,14 @@ This is a fork of the original companion-module-analogway-awj repository. It is 
 
 # Changelog
 
-# v3.0.0 Beta 6 – Changes (in development)
+# v3.0.0 RC1 – Changes
+
+**Feature freeze in effect as of this release** - from here on, only bug fixes and Midra/Alta verification work land before the final v3.0.0 release; no new features are planned for this release candidate.
 
 ## Planned
 
-- **Every action/feedback that's specific to one model series (not available on all three: LivePremier, Midra, Alta) now has "(Aquilon)" or "(Midra/Alta)" appended to its name** - for testers only, temporary for the beta: makes it obvious at a glance in the action/feedback picker which items still need testing on which hardware. **Remove this again once Beta 6 ships/exits beta** - strip the suffix from anything confirmed working across all three series by then; it's not meant to be a permanent part of the naming. Combined "(Midra/Alta)" rather than separate labels since the code has no way to distinguish the two (Alta/Zenith runs entirely through the `midra` platform class) - split it later only if a specific feature turns out to genuinely diverge between them.
+- **Every action/feedback that's specific to one model series (not available on all three: LivePremier, Midra, Alta) now has "(Aquilon)" or "(Midra/Alta)" appended to its name** - for testers only, kept through RC1: makes it obvious at a glance in the action/feedback picker which items still need testing on which hardware. **Remove this again for the final v3.0.0 release** - strip the suffix from anything confirmed working across all three series by then; it's not meant to be a permanent part of the naming. Combined "(Midra/Alta)" rather than separate labels since the code has no way to distinguish the two (Alta/Zenith runs entirely through the `midra` platform class) - split it later only if a specific feature turns out to genuinely diverge between them.
+
 ## Midra / Alta - Known Gaps
 
 Collected here (rather than scattered through Planned/New below) so they can all be checked together in one dedicated Midra/Alta review pass, instead of one at a time as they're individually noticed. Everything below already works correctly on LivePremier4/Aquilon.
@@ -257,7 +260,7 @@ Upgraded from `@companion-module/base` ~1.9.0 to ^2.1.3, the foundation for nati
 
 ### New feature: variable / local-variable support for option fields
 
-The actual goal of the migration — dropdown-style fields can now be set via Companion expressions, including local variables (`$(local:...)`) and Companion 5.1's new page variables (`$(page:...)`), verified end-to-end on real workflows (e.g. copy-pasting a "Recall Screen Memory" button template and only changing one local variable instead of every option field by hand).
+The actual goal of the migration — dropdown-style fields can now be set via Companion expressions, including local variables (`$(local:...)`), verified end-to-end on real workflows (e.g. copy-pasting a "Recall Screen Memory" button template and only changing one local variable instead of every option field by hand). Companion 5.10's new page variables (`$(page:...)`) will work the same way here once that Companion version is out of beta.
 
 - Added `allowInvalidValues: true` to every screen/aux-identifying option field (`screens`, `screen`, `memory` — actions and feedbacks, all platforms), since Companion silently skips an action entirely if an expression-computed value doesn't match the field's static choice list.
 - Added `expandScreenAuxTokens` parsing in `src/awjdevice/choices.ts`: a screen/aux multidropdown expression can now be written as a plain concatenated string like `S1S2A1` (no separator needed) instead of a JSON array; extracted tokens are cross-checked against currently-existing screens/auxes and silently dropped if invalid.
