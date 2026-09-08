@@ -14,7 +14,7 @@ import {
 	InstanceStatus,
 } from '@companion-module/base'
 import Constants from './constants.js'
-import { parseBoolean } from '../util.js'
+import { parseBoolean, stripMemoryPrefix } from '../util.js'
 
 
 /** Helper type for replacing the very generic options with the real structure of options */
@@ -300,7 +300,9 @@ export default class Feedbacks {
 					const path = [
 						'DEVICE',
 						...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-						'items', feedback.options.screen,
+						// platformId, not the raw "S1"-style option value directly - Midra's real item key is a
+						// plain number (see getScreenInfo()'s own doc comment); reading "S1" there always missed.
+						'items', screeninfo.platformId,
 						'presetList', 'items', preset,
 						...this.choices.getLayerPath(feedback.options.layer),
 					]
@@ -324,7 +326,7 @@ export default class Feedbacks {
 							// internally called "Mask") is available on this Layer at all - live-confirmed
 							// (2026-09-08). A Layer with canUseMask false cannot do Cut&Fill regardless of any
 							// stored Enable state.
-							const canUseCutFill = this.state.get(['DEVICE', ...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath), 'items', feedback.options.screen, 'layerList', 'items', feedback.options.layer, 'status', 'pp', 'canUseMask'])
+							const canUseCutFill = this.state.get(['DEVICE', ...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath), 'items', screeninfo.platformId, 'layerList', 'items', feedback.options.layer, 'status', 'pp', 'canUseMask'])
 							return !!canUseCutFill && this.state.get([...path, 'cutNFill', 'pp', 'type']) === 'CUT_N_FILL'
 						}
 						case 'maskActive': {
@@ -592,13 +594,14 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
+				const memory = stripMemoryPrefix(feedback.options.memory, 'MM')
 				if (
 					(feedback.options.preset === 'all' || feedback.options.preset === 'pgm') &&
-					this.state.get(['DEVICE', ...this.constants.lastUsedMasterPresetPath, 'presetModeList', 'items', 'PROGRAM', 'pp', 'memoryId']) == feedback.options.memory
+					this.state.get(['DEVICE', ...this.constants.lastUsedMasterPresetPath, 'presetModeList', 'items', 'PROGRAM', 'pp', 'memoryId']) == memory
 				) return true
 				if (
 					(feedback.options.preset === 'all' || feedback.options.preset === 'pvw' || feedback.options.preset === 'prw') &&
-					this.state.get(['DEVICE', ...this.constants.lastUsedMasterPresetPath, 'presetModeList', 'items', 'PREVIEW', 'pp', 'memoryId']) == feedback.options.memory
+					this.state.get(['DEVICE', ...this.constants.lastUsedMasterPresetPath, 'presetModeList', 'items', 'PREVIEW', 'pp', 'memoryId']) == memory
 				) return true
 				return false
 			},
@@ -660,7 +663,8 @@ export default class Feedbacks {
 			callback: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string[], preset: string, memory: string, unmodified: number } }) => {
 				const screens = this.choices.getChosenScreensSupportedByScreenMemories(feedback.options.screens)
 				const presets = feedback.options.preset === 'all' ? ['pgm', 'pvw'] : [feedback.options.preset]
-				
+				const memory = stripMemoryPrefix(feedback.options.memory, 'SM')
+
 				for (const screen of screens) {
 					const screeninfo = this.choices.getScreenInfo(screen)
 					for (const preset of presets) {
@@ -674,7 +678,7 @@ export default class Feedbacks {
 								'items',
 								this.choices.getPreset(screeninfo.id, preset),
 								...this.constants.activeScreenMemoryIdPath,
-							]) == feedback.options.memory
+							]) == memory
 						) {
 							if (feedback.options.unmodified === 2) return true
 							const modified = this.state.get([
@@ -734,7 +738,7 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
-				return !!this.state.get(['DEVICE', ...this.constants.screenMemoryPath, 'items', feedback.options.memory, 'status', 'pp', 'isValid'])
+				return !!this.state.get(['DEVICE', ...this.constants.screenMemoryPath, 'items', stripMemoryPrefix(feedback.options.memory, 'SM'), 'status', 'pp', 'isValid'])
 			},
 		}
 
@@ -796,7 +800,8 @@ export default class Feedbacks {
 			callback: (feedback) => {
 				const screens = this.choices.getChosenAuxes(feedback.options.screens)
 				const presets = feedback.options.preset === 'all' ? ['pgm', 'pvw'] : [feedback.options.preset]
-				
+				const memory = stripMemoryPrefix(feedback.options.memory, 'AM')
+
 				for (const screen of screens) {
 					const screeninfo = this.choices.getScreenInfo(screen)
 					for (const preset of presets) {
@@ -807,7 +812,7 @@ export default class Feedbacks {
 								'auxiliaryScreenList', 'items', screeninfo.numstr,
 								'presetList', 'items', this.choices.getPreset(screen, preset),
 								'status','pp','memoryId',
-							]) == feedback.options.memory
+							]) == memory
 						) {
 							if (feedback.options.unmodified === 2) return true
 							const modified = this.state.get([
@@ -1369,10 +1374,18 @@ export default class Feedbacks {
 				const layerpath = [
 					'DEVICE',
 					...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-					'items', feedback.options.screen,
+					// platformId, not the raw "S1"-style option value directly - see deviceLayerPropertyStatus's
+					// matching fix/comment above.
+					'items', screeninfo.platformId,
 					'presetList', 'items', preset,
 					'layerList', 'items', feedback.options.layer,
 				]
+				// TODO: 'source'/'pp'/'inputNum' and the IN_{n} raw id below are confirmed correct for LivePremier/
+				// LivePremier4 only - Midra's own deviceSelectSourceV3 action writes numbered layers' source to
+				// .../source/pp/input (singular, not inputNum) and uses INPUT_{n} elsewhere for its raw input ids,
+				// so this feedback is suspected to also need a Midra-specific override, but the exact field name/
+				// value format on Midra has not been live-verified this session - not guessing at a protocol
+				// value, left as-is pending live confirmation.
 				const source = this.state.get([...layerpath, 'source', 'pp', 'inputNum'])
 				const liveMatch = typeof source === 'string' ? source.match(/^(?:LIVE|IN)_(\d+)$/) : null
 				if (!liveMatch) return true
@@ -1963,7 +1976,7 @@ export default class Feedbacks {
 							parts[4] === 'presetList' &&
 							parts[5] === 'items' &&
 							parts[6] &&
-							feedback.options.path.split('/')[6]?.match(/^PGM|PVW|PRW|program|preview$/i) !== null
+							feedback.options.path.split('/')[6]?.match(/^(PGM|PVW|PRW|program|preview)$/i) !== null
 						) {
 							parts[6] = '(\\w+?)'
 							sub[`${feedback.id}-take`] = {
@@ -2061,7 +2074,7 @@ export default class Feedbacks {
 					} else if (typeof value === 'number') {
 						ret = value >= 0.5 ? true : false
 					} else if (typeof value === 'string') {
-						ret = value.match(/^y(es)?|true|0*1|go|\+|right|correct|ok(ay)?$/i) !== null
+						ret = value.match(/^(y(es)?|true|0*1|go|\+|right|correct|ok(ay)?)$/i) !== null
 					}
 					const bool = parseBoolean(feedback.options.invert) ? !ret : ret
 					this.instance.setVariableValues({ [varId]: bool ? 1 : 0 })
@@ -2271,8 +2284,14 @@ export default class Feedbacks {
 				}
 				poller.subscribers.set(feedback.id, { rate: requestedRate, lastSeen: Date.now() })
 
+				// Deliberately NOT an immediate this.pollThumbnail(key) here - Companion invokes this callback
+				// once even for a preset-browser preview that never becomes a real placed button (see the
+				// thumbnailPollers field comment above), so firing a request straight from the callback would
+				// hit the device the instant a row is rendered, before there's any way to tell a preview apart
+				// from a real button. Leaving the first fetch to recalculateThumbnailThrottle()'s own interval
+				// means a preview that disappears before its first tick (activeRate, e.g. 5s) never costs a
+				// single device request - a real button just shows its first image one tick later instead.
 				this.recalculateThumbnailThrottle()
-				if (!this.thumbnailCache.has(key)) this.pollThumbnail(key)
 
 				const cached = this.thumbnailCache.get(key)
 				return cached ? { png64: cached } : {}

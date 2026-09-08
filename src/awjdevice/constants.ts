@@ -23,7 +23,10 @@ export default class Constants {
 
     static readonly macAddressPath = 'DEVICE/device/system/network/adapter/pp/macAddress'
 
-    static readonly xUpdatePath: string = '"device","screenGroupList","control","pp","xUpdate"' // livepremier + livepremier4
+    // LivePremier4 overrides this to 'screenAuxGroupList' (see livepremier4/constants.ts) - this base value is
+    // only actually used as-is before a platform has been detected, or as the fallback for an unrecognized
+    // platform string (see AWJinstance.setDevice()'s default branch).
+    static readonly xUpdatePath: string = '"device","screenGroupList","control","pp","xUpdate"'
     // static readonly xUpdatePath = '""device","preset","control","pp","xUpdate"' // midra
 
     static readonly screenGroupPath = ['device', 'screenAuxGroupList']

@@ -4,15 +4,19 @@ import Choices from './choices.js'
 import {
 	combineRgb,
 	CompanionButtonStyleProps,
+	CompanionLayeredButtonPresetDefinition,
 	CompanionPresetDefinitions,
 	CompanionPresetSection,
 	CompanionSimplePresetDefinition,
+	CompanionSomePresetDefinition,
 	CompanionTextSize,
 	splitRgb
 } from '@companion-module/base'
 
-/** A preset definition still carrying its (module-internal) grouping category, before it gets split off into the preset structure/sections */
-export type PresetDefWithCategory = CompanionSimplePresetDefinition & { category: string }
+/** A preset definition still carrying its (module-internal) grouping category, before it gets split off into the preset structure/sections.
+ *  Widened from CompanionSimplePresetDefinition to CompanionSomePresetDefinition (simple | layered | alternatives)
+ *  for the "New Preset Test S1" alternatives preset - narrow this back once that's resolved either way. */
+export type PresetDefWithCategory = CompanionSomePresetDefinition & { category: string }
 /** A record of presets, each still carrying its grouping category */
 export type CategorizedPresetDefinitions = Record<string, PresetDefWithCategory>
 import Constants from './constants.js'
@@ -33,6 +37,7 @@ export default class Presets {
 
 	readonly presetsToUse: string[] = [
 		'masterMemories',
+		'newPresetTestS1', // TEMP - layered-preset workflow verification, see the getter's own comment
 		'screenMemories',
 		'auxMemories',
 		'layerMemories',
@@ -191,6 +196,157 @@ export default class Presets {
 						},
 					},
 				],
+			}
+		}
+
+		return presets
+	}
+
+	/** MARK: TEMP - "New Preset Test S1" - layered-preset workflow verification
+	 *  Not a real feature - one preset per currently-existing Screen Memory, built directly from a
+	 *  live-tested button export. Originally meant to check whether CompanionPresetAlternatives lets a host
+	 *  pick the best variant it supports (layered preferred, simple fallback) - that question is moot for now:
+	 *  live-verified against Companion 5.1.0+9884 (nightly/dev) that 'layered' preset FEEDBACKS don't show up
+	 *  at all once dragged onto a button (elements/style/actions all work fine), independent of alternatives.
+	 *  Shipping 'simple' only until that matures - see the CONCLUSION comment further down for detail.
+	 *  Only the "screenmemory" local variable's startup value is iterated per generated preset (matching the
+	 *  specific memory it's named after) - "screens" stays a genuine local variable on every generated preset
+	 *  (default "1", same as the tested button), so it's still freely adjustable per placed button afterward
+	 *  instead of being baked in.
+	 *  Remove this whole getter (and its presetsToUse entry) once the workflow is confirmed either way. */
+	get newPresetTestS1(): CategorizedPresetDefinitions {
+		const ilabel = this.instance.label
+		const memoryVarName = 'screenmemory'
+		const screensVarName = 'screens'
+		const memoryRef = `$(local:${memoryVarName})`
+		const screensRef = `$(local:${screensVarName})`
+		// Wraps an option value so Companion shows the field already toggled into Expression Mode when the
+		// preset is dropped onto a button - a bare string value is otherwise treated as isExpression:false
+		// (a literal value that only happens to contain "$(...)" text, still substituted, but not flagged
+		// as an expression in the UI the way a hand-built button's own toggle would be).
+		const expr = (value: string) => ({ value, isExpression: true as const })
+
+		const presets: CategorizedPresetDefinitions = {}
+
+		for (const memory of this.choices.getScreenMemoryArray()) {
+			const labelRef = `$(${ilabel}:${this.varName(`screenMemory${memory.id}label`, `SM${memory.id}.label`)})`
+			const localVariables = [
+				{ variableType: 'simple' as const, variableName: memoryVarName, startupValue: memory.id },
+				{ variableType: 'simple' as const, variableName: screensVarName, startupValue: '1' },
+			]
+
+			const recallAction = {
+				actionId: 'deviceScreenMemory',
+				options: {
+					screens: expr(screensRef),
+					preset: 'prw',
+					memory: expr(memoryRef),
+					selectScreens: false,
+				},
+			}
+
+			const layeredVariant: CompanionLayeredButtonPresetDefinition = {
+				type: 'layered',
+				name: `New Preset Test S1 - Recall Screen Memory ${memory.id} (layered)`,
+				elements: [
+					{ type: 'box', id: 'box0', x: 0, y: 0, width: 100, height: 100, color: 1774692 },
+					{
+						type: 'text', id: 'screenText', x: 0, y: 0, width: 100, height: 30,
+						text: `Screen ${screensRef}`, halign: 'center', valign: 'center',
+						fontsize: 100, fontsizeAllowShrink: true, color: 0xffffff,
+					},
+					{
+						type: 'text', id: 'memoryText', x: 0, y: 25, width: 100, height: 30,
+						text: `SM #${memoryRef}`, halign: 'center', valign: 'center',
+						fontsize: 100, fontsizeAllowShrink: true, color: 0xffffff,
+					},
+					{
+						type: 'text', id: 'text0', x: 0, y: 50, width: 100, height: 25,
+						text: labelRef, halign: 'center', valign: 'center',
+						fontsize: 50, fontsizeAllowShrink: true, color: 0xffffff,
+					},
+					{
+						// Hidden by default - the "only if modified" feedback below reveals this as a small
+						// red "*" badge in the corner, instead of recoloring the whole button like before.
+						type: 'text', id: 'modifiedBadge', x: 80, y: 70, width: 20, height: 30,
+						text: '*', halign: 'center', valign: 'center',
+						fontsize: 200, fontsizeAllowShrink: false, font: 'companion-mono', color: 0xff0000,
+						enabled: false,
+					},
+					{
+						type: 'text', id: 'loadText', x: 0, y: 70, width: 100, height: 30,
+						text: 'LOAD', halign: 'center', valign: 'center',
+						fontsize: 100, fontsizeAllowShrink: true, color: 0xffffff,
+					},
+				],
+				steps: [{ down: [recallAction], up: [] }],
+				feedbacks: [
+					{
+						feedbackId: 'deviceScreenMemory',
+						options: { screens: expr(screensRef), preset: 'prw', memory: expr(memoryRef), unmodified: 2 },
+						styleOverrides: [{ elementId: 'box0', elementProperty: 'color', override: this.config.color_greendark }],
+					},
+					{
+						feedbackId: 'deviceScreenMemory',
+						options: { screens: expr(screensRef), preset: 'pgm', memory: expr(memoryRef), unmodified: 2 },
+						styleOverrides: [{ elementId: 'box0', elementProperty: 'color', override: this.config.color_reddark }],
+					},
+					{
+						// Only checked against Preview, matching the tested design - a following Take makes the
+						// Preview-loaded memory become Program, so this still catches the common case.
+						feedbackId: 'deviceScreenMemory',
+						options: { screens: expr(screensRef), preset: 'prw', memory: expr(memoryRef), unmodified: 1 },
+						styleOverrides: [
+							{ elementId: 'modifiedBadge', elementProperty: 'enabled', override: true },
+							{ elementId: 'loadText', elementProperty: 'width', override: 80 },
+						],
+					},
+				],
+				localVariables,
+			}
+
+			const simpleVariant: CompanionSimplePresetDefinition = {
+				type: 'simple',
+				name: `New Preset Test S1 - Recall Screen Memory ${memory.id} (simple fallback)`,
+				style: {
+					text: `Screen ${screensRef}\\nSM #${memoryRef}\\n${labelRef}\\nLOAD`,
+					size: 'auto',
+					color: 0xffffff,
+					bgcolor: 1774692,
+				},
+				steps: [{ down: [recallAction], up: [] }],
+				feedbacks: [
+					{
+						feedbackId: 'deviceScreenMemory',
+						options: { screens: expr(screensRef), preset: 'prw', memory: expr(memoryRef), unmodified: 2 },
+						style: { bgcolor: this.config.color_greendark },
+					},
+					{
+						feedbackId: 'deviceScreenMemory',
+						options: { screens: expr(screensRef), preset: 'pgm', memory: expr(memoryRef), unmodified: 2 },
+						style: { bgcolor: this.config.color_reddark },
+					},
+					{
+						// No separate badge layer in a 'simple' preset - appends the same "*" marker to the text instead.
+						feedbackId: 'deviceScreenMemory',
+						options: { screens: expr(screensRef), preset: 'prw', memory: expr(memoryRef), unmodified: 1 },
+						style: { text: `Screen ${screensRef}\\nSM #${memoryRef} *\\n${labelRef}\\nLOAD` },
+					},
+				],
+				localVariables,
+			}
+
+			// CONCLUSION (live-verified against Companion 5.1.0+9884, a nightly/dev build): 'layered' preset
+			// feedbacks don't show up at all when the preset is dragged onto a button - elements/style/actions
+			// all work fine, only feedbacks are silently dropped, independent of whether wrapped in
+			// CompanionPresetAlternatives or not. Likely an app-side gap, not something fixable from the
+			// module's side - 'layered' only just landed in @companion-module/base 2.1.3 (2026-08-12).
+			// Staying on 'simple' (verified working immediately, feedbacks included) until that matures.
+			// layeredVariant is kept below for reference/reuse once layered-preset feedbacks actually work.
+			void layeredVariant
+			presets[`New Preset Test S1 - Recall Screen Memory ${memory.id}`] = {
+				...simpleVariant,
+				category: 'New Preset Test S1',
 			}
 		}
 
@@ -416,7 +572,7 @@ export default class Presets {
 				{
 					feedbackId: 'deviceTake',
 					options: {
-						screens: ['all'],
+						screens: ['sel'],
 					},
 					style: {
 						color: this.inverseColorBW(this.config.color_red),
@@ -1825,7 +1981,9 @@ export default class Presets {
 							actionId: 'deviceMultiviewerMemory',
 							options: {
 								memory: memory.id,
-								multiviewer,
+								// deviceMultiviewerMemory's "multiviewer" option is a multidropdown (string[]),
+								// even when there's only one Multiviewer - wrap the loop's single id accordingly.
+								multiviewer: [multiviewer],
 							},
 						},
 					],
@@ -2186,7 +2344,7 @@ export default class Presets {
 	get liveThumbnails() {
 		const presets: CategorizedPresetDefinitions = {}
 
-		const addThumbnailPreset = (id: string, label: string, feedbackOptions: Record<string, string | number>) => {
+		const addThumbnailPreset = (id: string, label: string, source: string) => {
 			presets[`thumbnail${id}`] = {
 				type: 'simple',
 				name: `Thumbnail ${label}`,
@@ -2203,7 +2361,9 @@ export default class Presets {
 					{
 						feedbackId: 'deviceThumbnail',
 						options: {
-							...feedbackOptions,
+							// deviceThumbnail's own "source" option is one combined "category:id" string (see its
+							// sourceChoices in feedback.ts) - not a separate category/item pair.
+							source,
 							// Companion does not fill in a preset's missing feedback option values with the
 							// field's own declared default - refreshRate showed up as 0 (not the field's
 							// default of 5) until set explicitly here.
@@ -2216,18 +2376,18 @@ export default class Presets {
 
 		for (const input of this.choices.getLiveInputArray()) {
 			const num = input.index ?? input.id.replace(/^\D+/, '')
-			addThumbnailPreset(`Input${num}`, `Input ${num}`, { source: 'inputs', inputItem: num })
+			addThumbnailPreset(`Input${num}`, `Input ${num}`, `inputs:${num}`)
 		}
 		for (const output of this.choices.getOutputArray()) {
 			if (this.choices.getMultiviewerOutputListKeys().includes(output.id)) continue
-			addThumbnailPreset(`Output${output.id}`, `Output ${output.id}`, { source: 'outputs', outputItem: output.id })
+			addThumbnailPreset(`Output${output.id}`, `Output ${output.id}`, `outputs:${output.id}`)
 		}
 		for (const store of this.choices.getStillsArray()) {
-			addThumbnailPreset(`Store${store.id}`, `Store ${store.id}`, { source: 'imagesStore', storeItem: store.id })
+			addThumbnailPreset(`Store${store.id}`, `IMG${store.id}`, `imagesStore:${store.id}`)
 		}
 		for (const timer of this.choices.getTimerArray()) {
 			const num = timer.index ?? timer.id.replace(/^\w+_/, '')
-			addThumbnailPreset(`Timer${num}`, `Timer ${num}`, { source: 'timers', timerItem: num })
+			addThumbnailPreset(`Timer${num}`, `Timer ${num}`, `timers:${num}`)
 		}
 
 		return presets

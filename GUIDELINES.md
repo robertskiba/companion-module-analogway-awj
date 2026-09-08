@@ -22,6 +22,21 @@ Every source/target type has a short, human-typeable id used everywhere user-fac
 
 `formatSourceShort()` (`src/awjdevice/subscriptions.ts`) is the canonical translator for sources shown in variables. Do not invent a second convention for a new source type - extend this one.
 
+### Memory type short IDs
+
+The four memory/preset-bank types each get their own two-letter short id, used consistently in variables (`MM1.label`), option-field dropdown labels, and expression-mode values (`SM10`):
+
+| Memory type | Short id |
+|---|---|
+| Master Memory | `MM{n}` |
+| Screen Memory | `SM{n}` |
+| Layer Memory | `LM{n}` |
+| Multiviewer Memory | `MV{n}` |
+
+`MV{n}` here is the Multiviewer *Memory* bank, not the Multiviewer device itself (`MVW{n}`, see the table above) - these two were live-confirmed to collide when the Multiviewer output variables briefly also used `MV{n}`, which is exactly why those got renamed to `MVW{n}` instead of the other way around. Don't reuse `MV` for anything else.
+
+Any option value in this convention (e.g. a "Memory" dropdown driven by an expression/local variable) must accept the prefixed form case-insensitively, stripped via the shared `stripMemoryPrefix()` helper (`src/util.ts`) before comparing against or sending the device's own bare-number id - the dropdown's own choices only ever store the bare number, so only an expression-entered value can carry the prefix at all.
+
 ### Bare numbers are only valid when the type is unambiguous
 
 A field whose dropdown can only ever resolve to **one** source type (e.g. an "Input" field that only ever offers Inputs, never Images too) should accept a bare number as well as the prefixed Short id in Expression Mode - `3` alongside `IN3` - since there's no ambiguity about what it refers to. See "LIVE - Input Freeze"/"LIVE - Output Freeze".

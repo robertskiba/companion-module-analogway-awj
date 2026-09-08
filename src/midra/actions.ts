@@ -8,7 +8,7 @@ import {
 } from '@companion-module/base'
 import { InstanceStatus } from '@companion-module/base'
 import Actions from '../awjdevice/actions.js'
-import { parseBoolean } from '../util.js'
+import { parseBoolean, stripMemoryPrefix } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -133,6 +133,7 @@ export default class ActionsMidra extends Actions {
 
 		deviceScreenMemory.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenChoices()]
 		deviceScreenMemory.callback = (action) => {
+			const memory = stripMemoryPrefix(action.options.memory, 'SM')
 			const screens = action.options.screens === 'first'
 				? this.choices.getSelectedScreens().slice(0, 1)
 				: this.choices.getChosenScreens(action.options.screens)
@@ -148,7 +149,7 @@ export default class ActionsMidra extends Actions {
 					'load',
 					'slotList',
 					'items',
-					action.options.memory,
+					memory,
 					'screenList',
 					'items',
 					screen.replaceAll(/\D/g, ''),
@@ -199,6 +200,7 @@ export default class ActionsMidra extends Actions {
 		const deviceAuxMemory = super.deviceAuxMemory
 
 		deviceAuxMemory.callback = (action) => {
+			const memory = stripMemoryPrefix(action.options.memory, 'AM')
 			const screens = action.options.screens === 'first'
 				? this.choices.getSelectedScreens().slice(0, 1)
 				: this.choices.getChosenAuxes(action.options.screens as string)
@@ -214,7 +216,7 @@ export default class ActionsMidra extends Actions {
 					'load',
 					'slotList',
 					'items',
-					action.options.memory,
+					memory,
 					'auxiliaryScreenList',
 					'items',
 					screen.replace(/\D/g, ''),
@@ -258,7 +260,7 @@ export default class ActionsMidra extends Actions {
 		deviceMasterMemory.callback = (action) => {
 			const bankpath = ['device', 'preset', 'masterBank']
 			const list = 'slotList'
-			const memorypath = ['items', action.options.memory]
+			const memorypath = ['items', stripMemoryPrefix(action.options.memory, 'MM')]
 			const loadpath = ['control', 'load', 'slotList']
 
 			const filterpath = this.state.get(['DEVICE', ...bankpath, list, ...memorypath, 'status', 'pp', 'isShadow']) ? ['status', 'shadow', 'pp'] : ['status', 'pp']
@@ -356,7 +358,7 @@ export default class ActionsMidra extends Actions {
 				'load',
 				'slotList',
 				'items',
-				action.options.memory,
+				stripMemoryPrefix(action.options.memory, 'MV'),
 				'pp',
 				'xRequest',
 			]
@@ -891,7 +893,14 @@ export default class ActionsMidra extends Actions {
 		const deviceInputKeying = super.deviceInputKeying
 
 		deviceInputKeying.callback = (action) => {
-			let input = action.options.input.replace('IN_', 'INPUT_')
+			// The dropdown's own choices (inherited unchanged from the base action) use this module's short
+			// 'IN{n}' convention (e.g. 'IN3', no underscore) - a plain '.replace(\'IN_\', \'INPUT_\')' never
+			// matched that (only the old V2-style 'IN_3'), so a fresh, untouched dropdown selection silently
+			// targeted a nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'. Same lenient
+			// bare-number/'IN{n}'/'IN_{n}' extraction the Aquilon version of this action already uses.
+			const match = (action.options.input ?? '').match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			if (!match) return
+			const input = `INPUT_${match[1]}`
 			this.connection.sendWSmessage(
 				[
 					'device',
@@ -922,7 +931,12 @@ export default class ActionsMidra extends Actions {
 		const deviceInputFreeze = super.deviceInputFreeze
 			
 		deviceInputFreeze.callback = (action) => {
-			const input = action.options.input.replace('IN_', 'INPUT_')
+			// Same fix as deviceInputKeying above - the dropdown's own choices use the short 'IN{n}' convention
+			// (e.g. 'IN3'), which a plain '.replace(\'IN_\', \'INPUT_\')' never matched, silently targeting a
+			// nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'.
+			const match = (action.options.input ?? '').match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			if (!match) return
+			const input = `INPUT_${match[1]}`
 			let val = false
 			if (action.options.mode === 1) {
 				val = true

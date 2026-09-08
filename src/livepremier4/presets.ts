@@ -7,6 +7,7 @@ export default class PresetsLivepremier4 extends Presets {
 	
 	readonly presetsToUse: string[] = [
 		'masterMemories',
+		'newPresetTestS1', // TEMP - layered-preset workflow verification, see the getter's own comment
 		'screenMemories',
 		// 'auxMemories',
 		'layerMemories',
@@ -58,7 +59,7 @@ export default class PresetsLivepremier4 extends Presets {
 		function makeInputSelectionPreset(input: Dropdown<string>, layertypes: string[], layerdescription: string) {
 			let sourceLabelVariable = ''
 			// sourceLayer, sourceNative, sourceBack, sourceFront
-			if (input.id.match(/^IN|LIVE|STILL|SCREEN/)) {
+			if (input.id.match(/^(IN|LIVE|STILL|SCREEN)/)) {
 				sourceLabelVariable = `\\n$(${ilabel}:${input.id.replace('LIVE_', 'INPUT_')}label)`
 			}
 			const preparedPreset: PresetDefWithCategory = {

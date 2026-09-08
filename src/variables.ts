@@ -133,12 +133,5 @@ export function initVariables(_instance: AWJinstance): TrackedVariable[] {
 		},
 	]
 
-	// for (const input of getLiveInputChoices(instance.state)) {
-	// 	variables.push({
-	// 		label: 'Freeze state of input ' + input.label,
-	// 		name: 'frozen_IN_' + input.id.replace('LIVE_', ''),
-	// 	})
-	// }
-
 	return variables
 }

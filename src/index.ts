@@ -13,7 +13,6 @@ import {
 	SomeCompanionConfigField,
 } from '@companion-module/base'
 import { AWJconnection } from './connection.js'
-import { AWJdevice } from './awjdevice/awjdevice.js'
 import { Config, DeviceCardSummaries, FoundDevice, GetConfigFields } from './config.js'
 import { initVariables, TrackedVariable } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
@@ -40,23 +39,25 @@ export const regexAWJpath = '^DeviceObject(?:\\/(@items|@props|\\$?[A-Za-z0-9_-]
 
 /**
  * This the general setup of this module:
- * 1. When module is instanciated, init is called
- * 2. in init an AWJconnection is created and AWJconnection.connect is called
- * 3. AWJconnection tries to connect to webserver and if it succeeds it calls AWJinstance.createDevice  
- *    the created device will hold the internal state and has all the methods to manipulate the state, get the right data out of state and to provide actions, feedbacks and so on
- * 4. AWJconnection opens the websocket connection to the webserver and hooks all incoming messges to be applied to the internal state
- * 5. AWJconnection downloads the state object from the API and calls AWJinstance.handleApiStateResponse with it
- * 6. handleApiStateResponse will call initSubscriptions, which sets up a lot of feedbacks, choices, variables, presets...
+ * 1. When the module is instantiated, init() is called.
+ * 2. init() creates an AWJconnection and calls connection.connect().
+ * 3. AWJconnection tries to reach the device's REST API; on success it detects the platform
+ *    (LivePremier4/Midra/generic) and calls AWJinstance.setDevice() with it.
+ * 4. setDevice() instantiates the platform-specific Constants/Choices/Actions/Feedbacks/Presets/Subscriptions
+ *    classes and assigns them onto this instance.
+ * 5. AWJconnection opens the websocket connection and applies every incoming message to the internal state
+ *    (this.state, a StateMachine).
+ * 6. AWJconnection downloads the full device state via REST and applies it, then calls
+ *    this.subscriptions.initSubscriptions(), which sets up variables, triggers feedback checks, etc.
  * Done
- * 
+ *
  * This module uses several classes:
- * @class AWJinstance - the Companion class for the module instance derived from InstanceBase
- * @class AWJconnection - methods for connecting to an AWJ device with REST and websocket
- * @class AWJState - methods of holding and manipulating state
- * @class AWJdevice - actually doing all the stuff needed for Companion, derived from State
- * @class AWJLivePremier4 - derived from AWJdevice, overriding some stuff for LivePremier devices (firmware V4+;
- *   below V4 is no longer supported - AWJconnection refuses the connection outright, see its Aquilon branch)
- * @class AWJMidra - derived from AWJdevice, overriding some stuff for Midra and Alta devices
+ * @class AWJinstance - the Companion class for the module instance, derived from InstanceBase
+ * @class AWJconnection - methods for connecting to an AWJ device via REST and websocket
+ * @class StateMachine - holds and manipulates the device/local state tree
+ * @class Actions/Feedbacks/Presets/Subscriptions/Choices (in awjdevice/) - the generic, platform-agnostic
+ *   definitions and helpers, extended per platform in livepremier4/ (firmware V4+; below V4 is no longer
+ *   supported - AWJconnection refuses the connection outright) and midra/ (Midra and Alta devices)
  */
 
 /**
@@ -81,32 +82,32 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	public state!: StateMachine
 
 	/** holds all constants for this particular type of device */
-    constants!: typeof Constants
+	constants!: typeof Constants
 
-    /** reference to the connection with the device */
-    public connection!: AWJconnection
+	/** reference to the connection with the device */
+	public connection!: AWJconnection
 
-    /** generates lists and choices from current state */
-    public choices!: Choices
+	/** generates lists and choices from current state */
+	public choices!: Choices
 
-    /** holds action definitions */
-    private actions!: Actions
+	/** holds action definitions */
+	private actions!: Actions
 
-    /** holds feedback definitions */
-    private feedbacks!: Feedbacks
+	/** holds feedback definitions */
+	private feedbacks!: Feedbacks
 
-    /** holds preset definitions */
-    private presets!: Presets
+	/** holds preset definitions */
+	private presets!: Presets
 
-    /** holds subscription definitions and checks incoming data against them */
-    public subscriptions!: Subscriptions
+	/** holds subscription definitions and checks incoming data against them */
+	public subscriptions!: Subscriptions
 
-	/** @deprecated device class */
-	public device!: AWJdevice
-	
 	/** variables storage */
 	private variables!: TrackedVariable[]
-	
+	/** True while a batched updateVariableDefinitions() call from addVariable()/removeVariable() is
+	 *  already queued for the end of the current synchronous work - see scheduleVariableDefinitionsUpdate(). */
+	private variableDefinitionsUpdatePending = false
+
 	/** the instance configuration */
 	public config!: Config
 	private oldlabel = ''
@@ -250,13 +251,13 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.config.showNotExisting = false
 			this.config.color_bright = 16777215
 			this.config.color_dark = 2239025
-			this.config.color_highlight = combineRgb(24,111,173)
-			this.config.color_green = combineRgb(0,203,56)
-			this.config.color_greendark = combineRgb(0,115,27)
-			this.config.color_greengrey = combineRgb(45,79,49)
-			this.config.color_red = combineRgb(213,0,0)
-			this.config.color_reddark = combineRgb(82,0,0)
-			this.config.color_redgrey = combineRgb(79,31,31)
+			this.config.color_highlight = combineRgb(33,133,208)
+			this.config.color_green = combineRgb(0,220,19)
+			this.config.color_greendark = combineRgb(0,160,11)
+			this.config.color_greengrey = combineRgb(70,85,72)
+			this.config.color_red = combineRgb(255,87,22)
+			this.config.color_reddark = combineRgb(216,0,0)
+			this.config.color_redgrey = combineRgb(85,70,70)
 			this.config.useOldVariableNames = false
 			this.config.allowLiveThumbnails = true
 			this.config.hotBackupEnabled = false
@@ -284,7 +285,6 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 
 		this.connection.connect(this.config.deviceaddr)
 		this.connection.updateBackupConnection()
-		//this.device = new AWJdevice(this.state, this.connection)
 	}
 
 	/**
@@ -520,16 +520,35 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 
 	/**
 	 * updates the variable definitions of this instance with the values of this.variables or the optional parameter
-	 * @param variables 
+	 * @param variables
 	 */
 	public updateVariableDefinitions(variables = this.variables) {
-		// make set with unique variableIds
-		const varIds = new Set(variables.map(variable => variable.variableId))
+		// first registration for a given variableId wins, matching the previous Array.find()-based behavior
 		const vars: CompanionVariableDefinitions<CompanionVariableValues> = {}
-		varIds.forEach(varId => {
-			vars[varId] = { name: variables.find(vari => vari.variableId === varId)?.name ?? '' }
-		})
+		for (const variable of variables) {
+			if (!(variable.variableId in vars)) {
+				vars[variable.variableId] = { name: variable.name }
+			}
+		}
 		this.setVariableDefinitions(vars)
+	}
+
+	/**
+	 * Batches addVariable()/removeVariable() calls that happen within the same synchronous stretch (e.g. a
+	 * subscription's `ini` loop registering hundreds of variables at connect) into a single
+	 * updateVariableDefinitions() call, instead of rebuilding and republishing the entire definition list
+	 * after every single one - each call was previously its own O(n) rebuild, so hundreds of calls during a
+	 * single connect made startup cost grow roughly with the square of the variable count. Deferred via a
+	 * microtask, so it fires once the current synchronous batch finishes, before the next Companion-visible
+	 * effect - variable *values* are unaffected, since those are always pushed separately via setVariableValues().
+	 */
+	private scheduleVariableDefinitionsUpdate(): void {
+		if (this.variableDefinitionsUpdatePending) return
+		this.variableDefinitionsUpdatePending = true
+		void Promise.resolve().then(() => {
+			this.variableDefinitionsUpdatePending = false
+			this.updateVariableDefinitions()
+		})
 	}
 
 	/**
@@ -550,7 +569,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		if (this.variables.some(variable => (variable.variableId === newVariable.variableId && variable.id !== newVariable.id))) { // the variable already exists from another id
 			return
 		} else {
-			this.updateVariableDefinitions()
+			this.scheduleVariableDefinitionsUpdate()
 		}
 	}
 
@@ -563,11 +582,11 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		if (remVariable === undefined && this.variables.findIndex(vari => vari.id === id) != -1) {
 			const newvars = this.variables.filter(vari => vari.id !== id)
 			this.variables = newvars
-			this.updateVariableDefinitions()
+			this.scheduleVariableDefinitionsUpdate()
 		} else if (this.variables.findIndex(vari => (vari.id === id && vari.variableId === remVariable)) != -1) {
 			const newvars = this.variables.filter(vari => !(vari.id === id && vari.variableId === remVariable))
 			this.variables = newvars
-			this.updateVariableDefinitions()
+			this.scheduleVariableDefinitionsUpdate()
 		}
 	}
 
@@ -589,7 +608,6 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	 */
 	public switchSync(action: number, attempt = 0): void {
 		const clients = this.state.get('REMOTE/system/network/websocketServer/clients')
-		// this.log('debug', 'REMOTE ' + JSON.stringify(this.device.get('REMOTE')))
 		const myid: string = this.state.get('LOCAL/socketId')
 		// The REMOTE client list and our own socket id only arrive via the websocket's separate,
 		// asynchronous INIT message, which races against the REST-based device state download that
@@ -604,13 +622,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			return
 		}
 		let syncstate: boolean
-		const myindex = clients.findIndex((elem: Record<string, unknown>) => {
-			if (elem.id === myid) {
-				return true
-			} else {
-				return false
-			}
-		})
+		const myindex = clients.findIndex((elem: Record<string, unknown>) => elem.id === myid)
 		if (myindex === -1) {
 			if (attempt < 10) {
 				setTimeout(() => this.switchSync(action, attempt + 1), 300)
@@ -655,8 +667,8 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	 * @param platform 
 	 */
 	sendXupdate(): void {
-        this.connection.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":[${this.constants.xUpdatePath}],"value":false}}`)
-        this.connection.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":[${this.constants.xUpdatePath}],"value":true}}`)
+		this.connection.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":[${this.constants.xUpdatePath}],"value":false}}`)
+		this.connection.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":[${this.constants.xUpdatePath}],"value":true}}`)
 	}
 
 	/**
@@ -706,7 +718,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			parts[6].toLowerCase() === 'pgm'
 		) {
 			if (this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pgm/preset`)) {
-				parts[6] = this.state.get(`LOCAL/screens/S${parts[3].replace(/\D/g, '')}/pgm/preset`)
+				parts[6] = this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pgm/preset`)
 				if (this.state.platform === 'midra') parts[6] = parts[6].replace('A', 'DOWN').replace('B', 'UP')
 			}
 		} else if (
@@ -717,7 +729,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			['pvw', 'prw', 'prv'].includes(parts[6].toLowerCase())
 		) {
 			if (this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pvw/preset`)) {
-				parts[6] = this.state.get(`LOCAL/screens/S${parts[3].replace(/\D/g, '')}/pvw/preset`)
+				parts[6] = this.state.get(`LOCAL/screens/A${parts[3].replace(/\D/g, '')}/pvw/preset`)
 				if (this.state.platform === 'midra') parts[6] = parts[6].replace('A', 'DOWN').replace('B', 'UP')
 			}
 		} else if (

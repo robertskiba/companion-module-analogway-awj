@@ -1,4 +1,4 @@
-﻿import {AWJinstance} from '../index.js'
+import {AWJinstance} from '../index.js'
 
 import Choices, { Choicemeta, AnchorPoint } from './choices.js'
 import {
@@ -15,7 +15,7 @@ import { AWJconnection } from '../connection.js'
 import { splitRgb, InstanceStatus } from '@companion-module/base'
 import { StateMachine } from '../state.js'
 import Constants from './constants.js'
-import { timeToSeconds, parseBoolean } from '../util.js'
+import { timeToSeconds, parseBoolean, stripMemoryPrefix } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -421,6 +421,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
+				const memory = stripMemoryPrefix(action.options.memory, 'LM')
 				let layers: { screenAuxKey: string; layerKey: string }[] = []
 				let preset: string
 				if (action.options.method === 'sel') {
@@ -458,7 +459,7 @@ export default class Actions {
 						'load',
 						'slotList',
 						'items',
-						action.options.memory,
+						memory,
 						listKey,
 						'items',
 						layer.screenAuxKey,
@@ -561,6 +562,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
+				const memory = stripMemoryPrefix(action.options.memory, 'LM')
 				let layers: { screenAuxKey: string; layerKey: string }[] = []
 				let preset: string
 				if (parseBoolean(action.options.useSelectedLayers)) {
@@ -598,7 +600,7 @@ export default class Actions {
 						'load',
 						'slotList',
 						'items',
-						action.options.memory,
+						memory,
 						listKey,
 						'items',
 						layer.screenAuxKey,
@@ -754,6 +756,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
+				const memory = stripMemoryPrefix(action.options.memory, 'MV')
 				for (const mv of action.options.multiviewer) {
 					const fullpath = [
 						'device',
@@ -762,7 +765,7 @@ export default class Actions {
 						'load',
 						'slotList',
 						'items',
-						action.options.memory,
+						memory,
 						'outputList',
 						'items',
 						mv,
@@ -4995,6 +4998,24 @@ export default class Actions {
 					default: 'sel',
 					isVisibleExpression: "$(options:mode) != 'fullscreen'",
 				},
+				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
+				{
+					// module-only convenience, not present in WebRCS - added to every "Layer Properties" action since
+					// users often don't notice a screen is locked, and a locked target silently doing nothing is confusing
+					id: 'unlockIfLocked',
+					type: 'checkbox',
+					label: 'Unlock Screen if locked?',
+					tooltip: 'Unlocks all affected screens before execution if they are locked.',
+					default: false,
+				},
+				{
+					id: 'relockAfterChange',
+					type: 'checkbox',
+					label: 'Relock after change',
+					tooltip: 'Locks all affected screens after execution if they were previously locked.',
+					default: false,
+					isVisibleExpression: '$(options:unlockIfLocked) == true',
+				},
 			],
 			callback: async (action) => {
 				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // wipe out native layer
@@ -7617,7 +7638,6 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					const path = this.instance.AWJtoJsonPath(action.options.path)
 					if (path.length > 1) {
 						this.connection.sendWSmessage(path, value)
-						//this.device.sendRawWSmessage(`{"channel":"DEVICE","data":{"path":${JSON.stringify(path)},"value":${value}}}`)
 					}
 					if (parseBoolean(action.options.xUpdate)) {
 						this.instance.sendXupdate()
@@ -8094,9 +8114,6 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					this.connection.resetReconnectInterval()
 				}
 				if (action.options.action === 'off') {
-					// this.device.sendWSmessage(path + 'pp/wakeOnLan', true)
-					// this.device.sendWSmessage(path + 'pp/xRequest', false)
-					// this.device.sendWSmessage(path + 'pp/xRequest', true)
 					this.connection.sendWSmessage(path, 'NONE', 'SHUTDOWN')
 				}
 				if (action.options.action === 'reboot') {

@@ -9,27 +9,11 @@ export default class ConstantsLivepremier4 extends Constants {
         super()
     }
 
-    static readonly maxScreens = 24
-    static readonly maxAuxScreens = 96
-    static readonly maxInputs = 256
-    static override readonly maxLayers = 128 as const
-    
-    static readonly presetTogglePath = ['device','screenAuxGroupList','items','S1','control','pp','copyMode']
-    static readonly presetToggleValueValid = false
-
-    static readonly macAddressPath = 'DEVICE/device/system/network/adapter/pp/macAddress'
-
-    static readonly xUpdatePath = '"device","screenAuxGroupList","control","pp","xUpdate"' // livepremier4
-
-    static readonly screenGroupPath = ['device', 'screenAuxGroupList']
-    static readonly auxGroupPath = ['device', 'screenAuxGroupList']
-
-    static readonly screenPath = ['device', 'screenList']
-    static readonly auxPath = ['device', 'auxiliaryList']
-
-    static readonly subSyncselectionPat = 'system/network/websocketServer/clients'
-
-    static readonly multiviewerWidgetSelectionPath = 'REMOTE/live/multiviewers/widgetSelection/widgetIds'
-    
-    
+    // The only two constants that actually differ from the base class's own Aquilon/LivePremier defaults -
+    // LivePremier4 uses the unified 'screenAuxGroupList' (screenGroupPath/auxGroupPath already point there in
+    // the base class) where the base's own copyMode/xUpdate paths still use 'screenGroupList'. Every other
+    // field previously duplicated here was byte-identical to its inherited base value - removed to avoid
+    // implying a difference that doesn't exist.
+    static override readonly presetTogglePath = ['device','screenAuxGroupList','items','S1','control','pp','copyMode']
+    static override readonly xUpdatePath = '"device","screenAuxGroupList","control","pp","xUpdate"' // livepremier4
 }

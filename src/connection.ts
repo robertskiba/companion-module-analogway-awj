@@ -25,7 +25,6 @@ class AWJconnection {
 	// and avoids a burst of near-instant retry attempts against a device that just got a Wake-on-LAN packet
 	// and needs real time to boot before it can answer at all.
 	private readonly reconnectmin = 10_000
-	private readonly reconnectmax = 10_000
 	private reconnectinterval = this.reconnectmin
 	private countdownTimer: ReturnType<typeof setInterval> | undefined
 	// Detects a "zombie" connection - most commonly after the host PC wakes from sleep/standby, where the
@@ -101,9 +100,6 @@ class AWJconnection {
 			if (this.countdownTimer) clearInterval(this.countdownTimer)
 			this.connect(this.addr)
 		}, this.reconnectinterval)
-
-		this.reconnectinterval *= 1.2
-		if (this.reconnectinterval > this.reconnectmax) this.reconnectinterval = this.reconnectmax
 	}
 
 	bufferFragment(data: string): void {
@@ -134,19 +130,13 @@ class AWJconnection {
 			address = 'http://' + address
 		}
 		const urlObj = new URI(address)
-		if (urlObj.is('domain')) {
-			//console.log('URL Domain', urlObj)
-		} else if (urlObj.is('ipv4')) {
-			//console.log('URL ipv4', urlObj)
-		} else if (urlObj.is('ipv6')) {
-			//console.log('URL ipv6', urlObj)
-		} else {
+		if (!urlObj.is('domain') && !urlObj.is('ipv4') && !urlObj.is('ipv6')) {
 			this.instance.log('warn', 'URL seems invalid')
 		}
-		if (urlObj.protocol() === 'http' && urlObj.port === null) {
+		if (urlObj.protocol() === 'http' && urlObj.port() === '') {
 			urlObj.port('80')
 		}
-		if (urlObj.protocol() === 'https' && urlObj.port === null) {
+		if (urlObj.protocol() === 'https' && urlObj.port() === '') {
 			urlObj.port('443')
 		}
 		if (urlObj.protocol() !== 'http' && urlObj.protocol() !== 'https') {
@@ -382,7 +372,6 @@ class AWJconnection {
 				...fetchDefaultParameters,
 				retry: 0,
 			}).json<{[name: string]: any}>()
-			// console.log('auth response', authResponse)
 			const isAuth = authResponse.authentication?.isAuthenticationEnabled
 			const deviceObj = authResponse.device || authResponse.devices?.leader || undefined
 			if (isAuth !== undefined && deviceObj !== undefined) {
@@ -391,7 +380,6 @@ class AWJconnection {
 				const handleApiStateResponse = async (res: {[name: string]: any}): Promise<void> => {
 					if (res.device) {
 						this.instance.state.set('DEVICE', res)
-						//console.log('rest get API device state result')
 						// A Follower can be configured/detected (present in .followers) while the link itself is
 						// currently deactivated (e.g. temporarily unplugged/standalone) - isLinkActive, from the
 						// same auth/status response's separate .system object, is the actual live signal for
@@ -408,7 +396,7 @@ class AWJconnection {
 							return
 						}
 
-						let deviceroot = system.deviceList?.items['1'].pp
+						let deviceroot = system.deviceList?.items?.['1']?.pp
 						if (!deviceroot) deviceroot = system.pp
 						if (!deviceroot) {
 							this.instance.updateStatus(InstanceStatus.ConnectionFailure)
@@ -696,8 +684,6 @@ class AWJconnection {
 				}
 
 				const setupDevice = async () => {
-					//const _device = setDevice()
-
 					// A previous websocket instance (e.g. from an earlier attempt during a reconnect storm,
 					// with reconnects starting as fast as every 100ms) might still be open/connecting here -
 					// overwriting the reference without closing it first leaks the underlying OS socket and
@@ -738,7 +724,6 @@ class AWJconnection {
 					})
 
 					this.websocket.on('close', () => {
-						// console.log('ws closed', ev.toString(), this.shouldBeConnected ? 'should be connected' : 'should not be connected')
 						if (this.heartbeatInterval) {
 							clearInterval(this.heartbeatInterval)
 							this.heartbeatInterval = undefined
@@ -775,18 +760,7 @@ class AWJconnection {
 					})
 
 					this.websocket.on('message', (data, isBinary) => {
-						// console.log('debug', 'incoming WS message '+ data.toString().substring(0, 400))
-						if (
-							isBinary != true
-						) {
-							// if (
-							// 	data.toString().match(/"op":"replace","path":"\/system\/status\/current(Device)?Time","value":/) === null &&
-							// 	data.toString().match(/"op":"(add|remove)","path":"\/system\/temperature\/externalTempHistory\//) === null &&
-							// 	data.toString().match(/"device","system",("deviceList","items","[1-4]",)?"temperature",/) === null &&
-							// 	data.toString().match(/"device","timerList","items","TIMER_\d+","status","pp","value"/) === null
-							// ) {
-							// 	console.log('debug', 'incoming WS message '+ data.toString().substring(0, 400))
-							// }
+						if (isBinary != true) {
 							this.instance.state.apply(JSON.parse(data.toString()))
 						}
 					})
@@ -844,10 +818,7 @@ class AWJconnection {
 				this.disconnect()
 			}
 
-			
-
 		} catch (error) {
-			// console.log('ws close and retry in', this.reconnectinterval)
 			this.disconnect()
 			let logMessage: string
 			let buildMessage: (secondsLeft: number) => string
@@ -895,7 +866,7 @@ class AWJconnection {
 			.finally(() => { this.isScanningNetwork = false })
 	}
 
-	async downloadDevicestate(urlObj) {
+	async downloadDevicestate(urlObj: URI) {
 		let downloaded = 0
 		this.instance.updateStatus(InstanceStatus.Connecting, `Syncing`)
 		let response: any
@@ -928,77 +899,53 @@ class AWJconnection {
 	restPOST(href: string, message: string): void {
 		const urlObj = this.getURLobj(href)
 		if (urlObj === null) return
-		if (urlObj.username() !== 'Admin' && this.authcookie.length === 0) {
-			ky.post(`${urlObj.protocol()}://${urlObj.host()}${urlObj.resource()}`,{
-				body: message,
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				...fetchDefaultParameters,
-				redirect: 'error'
-			})
-				//.ok((res) => res.status < 400)
-			.then((res) => {
-				this.instance.log('debug', 'http POST successful ' + res.status)
-			})
-			.catch((err) => {
-				this.instance.log('debug', 'http POST failed ' + err)
-			})
-		} else if (this.authcookie.length > 0) { 
-			ky.post(`${urlObj.protocol()}://${urlObj.host()}${urlObj.resource()}`,{
+
+		const postData = (cookie: string): Promise<void> =>
+			ky.post(`${urlObj.protocol()}://${urlObj.host()}${urlObj.resource()}`, {
 				body: message,
 				headers: {
 					'Content-Type': 'application/json',
-					'Cookie': this.authcookie
+					...(cookie ? { 'Cookie': cookie } : {}),
 				},
 				...fetchDefaultParameters,
-				redirect: 'error'
+				redirect: 'error',
 			})
-				//.ok((res) => res.status < 400)
-			.then((res) => {
-				this.instance.log('debug', 'http POST successful ' + res.status)
-			})
-			.catch((err) => {
-				this.instance.log('debug', 'http POST failed ' + err)
-			})
-		} else if (urlObj.username() === 'Admin' && this.authcookie.length === 0) {
-			ky.post(`${urlObj.protocol()}://${urlObj.host()}/auth/login`,{
+				.then((res) => {
+					this.instance.log('debug', 'http POST successful ' + res.status)
+				})
+				.catch((err) => {
+					this.instance.log('debug', 'http POST failed ' + err)
+				})
+
+		if (this.authcookie.length > 0) {
+			postData(this.authcookie)
+		} else if (urlObj.username() !== 'Admin') {
+			postData('')
+		} else {
+			// URL carries "Admin" credentials but no session cookie yet - log in first, then POST regardless
+			// of whether the login actually returned a cookie (a failed login still surfaces as a failed POST
+			// via the device's own auth rejection, same as before this was factored out).
+			ky.post(`${urlObj.protocol()}://${urlObj.host()}/auth/login`, {
 				body: JSON.stringify({ password: urlObj.password() }),
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				...fetchDefaultParameters,
 				redirect: 'manual',
-				throwHttpErrors: false
+				throwHttpErrors: false,
 			})
-				//.ok((res) => res.status < 400)
-			.then((res) => {
-				// Got successful auth response
-				// Note: res.headers is a Headers instance (fetch API), not a plain object - must use .get()
-				const setCookie = res.headers.get('set-cookie')
-				if (setCookie) {
-					this.authcookie = setCookie
-					this.instance.log('info', 'Login to device is successful')
-				}
-				ky.post(`${urlObj.protocol()}://${urlObj.host()}${urlObj.resource()}`,{
-					body: message,
-					headers: {
-						'Content-Type': 'application/json',
-						'Cookie': this.authcookie
-					},
-					...fetchDefaultParameters,
-					redirect: 'error'
-					})
-					.then((res) => {
-						this.instance.log('debug', 'http POST successful ' + res.status)
-					})
-					.catch((err) => {
-						this.instance.log('debug', 'http POST failed ' + err)
-					})
-			})
-			.catch((err) => {
-				this.instance.log('debug', 'http POST failed ' + err)
-			})
+				.then((res) => {
+					// res.headers is a Headers instance (fetch API), not a plain object - must use .get()
+					const setCookie = res.headers.get('set-cookie')
+					if (setCookie) {
+						this.authcookie = setCookie
+						this.instance.log('info', 'Login to device is successful')
+					}
+					return postData(this.authcookie)
+				})
+				.catch((err) => {
+					this.instance.log('debug', 'http POST failed ' + err)
+				})
 		}
 	}
 
@@ -1099,20 +1046,12 @@ class AWJconnection {
 		this.shouldBeConnected = false
 		this.hadError = false
 		this.websocket?.close()
-		//this.websocket = null
-		// this.tcpsocket.destroy()
 		this.buffer = ''
 	}
 
 	destroy(): void {
-		clearTimeout(this.wsTimeout)
-		if (this.countdownTimer) clearInterval(this.countdownTimer)
-		this.shouldBeConnected = false
-		this.hadError = false
-		this.websocket?.close()
+		this.disconnect()
 		this.websocket = null
-		//this.tcpsocket.destroy()
-		this.buffer = ''
 		this.authcookie = ''
 		this.instance.log('debug', 'Connection has been destroyed due to removal or disable by user')
 	}
@@ -1271,6 +1210,13 @@ class AWJconnection {
 		// create magic packet
 		const magicPacket = this.createMagicPacket(mac)
 		const socket = dgram.createSocket("udp4")
+		// A dgram Socket is a Node EventEmitter - an unhandled 'error' event (e.g. a bind failure or an
+		// unreachable broadcast route) throws and crashes the whole module process by default, not just this
+		// one wake-on-LAN call, so this needs its own handler regardless of how unlikely the error is.
+		socket.on('error', (err) => {
+			this.instance.log('error', 'Could not send wake on lan packet. ' + err)
+			socket.close()
+		})
 		socket.bind(() => {
 			socket.setBroadcast(true)
 			socket.send(magicPacket, 9, '255.255.255.255', (err) => {

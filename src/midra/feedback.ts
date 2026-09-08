@@ -153,7 +153,10 @@ export default class FeedbacksMidra extends Feedbacks  {
 						else continue
 					}
 
-					if ((expectedSource === 'NONE' || expectedSource?.toString().startsWith('BACKGROUND') && this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === expectedSource)) {
+					if (
+						(expectedSource === 'NONE' || expectedSource?.toString().startsWith('BACKGROUND'))
+						&& this.state.get([...presetpath, 'source', 'pp', 'inputNum']) === expectedSource
+					) {
 						return true
 					}
 
@@ -273,7 +276,12 @@ export default class FeedbacksMidra extends Feedbacks  {
 		const deviceInputFreeze = super.deviceInputFreeze
 
 		deviceInputFreeze.callback = (feedback) => {
-			const input = feedback.options.input?.toString().replace('LIVE', 'INPUT') || ''
+			// The dropdown's own choices (inherited unchanged from the base feedback) use this module's short
+			// 'IN{n}' convention (e.g. 'IN3', no underscore) - '.replace(\'LIVE\', \'INPUT\')' never matched
+			// that, silently reading a nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'. Same
+			// lenient bare-number/'IN{n}'/'INPUT_{n}' extraction as the matching action's fix.
+			const match = (feedback.options.input ?? '').toString().match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			const input = match ? `INPUT_${match[1]}` : ''
 			const freeze = this.state.get('DEVICE/device/inputList/items/' + input + '/control/pp/freeze')
 			if (freeze) {
 				this.instance.setVariableValues({ ['frozen_' + input]: '*'})
@@ -284,6 +292,27 @@ export default class FeedbacksMidra extends Feedbacks  {
 		}
 
 		return deviceInputFreeze
+	}
+
+	/**
+	 * MARK: deviceInputKeyingStatus - Midra
+	 * Base implementation hardcodes the Aquilon-only raw id 'IN_{n}' (matching that platform's own convention,
+	 * see the base's own 'Set Input Keying' action) - Midra's real state key is 'INPUT_{n}' (getLiveInputArray()'s
+	 * own default prefix), so left unoverridden this feedback always read a nonexistent path and stayed stuck
+	 * false. Same fix/reasoning as deviceInputFreeze above.
+	 */
+	get deviceInputKeyingStatus() {
+		const deviceInputKeyingStatus = super.deviceInputKeyingStatus
+
+		deviceInputKeyingStatus.callback = (feedback) => {
+			const match = (feedback.options.input ?? '').toString().match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			if (!match) return false
+			const input = `INPUT_${match[1]}`
+			const plug = this.state.get('DEVICE/device/inputList/items/' + input + '/status/pp/plug')
+			return this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', plug, 'settings', 'keying', 'control', 'pp', 'mode']) === feedback.options.mode
+		}
+
+		return deviceInputKeyingStatus
 	}
 
 	// MARK: deviceStreaming - Midra

@@ -8,7 +8,7 @@ import {
 } from '@companion-module/base'
 import { splitRgb } from '@companion-module/base'
 import Actions from '../awjdevice/actions.js'
-import { parseBoolean } from '../util.js'
+import { parseBoolean, stripMemoryPrefix } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -179,6 +179,7 @@ export default class ActionsLivepremier4 extends Actions {
 
 		returnAction.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, { id: 'sel', label: 'All Selected Screens' }, ...this.choices.getScreenAuxChoices()]
 		returnAction.callback = (action) => {
+			const memory = stripMemoryPrefix(action.options.memory, 'SM')
 			const screens = action.options.screens === 'first'
 				? this.choices.getSelectedScreens().slice(0, 1)
 				: this.choices.getChosenScreenAuxes(action.options.screens)
@@ -195,7 +196,7 @@ export default class ActionsLivepremier4 extends Actions {
 					'load',
 					'slotList',
 					'items',
-					action.options.memory,
+					memory,
 					listKey,
 					'items',
 					screen,
@@ -220,7 +221,7 @@ export default class ActionsLivepremier4 extends Actions {
 
 				const presetLetter = this.choices.getPreset(screen, action.options.preset)
 				const idPath = ['DEVICE', 'device', 'presetBank', 'status', 'presetId', listKey, 'items', screen, 'presetList', 'items', presetLetter, 'pp', 'id']
-				waitPromises.push(this.waitForStateValue(idPath, (v) => String(v) === String(action.options.memory)))
+				waitPromises.push(this.waitForStateValue(idPath, (v) => String(v) === String(memory)))
 
 				if (parseBoolean(action.options.selectScreens)) {
 					if (this.state.syncSelection) {
@@ -338,7 +339,7 @@ export default class ActionsLivepremier4 extends Actions {
 		// (e.g. "S1S2") only ever uses the first one, per explicit user decision (2026-08-28).
 		returnAction.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, ...this.choices.getScreenAuxChoices()]
 		returnAction.callback = (action) => {
-			const slot = action.options.memory === 'next' ? this.choices.getNextAvailableScreenMemorySlot() : action.options.memory
+			const slot = action.options.memory === 'next' ? this.choices.getNextAvailableScreenMemorySlot() : stripMemoryPrefix(action.options.memory, 'SM')
 			if (!slot) return Promise.resolve()
 
 			// Serialize keyed by the memory slot itself (a shared resource, e.g. two operators racing to save
@@ -424,7 +425,7 @@ export default class ActionsLivepremier4 extends Actions {
 		deviceMasterMemory.callback = (action) => {
 			const bankpath = ['device', 'masterPresetBank']
 			const list = 'bankList'
-			const memorypath = ['items', action.options.memory]
+			const memorypath = ['items', stripMemoryPrefix(action.options.memory, 'MM')]
 			const loadpath = ['control', 'load', 'slotList']
 
 			const filterpath = this.state.get(['DEVICE', ...bankpath, list, ...memorypath, 'status', 'pp', 'isShadow']) ? ['status', 'shadow', 'pp'] : ['status', 'pp']

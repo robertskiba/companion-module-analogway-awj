@@ -782,7 +782,7 @@ export default class Choices {
 		return this.placeholderIfEmpty(this.getMultiviewerMemoryArray().map((mem: Choicemeta) => {
 			return {
 				id: mem.id,
-				label: `VM${mem.id}${mem.label === '' ? '' : ' - ' + mem.label}`
+				label: `MV${mem.id}${mem.label === '' ? '' : ' - ' + mem.label}`
 			}
 		}), 'No Multiviewer Memories configured')
 	}
@@ -1146,13 +1146,13 @@ export default class Choices {
 				pst = this.state.get('LOCAL/presetMode')
 			}
 		}
-		if (pst && pst.match(/^pgm|program$/i) && !fullName) {
+		if (pst && pst.match(/^(pgm|program)$/i) && !fullName) {
 			return 'pgm'
-		} else if (pst && pst.match(/^pvw|^prw|^prv|preview$/i) && !fullName) {
+		} else if (pst && pst.match(/^(pvw|prw|prv|preview)$/i) && !fullName) {
 			return 'pvw'
-		} else if (pst && pst.match(/^pgm|program$/i) && fullName) {
+		} else if (pst && pst.match(/^(pgm|program)$/i) && fullName) {
 			return 'PROGRAM'
-		} else if (pst && pst.match(/^pvw|^prw|^prv|preview$/i) && fullName) {
+		} else if (pst && pst.match(/^(pvw|prw|prv|preview)$/i) && fullName) {
 			return 'PREVIEW'
 		} else if (fullName) {
 			return 'PREVIEW'
@@ -1168,15 +1168,15 @@ export default class Choices {
 	 * @returns A or B or '', whichever is the actual preset for program or preview, during fades the preset is changed only at the end of the fade
 	 */
 	public getPreset(screen: string, preset: string): string {
-		if (screen.match(/^S|A\d+$/) === null) return ''
+		if (screen.match(/^(S|A)\d+$/) === null) return ''
 		// PVW and PRV are accepted for backwards compatibility / typo-tolerance alongside the current PRW -
 		// never remove them
-		if (preset.match(/^A|B|PGM|PVW|PRW|PRV|SEL$/i) === null) return ''
+		if (preset.match(/^(A|B|PGM|PVW|PRW|PRV|SEL)$/i) === null) return ''
 		if (preset.toLowerCase() === 'sel') {
 			preset = this.getPresetSelection()
 		}
 		let ret: string
-		if (preset.match(/^A|B$/i)) {
+		if (preset.match(/^(A|B)$/i)) {
 			ret = preset.toUpperCase()
 		} else {
 			// the internal state key is always 'pvw', regardless of whether the user typed PVW, PRW or PRV
@@ -1194,8 +1194,8 @@ export default class Choices {
 	 * @returns program or preview, during fades the preset is changed only at the end of the fade
 	 */
 	public getPresetRev(screen: string, preset: string, fullName = false): string | null {
-		if (screen.match(/^S|A\d+$/) === null) return null
-		if (preset.match(/^A|B$/i) === null) return null
+		if (screen.match(/^(S|A)\d+$/) === null) return null
+		if (preset.match(/^(A|B)$/i) === null) return null
 		let ret: string
 		if (this.state.get(`LOCAL/screens/${screen}/pgm/preset`) === preset.toUpperCase()) {
 			ret = fullName ? 'PROGRAM' : 'pgm'
@@ -1209,9 +1209,13 @@ export default class Choices {
 	 * Splits any array elements that look like multiple concatenated screen/aux ids (e.g. a value like
 	 * 'S1S2A1' coming from an expression built without a separator) into their individual ids (S1, S2, A1),
 	 * so users can build such lists without needing a separator character. Leaves 'all'/'sel' keywords as-is.
-	 * Ids that don't correspond to a currently existing screen/aux are silently dropped, since they could
-	 * otherwise only come from an expression typo or an out-of-range value (real dropdown selections are
-	 * already constrained to real choices, and 'allowInvalidValues' only relaxes that in expression mode).
+	 * A bare number with no 'S'/'A' letter at all (e.g. '1') is treated as shorthand for a single Screen
+	 * ('S1') - unambiguous only because it's a single token; concatenating several bare numbers together
+	 * would be ambiguous (is '12' Screen 12, or Screens 1+2?), so multiple targets still require the explicit
+	 * 'S'/'A' letter form. Ids that don't correspond to a currently existing screen/aux are silently dropped,
+	 * since they could otherwise only come from an expression typo or an out-of-range value (real dropdown
+	 * selections are already constrained to real choices, and 'allowInvalidValues' only relaxes that in
+	 * expression mode).
 	 * @param input array of strings to check
 	 * @returns array with any concatenated ids split into individual, currently existing ids
 	 */
@@ -1219,6 +1223,7 @@ export default class Choices {
 		const validIds = new Set([...this.getScreensArray(), ...this.getAuxArray()].map((s) => s.id))
 		return input.flatMap((el) => {
 			if (el === 'all' || el === 'sel') return [el]
+			if (/^\d+$/.test(el)) return validIds.has(`S${el}`) ? [`S${el}`] : []
 			const tokens = el.match(/[SA]\d+/g)
 			if (tokens === null) return [el]
 			return tokens.filter((token) => validIds.has(token))
@@ -1605,7 +1610,7 @@ export default class Choices {
 		if (layer.match(/top/i)) {
 			return ['layerList', 'items', '48']
 		}
-		else if (layer.match(/^bg$|bkg|background|native/i)) {
+		else if (layer.match(/^(bg|bkg|background|native)$/i)) {
 			return ['layerList', 'items', 'NATIVE']
 		}
 		else {

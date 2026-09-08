@@ -5,6 +5,7 @@ import {
 	CompanionInputFieldDropdown,
 	combineRgb,
 } from '@companion-module/base'
+import { stripMemoryPrefix } from '../util.js'
 
 
 /** Helper type for replacing the very generic options with the real structure of options */
@@ -96,7 +97,8 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 		deviceScreenMemory.callback =  (feedback) => {
 			const screens = this.choices.getChosenScreensSupportedByScreenMemories(feedback.options.screens)
 			const presets = feedback.options.preset === 'all' ? ['pgm', 'pvw'] : [feedback.options.preset]
-			
+			const memory = stripMemoryPrefix(feedback.options.memory, 'SM')
+
 			for (const screen of screens) {
 				const screeninfo = this.choices.getScreenInfo(screen)
 				for (const preset of presets) {
@@ -111,11 +113,15 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 							'pp'
 						]
 					if (
-						this.state.get([...propPath, 'id']) == feedback.options.memory
+						this.state.get([...propPath, 'id']) == memory
 					) {
 						if (feedback.options.unmodified === 2) return true
-						const notModified = this.state.get([...propPath, 'isNotModified'])
-						if (notModified == feedback.options.unmodified) {
+						// isNotModified is true when the memory is UNCHANGED - the "is Modified" option's 0/1
+						// values mean the opposite ("only if unmodified"/"only if modified"), so the raw flag
+						// has to be inverted before comparing (previously compared directly, which made both
+						// choices show the opposite of what they claimed to check for).
+						const modified = this.state.get([...propPath, 'isNotModified']) ? 0 : 1
+						if (modified == feedback.options.unmodified) {
 							return true
 						}
 					}

@@ -150,7 +150,7 @@ class StateMachine {
 				JSON.stringify(data).match(/"device","system",("deviceList","items","\d+",)?"temperature",/) === null &&
 				data.path.toString().match(/device,timerList,items,TIMER_\d+,status,pp,value/) === null
 			) {
-				console.log('last msg', JSON.stringify(data))
+				this.instance.log('debug', 'last msg ' + JSON.stringify(data))
 				this.storeLastMsg({ path: data.path, value: data.value })
 				if (this.instance.isRecording && JSON.stringify(data.value).length <= 132) {
 					const newoptions = { xUpdate: false }
@@ -198,7 +198,7 @@ class StateMachine {
 					this.set(data.patch.path, data.patch.value, this.state[channel])
 					feedbacks = this.instance.subscriptions.checkForAction(this.concat(channel, data.patch.path), data.patch.value)
 				} catch (error) {
-					console.log('could not replace JSON\n', error)
+					this.instance.log('error', 'could not replace JSON\n' + error)
 				}
 			}
 			if (data.patch.op === 'add') {
@@ -206,7 +206,7 @@ class StateMachine {
 					this.set(data.patch.path, data.patch.value, this.state[channel])
 					feedbacks = this.instance.subscriptions.checkForAction(this.concat(channel, data.patch.path), data.patch.value)
 				} catch (error) {
-					console.log('could not add JSON\n', error)
+					this.instance.log('error', 'could not add JSON\n' + error)
 				}
 			}
 			if (data.patch.op === 'remove') {
@@ -214,7 +214,7 @@ class StateMachine {
 					this.delete(data.patch.path, this.state[channel])
 					feedbacks = this.instance.subscriptions.checkForAction(this.concat(channel, data.patch.path))
 				} catch (error) {
-					console.log('could not remove element from JSON\n', error)
+					this.instance.log('error', 'could not remove element from JSON\n' + error)
 				}
 			}
 		} else if (data?.channel === 'INIT') {
@@ -227,7 +227,6 @@ class StateMachine {
 			}
 		}
 		if (feedbacks && Array.isArray(feedbacks)) {
-			// console.log('checking feedbacks from external msg', feedbacks)
 			feedbacks.forEach((fb) => {
 				if (fb.startsWith('id:')) {
 					this.instance.checkFeedbacksById(fb.substring(3))
@@ -250,8 +249,6 @@ class StateMachine {
 		// if we are at the leaf -> update
 		if (patharray.length === 0) {
 			obj[first] = value
-			//console.log('state update')
-			//console.log('\nstate update', JSON.stringify(this.stateobj))
 		} else {
 			// if we are at a non-existent branch -> create
 			if (obj[first] == undefined) {
@@ -307,7 +304,6 @@ class StateMachine {
 			} else {
 				delete obj[first]
 			}
-			// console.log('\nstate update', JSON.stringify(this.stateobj).substring(0, 500))
 		} else {
 			// if we are at a non-existent branch -> nothing to delete
 			if (obj[first] == undefined) {
