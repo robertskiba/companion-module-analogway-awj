@@ -144,10 +144,7 @@ Every bug fix across the V3 development line, grouped by area.
 **Testpatterns**
 - Midra's "Set Testpattern" Screen Canvas group never actually worked - the wrong internal id was being sent to the device.
 - "Set Testpattern"/"Testpattern Active" fields (Screen/Output/Input, Pattern, and the pattern-specific option groups) didn't reliably show/hide.
-- "Disable all active Testpatterns" didn't also clear Raster Boxes (LivePremier/LivePremier4), leaving them on and easy to forget before a show.
-
-**Show Thumbnail**
-- Opening the preset browser for the Thumbnail preset group could fire a burst of requests at the device all at once (one per preset shown) and leave background pollers running forever with nothing to stop them.
+- "Disable all active Testpatterns" didn't also clear Raster Boxes (LivePremier), leaving them on and easy to forget before a show.
 
 **Presets & UI**
 - Several Multiviewer Memory presets all collapsed into a single preset due to an operator-precedence bug, instead of one per memory.
@@ -163,5 +160,5 @@ Every bug fix across the V3 development line, grouped by area.
 
 **Other**
 - "Select Layer Source" threw an outright error on Midra/Zenith devices due to a variable mix-up.
-- "Set Transition Time" wrote the duration to the wrong T-Bar direction on LivePremier/LivePremier4, causing inconsistent Take transition timing.
+- "Set Transition Time" wrote the duration to the wrong T-Bar direction on LivePremier, causing inconsistent Take transition timing.
 - Several dead/duplicate action registrations left over from an earlier migration were cleaned up.

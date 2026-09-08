@@ -145,7 +145,7 @@ This release completes the "Layer Properties" action family (now covering nearly
 - **'PRV' is now accepted as a typo-tolerant alias for Preview** everywhere 'PVW'/'PRW' were already accepted, and a confusing duplicate "Preview (legacy value...)" dropdown entry was removed – existing configs keep working unchanged.
 - **Midra's built-in multiviewer (MTVW) no longer appears in any Output dropdown** (Testpattern, GPO, Raster Box, etc.), matching LivePremier's own architecture where the multiviewer was never mixed into the physical-output list in the first place. It remains fully reachable through the dedicated Multiviewer dropdowns.
 - **"LIVE - Take" and "LIVE - Cut" renamed to "LIVE - Transition TAKE" and "LIVE - Transition CUT"** for clarity – purely a display-name change, existing buttons keep working unchanged.
-- **"Backups - Set Backup Set to Source"/"Set Auto Mode" and "Layer Properties - Keying" now detect insufficient device firmware** (LivePremier/LivePremier4 older than firmware V6, where these features don't exist yet): instead of silently failing, the action's options are replaced with a clear notice to update the device's firmware.
+- **"Backups - Set Backup Set to Source"/"Set Auto Mode" and "Layer Properties - Keying" now detect insufficient device firmware** (LivePremier older than firmware V6, where these features don't exist yet): instead of silently failing, the action's options are replaced with a clear notice to update the device's firmware.
 - **Backup and "Layer Properties - Keying" are no longer offered on Midra/Alta** (Zenith 100/200) – live-confirmed against a Zenith 200 simulator that neither concept exists on that platform; previously they were offered there but never actually worked.
 
 ## Reliability
@@ -183,20 +183,20 @@ This release completes the "Layer Properties" action family (now covering nearly
 
 ## Changed
 
-- **"Disable all active Testpatterns"** (in the testpattern action) now also turns off all Raster Boxes (Format/AOI) on LivePremier/LivePremier4 – previously these stayed on independently.
+- **"Disable all active Testpatterns"** (in the testpattern action) now also turns off all Raster Boxes (Format/AOI) on LivePremier – previously these stayed on independently.
 - **"Set Testpattern" fields** now reliably show/hide correctly, without the Output/Screen/Input/Pattern dropdowns losing their expression/variable capability.
 - **Preset categories** renamed consistently to an "Area - Description" scheme (e.g. "Multiviewer - Select Widgets", "Screens - Lock Screens") and sorted alphabetically.
 
 ## New Actions
 
 - **Assign Image from Library to Foreground/Background Frame** (Midra only) – assigns a Still Image Library item to a screen's Foreground/Background Frame slot.
-- **Set LivePremier(≤V3)/LivePremier Testpattern Raster Box** (LivePremier/LivePremier4) – enables, disables, or toggles the Format/AOI Raster Box overlay on an output, independent of the testpattern enable state.
+- **Set LivePremier(≤V3)/LivePremier Testpattern Raster Box** (LivePremier) – enables, disables, or toggles the Format/AOI Raster Box overlay on an output, independent of the testpattern enable state.
 
 ## New Feedbacks
 
 - **Show Thumbnail** (all platforms) – see above.
 - **Midra 4K/LivePremier(≤V3)/LivePremier Testpattern Active** (all platforms) – shows whether the selected testpattern is currently active on the selected screen/output/input.
-- **LivePremier(≤V3)/LivePremier Testpattern Raster Box Active** (LivePremier/LivePremier4) – shows whether the selected Raster Box (Format/AOI) is currently enabled on an output.
+- **LivePremier(≤V3)/LivePremier Testpattern Raster Box Active** (LivePremier) – shows whether the selected Raster Box (Format/AOI) is currently enabled on an output.
 
 In addition, we checked the compliance to Midra Systems by using the Midra Simulator. Fixed a lot of new and old bugs and special behaviours of Midra. 
 
@@ -239,7 +239,7 @@ In addition, we checked the compliance to Midra Systems by using the Midra Simul
 - Selection-derived variables (`SelectedLayer.*`, `SelectedScreen.*`, global Anchor Point) could stay blank after a reconnect until the user made a new selection, since that part of the protocol only streams changes, not an initial snapshot.
 - A crash risk in the sync-on-connect logic when switching sync mode before the device's client list was fully populated.
 - Several dead/duplicate action registrations left over from the base migration.
-- A copy-paste bug in the input-selection presets (LivePremier/LivePremier4) referencing a field that only exists on Midra.
+- A copy-paste bug in the input-selection presets (LivePremier) referencing a field that only exists on Midra.
 - Audio input routing numbering on multi-device linked systems (continuous video numbering vs. per-device audio address padding).
 
 ### Known limitations
@@ -275,7 +275,7 @@ The actual goal of the migration — dropdown-style fields can now be set via Co
 - **Multiviewer Memories presets all collapsed into one preset.** Operator-precedence bug in a ternary (`'Load VM' + memory.id + multimulti ? x : y` parses as `(concat) ? x : y`), so every memory's preset used the same object key and only the last one survived. (`src/awjdevice/presets.ts`)
 - **Audio input routing numbering wrong on multi-card devices with non-max-capacity cards** (LivePremier v4, e.g. Aquilon C+/RS-series). AWJ audio addressing reserves a fixed 8-address block per physical card slot, independent of the slot's real input count, while video input numbering is continuous — the two only coincide when every card is at max (8) capacity. Added `getAudioInputSlotCapacities`/`audioInputNumberToVideoInputNumber` in `src/livepremier4/choices.ts` to translate correctly; live-verified against multiple card configurations on the simulator. (Not yet applied to the pre-v4-firmware `src/livepremier/choices.ts` path or to audio *outputs* — see Known issues.)
 - **"Select Layer Source" throws `"e.options[r] is not iterable"` on Midra/Zenith devices.** A template literal used the wrong variable (`` `layer${screen}` `` where `screen` had been reassigned to an object instead of its id string), producing a field id that never exists. Matches upstream [issue #41](https://github.com/bitfocus/companion-module-analogway-awj/issues/41). (`src/midra/actions.ts`)
-- **"Set Transition Time" wrote the duration to the wrong T-Bar direction** on LivePremier/LivePremier4, causing inconsistent Take transition timing. Two actions (`deviceTakeScreen` and `deviceTakeTime`) disagreed on which physical T-Bar direction (up/down) corresponds to "PGM" for a given state; fixed to agree. Matches upstream [issue #52](https://github.com/bitfocus/companion-module-analogway-awj/issues/52). (`src/awjdevice/actions.ts`)
+- **"Set Transition Time" wrote the duration to the wrong T-Bar direction** on LivePremier, causing inconsistent Take transition timing. Two actions (`deviceTakeScreen` and `deviceTakeTime`) disagreed on which physical T-Bar direction (up/down) corresponds to "PGM" for a given state; fixed to agree. Matches upstream [issue #52](https://github.com/bitfocus/companion-module-analogway-awj/issues/52). (`src/awjdevice/actions.ts`)
 - **Connecting to a password-protected device crashed the entire module process, or silently never logged in.** Confirmed fixed and live-verified against a password-protected simulator. Three causes, all fixed, matching upstream [issue #40](https://github.com/bitfocus/companion-module-analogway-awj/issues/40):
   1. The login request used `redirect: 'error'` + default `throwHttpErrors: true`, treating the redirect some firmware versions send back after a successful login as a hard failure before the response could even be inspected. Now `redirect: 'manual'` + `throwHttpErrors: false`.
   2. The error-handling path used `return Promise.reject(error)` inside `connect()`, but nothing calling `connect()` ever `.catch()`es its result — turning every login failure into an unhandled promise rejection, which crashes the Node process. Now returns normally after logging + a clear `AuthenticationFailure` status, instead of silently crash-looping.
@@ -330,7 +330,7 @@ Unlike LivePremier4's flat 192-slot Image Store, Midra has no generic per-layer 
 
 ### New: generic device variables (`Device.Series`, `Device.Model`, `Device.Name`, `Device.Status.Temperature`, `Device.Status.Fans`) (2026-08-21)
 
-Added for all platforms (LivePremier, LivePremier4, Midra), useful for IF/THEN-style feedback/trigger logic. `Device.Series` (e.g. "Midra 4K", "LivePremier", "Alta 4K") and `Device.Model` (e.g. "Eikos 4k", "Aquilon RS2") are resolved once at connect using the device-family detection already used for the connect log line. `Device.Name` live-tracks the device's configurable label. `Device.Status.Temperature` reuses AWJ's own aggregate temperature alarm field (`NONE`/`WARNING`/`ALARM`). `Device.Status.Fans` (`OK`/`ALARM`) has no protocol-provided aggregate to reuse, so it's computed by scanning the whole fan status subtree for any active alarm, adapting to whatever fan sub-lists a platform actually has rather than assuming a fixed layout. Live-verified end-to-end on a Midra (Eikos 4K) simulator; LivePremier/LivePremier4 use the same linked-device path fallback already proven elsewhere in the codebase but aren't yet live-verified on that hardware.
+Added for all platforms (LivePremier, LivePremier4, Midra), useful for IF/THEN-style feedback/trigger logic. `Device.Series` (e.g. "Midra 4K", "LivePremier", "Alta 4K") and `Device.Model` (e.g. "Eikos 4k", "Aquilon RS2") are resolved once at connect using the device-family detection already used for the connect log line. `Device.Name` live-tracks the device's configurable label. `Device.Status.Temperature` reuses AWJ's own aggregate temperature alarm field (`NONE`/`WARNING`/`ALARM`). `Device.Status.Fans` (`OK`/`ALARM`) has no protocol-provided aggregate to reuse, so it's computed by scanning the whole fan status subtree for any active alarm, adapting to whatever fan sub-lists a platform actually has rather than assuming a fixed layout. Live-verified end-to-end on a Midra (Eikos 4K) simulator; LivePremier use the same linked-device path fallback already proven elsewhere in the codebase but aren't yet live-verified on that hardware.
 
 ### New: multiviewer output variables (`MV1.width`, `MV1.height`, ...), matched to Aquilon's own structure (2026-08-21)
 
@@ -450,9 +450,9 @@ Two fixes:
 - **Device-wide request queue** (`AWJconnection.getSnapshot()`, `connection.ts`): every snapshot request, regardless of what triggered it (our own polling, or Companion's preview rendering), is now serialized through a single queue that fires at most 1/second. The existing per-item poller throttle only ever protected our own deliberate polling - it did nothing to stop a burst of one-off preview calls, since those don't come through the poller at all.
 - **Stale-subscriber self-cleanup** (`feedback.ts`): a preset-browser preview calls the callback exactly once and never again (Companion doesn't track it as a real ongoing instance), but the callback's own bookkeeping had no way to tell that apart from a real placed button - meaning every opened preview was quietly starting a `setInterval` poller that would run forever with no `unsubscribe` ever coming to stop it. Fixed by tracking each poller subscriber's `lastSeen` timestamp, renewed every time its own poll cycle re-triggers the callback (which a real button does forever, but a one-off preview never does again) - a subscriber not renewed within 60s (or 3x its own Refresh Rate, whichever is larger) is dropped, and a poller left with zero subscribers self-terminates on its own next tick instead of continuing to poll for nobody.
 
-### FIXED: "Disable all active Testpatterns" now also clears Raster Boxes on every output (LivePremier/LivePremier4)
+### FIXED: "Disable all active Testpatterns" now also clears Raster Boxes on every output (LivePremier)
 
-Raster Boxes (the Format/AOI centering overlay, set via the separate "Set LivePremier(≤V3) Testpattern Raster Box" action) are independent of the testpattern enable state, so the existing "All active Testpatterns" → "Disable all active Testpatterns" action left them untouched - easy to forget before a show, since they're barely visible on their own. Now clears `centering` to empty on every output alongside disabling every pattern. Deliberately Raster-Box-action-gated (`this.actionsToUse.includes('deviceTestpatternRasterBox')`), so this only runs on LivePremier/LivePremier4 - Midra models the same concept as two separate booleans instead of one array and has no Raster Box action built yet, so nothing changes there.
+Raster Boxes (the Format/AOI centering overlay, set via the separate "Set LivePremier(≤V3) Testpattern Raster Box" action) are independent of the testpattern enable state, so the existing "All active Testpatterns" → "Disable all active Testpatterns" action left them untouched - easy to forget before a show, since they're barely visible on their own. Now clears `centering` to empty on every output alongside disabling every pattern. Deliberately Raster-Box-action-gated (`this.actionsToUse.includes('deviceTestpatternRasterBox')`), so this only runs on LivePremier - Midra models the same concept as two separate booleans instead of one array and has no Raster Box action built yet, so nothing changes there.
 
 ### Known issues / not yet done
 
