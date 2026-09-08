@@ -30,7 +30,7 @@ Freeze used to be limited. Now there's a matching action *and* feedback for free
 - **Backups** now also cover Background Sets, not just Inputs, with live status feedback.
 - **Dante audio functions** - reboot, factory reset, or bulk-rename Dante channels (note: renaming channels currently doesn't take effect on the device yet, even though everything else works).
 - **Health/status monitoring** - feedbacks for device temperature/fan alarms, input/layer signal presence, and general connection health, plus variables like `Device.Model`, `Device.FirmwareVersion` for building your own condition logic.
-- **Failover to a Hot Backup device** - configure a standby device that quietly mirrors your show in the background, then hit one confirmed button to swap over to it if the main device fails live; the same button swaps you back afterwards.
+- **Failover to a Hot Backup device** - configure a standby device that quietly mirrors your show in the background, then hit one confirmed button to swap over to it if the main device fails live; the same button swaps you back afterwards. Once this has been fully tested across all supported device types, it gives you a level of live-show redundancy that nothing else in the event industry offers out of the box. A PreFlight Checklist explaining how to set this up and rehearse it properly will be published alongside the final release.
 
 ## Naming clean-up (mostly cosmetic)
 

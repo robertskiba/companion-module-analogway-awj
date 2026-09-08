@@ -73,6 +73,8 @@ A large, consistent family of actions/feedbacks mirroring WebRCS's own per-Layer
 - **[NEW FEEDBACKS] Health/Signal status**: "Device - Health Alarm" (Temperature/Fan), "Device - Input Signal Present"/"Layer Signal Present".
 - **Custom Commands**: send a raw custom AWJ get/replace command directly - existed in V2.
 
+> **A new level of show redundancy.** Once "Device - Failover to Hot Backup" has been fully verified across all three platforms, it gives a Companion-driven show the kind of standby-device redundancy that no other control system in the event industry offers out of the box - a mirrored backup device kept continuously in sync in the background, one confirmed button press away from taking over live. A PreFlight Checklist covering how to set this up and rehearse it properly before relying on it in a show will be published alongside the final release.
+
 ## 9. Variables
 
 - **Renamed the entire dynamic-variable set to a consistent `Object{n}.property` scheme** (`S1.label`, `IN1.status`, `MM1`/`SM1`/`LM1`/`MV1` for the four memory types, `TIMER1.value`, etc.), replacing the old ad-hoc/inconsistent V2 names - a rename, not new variables. **Not a breaking change**: a "Use old (V2) variable names" config checkbox controls which scheme is active, auto-enabled for any config that already existed before this change (existing button text/triggers keep working unchanged); new connections default to the new names.
