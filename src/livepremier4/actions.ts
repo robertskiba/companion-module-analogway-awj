@@ -100,6 +100,7 @@ export default class ActionsLivepremier4 extends Actions {
 		'cstawjgetcmd',
 		'deviceGPO',
 		'devicePower',
+		'deviceFailoverToHotBackup',
 		'deviceBackupSetSource',
 		'deviceBackupAutoMode'
 	]
@@ -209,7 +210,9 @@ export default class ActionsLivepremier4 extends Actions {
 					}
 				}
 
+				this.connection.mirrorUnlockToBackup(screen, preset)
 				this.connection.sendWSmessage(path,false, true)
+				this.connection.mirrorToBackup(path, false, true)
 				this.instance.sendXupdate()
 
 				const presetLetter = this.choices.getPreset(screen, action.options.preset)
@@ -221,6 +224,7 @@ export default class ActionsLivepremier4 extends Actions {
 						this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 					} else {
 						this.state.set('LOCAL/screenAuxSelection/keys', screens)
+						this.connection.mirrorSelectionToBackup(screens)
 						this.instance.checkFeedbacks('liveScreenSelection')
 					}
 				}
@@ -467,7 +471,11 @@ export default class ActionsLivepremier4 extends Actions {
 				'pp',
 				'xRequest',
 			]
+			for (const screen of [...screens, ...auxScreens]) {
+				this.connection.mirrorUnlockToBackup(screen, preset)
+			}
 			this.connection.sendWSmessage( fullpath, false, true )
+			this.connection.mirrorToBackup(fullpath, false, true)
 			this.instance.sendXupdate()
 			await this.waitForPulseComplete(['DEVICE', ...bankpath, ...loadpath, ...memorypath, 'presetList', 'items', preset, 'pp', 'isLoading'])
 
@@ -476,6 +484,7 @@ export default class ActionsLivepremier4 extends Actions {
 					this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [[...screens, ...auxScreens]])
 				} else {
 					this.state.set('LOCAL/screenAuxSelection/keys', [...screens, ...auxScreens])
+					this.connection.mirrorSelectionToBackup([...screens, ...auxScreens])
 					this.instance.checkFeedbacks('liveScreenSelection')
 				}
 			}
@@ -1422,7 +1431,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
 					{ id: 'SMPTE', label: 'SMPTE' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'THIRTY_BPP_1', label: '30 Bit per Pixel 1' },
@@ -1449,7 +1458,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'BURST_H', label: 'Horizontal Burst' },
 					{ id: 'BURST_V', label: 'Vertical Burst' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'MOVING', label: 'Moving Lines' },
@@ -1477,7 +1486,7 @@ export default class ActionsLivepremier4 extends Actions {
 					{ id: 'BURST_H', label: 'Horizontal Burst' },
 					{ id: 'BURST_V', label: 'Vertical Burst' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'MOVING', label: 'Moving Lines' },

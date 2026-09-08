@@ -14,7 +14,7 @@ import {
 } from '@companion-module/base'
 import { AWJconnection } from './connection.js'
 import { AWJdevice } from './awjdevice/awjdevice.js'
-import { Config, GetConfigFields } from './config.js'
+import { Config, DeviceCardSummaries, FoundDevice, GetConfigFields } from './config.js'
 import { initVariables, TrackedVariable } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { StateMachine } from './state.js'
@@ -117,6 +117,48 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	public config!: Config
 	private oldlabel = ''
 	public isRecording = false
+	/** Timestamp (Date.now()) of the last "Device - Failover to Hot Backup" trigger - a 30s cooldown after
+	 * it guards against an accidental double-press swapping straight back, see that action's callback. */
+	public lastFailoverAt = 0
+	/** Tracks the status this connection last reported via updateStatus() - InstanceBase itself is write-only
+	 * (no getter), so this is the only way to read it back for the Device.Connected.* variables/feedback. */
+	public currentInstanceStatus: InstanceStatus = InstanceStatus.Disconnected
+
+	/** Same as InstanceBase's own updateStatus(), but also tracks the status for Device.Connected.Maindevice
+	 * (Hotbackupdevice/IP.Hotbackup are refreshed alongside it, see updateHotBackupVariables()) and the
+	 * matching feedback - a single central override instead of touching every one of the many updateStatus()
+	 * call sites scattered through connection.ts. */
+	public updateStatus(status: InstanceStatus, message?: string | null): void {
+		this.currentInstanceStatus = status
+		super.updateStatus(status, message)
+		if (this.variables) {
+			this.setVariableValues({ 'Device.Connected.Maindevice': status })
+			this.updateHotBackupVariables()
+		}
+	}
+
+	/** Refreshes the two config-driven (not live-connection-driven) Hot Backup variables. While "Enable Hot
+	 * Backup Device" is unchecked, Device.Connected.Hotbackupdevice reads "not_configured" rather than
+	 * mirroring Main's status - mirroring would misleadingly suggest a backup connection exists - and
+	 * Device.IP.Hotbackup is empty. While enabled, Hotbackupdevice reflects the real Hot Backup connection's
+	 * own open/closed state (see backupConnection.ts) and IP.Hotbackup shows the configured address's host.
+	 * Called from updateStatus() (Main's status changed - kept in sync in case Main/Hotbackup ever need to be
+	 * compared side by side), from configUpdated() (the Hot Backup config itself changed), and from
+	 * AWJBackupConnection itself (its own connection opens/closes). Public since AWJBackupConnection calls it
+	 * directly. */
+	public updateHotBackupVariables(): void {
+		if (!this.variables) return
+		const hotBackupStatus = !this.config.hotBackupEnabled
+			? 'not_configured'
+			: this.connection.backupConnection.isConnected ? InstanceStatus.Ok : InstanceStatus.Disconnected
+		this.setVariableValues({
+			'Device.Connected.Hotbackupdevice': hotBackupStatus,
+			'Device.IP.Hotbackup': this.config.hotBackupEnabled
+				? (this.connection.getURLobj(this.config.hotBackupAddress)?.hostname() ?? '')
+				: '',
+		})
+		this.checkFeedbacks('deviceConnectionStatus')
+	}
 
 	/**
 	 * FIFO queues backing serialize() below - one chained Promise per key (a Screen/Aux id, e.g. "S1"/"A2"),
@@ -187,10 +229,31 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		if (this.config.deviceaddr === undefined) {
 			// config never been set?
 			console.log('brand new config')
-			this.config.deviceaddr = 'http://192.168.2.140'
+			// Deliberately left empty (not a hardcoded default) - see the empty-address handling in
+			// connection.ts's connect(), which triggers the automatic network scan right away for a brand
+			// new connection instead of pointlessly trying (and failing) to reach the old hardcoded default.
+			this.config.deviceaddr = ''
+			this.config.foundDevices = ''
+			this.config.secureHttp = false
+			this.config.simulatedDevice = false
 			this.config.macaddress = ''
+			this.config.deviceModel = ''
+			this.config.deviceFirmware = ''
+			this.config.device2ip = ''
+			this.config.device2mac = ''
+			this.config.device2model = ''
+			this.config.device2firmware = ''
+			this.config.device3ip = ''
+			this.config.device3mac = ''
+			this.config.device3model = ''
+			this.config.device3firmware = ''
+			this.config.device4ip = ''
+			this.config.device4mac = ''
+			this.config.device4model = ''
+			this.config.device4firmware = ''
 			this.config.sync = true
 			this.config.showDisabled = false
+			this.config.showNotExisting = false
 			this.config.color_bright = 16777215
 			this.config.color_dark = 2239025
 			this.config.color_highlight = combineRgb(24,111,173)
@@ -202,12 +265,17 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.config.color_redgrey = combineRgb(79,31,31)
 			this.config.useOldVariableNames = false
 			this.config.allowLiveThumbnails = true
+			this.config.hotBackupEnabled = false
+			this.config.hotBackupAddress = 'http://192.168.2.141'
+			this.config.hotBackupAutoFailover = false
+			this.config.hotBackupFailoverTimeout = 20
 			this.saveConfig(this.config)
 		}
 
 		this.variables = initVariables(this)
 		this.updateVariableDefinitions(this.variables)
 		this.setVariableValues({connectionLabel: this.label})
+		this.updateHotBackupVariables()
 
 		// Publish the generic (platform-unknown) action/feedback/preset set immediately, before attempting to
 		// connect - previously this only ever happened deep inside connection.ts's post-connect success path,
@@ -221,6 +289,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		await this.updateInstance()
 
 		this.connection.connect(this.config.deviceaddr)
+		this.connection.updateBackupConnection()
 		//this.device = new AWJdevice(this.state, this.connection)
 	}
 
@@ -278,6 +347,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	public async destroy(): Promise<void> {
 		this.state.clearTimers()
 		this.connection.destroy()
+		this.connection.backupConnection.stop()
 
 		this.log('debug' ,'destroy '+this.id)
 	}
@@ -286,7 +356,22 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	 * Creates the configuration fields for instance config.
 	 */
 	public getConfigFields(): SomeCompanionConfigField[] {
-		return GetConfigFields()
+		let cardSummaries: DeviceCardSummaries = {}
+		try {
+			cardSummaries = {
+				leader: this.choices.getInstalledCardsSummary(1),
+				device2: this.choices.getInstalledCardsSummary(2),
+				device3: this.choices.getInstalledCardsSummary(3),
+				device4: this.choices.getInstalledCardsSummary(4),
+			}
+		} catch (error: any) {
+			this.log('debug', `building linked-device installed-cards summary failed (fields still show without it): ${error?.stack ?? error}`)
+		}
+		// Left as undefined (not []) until a scan has actually run at least once - GetConfigFields uses that
+		// distinction to keep the "Found AWJ Devices" field hidden entirely before then, vs. showing "No
+		// Device Found" once a completed scan genuinely found nothing.
+		const networkScanResults: FoundDevice[] | undefined = this.state?.get(['LOCAL', 'networkScanResults'])
+		return GetConfigFields(this.config, cardSummaries, networkScanResults)
 	}
 
 	/**
@@ -297,11 +382,66 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		const oldconfig = {  ...this.config }
 		this.config = config
 
-		if (this.config.deviceaddr !== oldconfig.deviceaddr) {
-			// new address, reconnect
+		// Selecting an entry in "Found AWJ Devices" (populated by the automatic network-scan fallback, see
+		// connection.ts's connect() catch block) applies it as the new address and resets the dropdown back
+		// to its placeholder - a one-shot "apply" trigger, not a persistent selection.
+		if (this.config.foundDevices) {
+			this.config.deviceaddr = `http://${this.config.foundDevices}`
+			this.config.foundDevices = ''
+			this.saveConfig(this.config)
+		}
+
+		// None of the address-correcting logic below makes sense on an empty address (it would otherwise
+		// happily "correct" '' into something like 'https:///') - skip all of it while the field is blank.
+		if (this.config.deviceaddr.trim() !== '') {
+			// A bare host/IP with no protocol at all (e.g. just "192.168.2.140") defaults to http:// - matches
+			// getURLobj()'s/ensureSecureHttp()'s/ensureSimulatorPort()'s own internal fallback, but makes it
+			// visible in the stored config too instead of only ever applying it silently at connect time.
+			if (!/^https?:\/\//.test(this.config.deviceaddr)) {
+				this.config.deviceaddr = 'http://' + this.config.deviceaddr
+				this.saveConfig(this.config)
+			}
+
+			// A real Aquilon can never be reachable at localhost or one of this machine's own IP addresses -
+			// that always means a simulator running on this same machine, so this can be decided proactively
+			// from the address alone, without waiting for a live connection to confirm it.
+			if (this.connection.isLocalAddress(this.config.deviceaddr) && !this.config.simulatedDevice) {
+				this.config.simulatedDevice = true
+				this.saveConfig(this.config)
+			}
+
+			// Confirmed live (2026-09-05): the simulator's HTTPS is selectable but doesn't actually work and
+			// has no upside anyway - Secure HTTP is therefore always forced off while Simulated Device is checked.
+			if (this.config.simulatedDevice && this.config.secureHttp) {
+				this.config.secureHttp = false
+				this.saveConfig(this.config)
+			}
+
+			if (this.config.secureHttp) {
+				const correctedAddr = this.connection.ensureSecureHttp(this.config.deviceaddr)
+				if (correctedAddr !== this.config.deviceaddr) {
+					this.config.deviceaddr = correctedAddr
+					this.saveConfig(this.config)
+				}
+			} else if (this.config.simulatedDevice) {
+				const correctedAddr = this.connection.ensureSimulatorPort(this.config.deviceaddr)
+				if (correctedAddr !== this.config.deviceaddr) {
+					this.config.deviceaddr = correctedAddr
+					this.saveConfig(this.config)
+				}
+			}
+		}
+
+		if (this.config.deviceaddr !== oldconfig.deviceaddr || this.config.simulatedDevice !== oldconfig.simulatedDevice) {
+			// new address, or the user changed "Simulated Device?" by hand - reconnect either way, so a fresh
+			// live check runs and (via the automatic sync above) can correct the checkbox again if needed
 			this.updateStatus(InstanceStatus.Connecting)
 			this.connection.disconnect()
 			this.connection.connect(this.config.deviceaddr)
+		}
+		if (this.config.hotBackupEnabled !== oldconfig.hotBackupEnabled || this.config.hotBackupAddress !== oldconfig.hotBackupAddress) {
+			this.connection.updateBackupConnection()
+			this.updateHotBackupVariables()
 		}
 		if (this.config.allowLiveThumbnails !== oldconfig.allowLiveThumbnails) {
 			if (!this.config.allowLiveThumbnails) {
@@ -316,7 +456,10 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 		if (
 			this.label !== this.oldlabel ||
 			this.config.showDisabled !== oldconfig.showDisabled ||
-			this.config.color_bright !== oldconfig.color_bright || 
+			this.config.showNotExisting !== oldconfig.showNotExisting ||
+			this.config.hotBackupEnabled !== oldconfig.hotBackupEnabled ||
+			this.config.hotBackupAddress !== oldconfig.hotBackupAddress ||
+			this.config.color_bright !== oldconfig.color_bright ||
 			this.config.color_dark !== oldconfig.color_dark || 
 			this.config.color_green !== oldconfig.color_green || 
 			this.config.color_greendark !== oldconfig.color_greendark || 

@@ -46,6 +46,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		'deviceInputSignalStatus',
 		'deviceLayerSignalStatus',
 		'deviceHealthStatus',
+		'deviceConnectionStatus',
 		'deviceLayerFreeze',
 		'deviceScreenFreeze',
 		'timerState',
@@ -121,7 +122,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 							else continue
 						}
 
-						// check if source is used in background layer on a aux
+						// check if source is used in background layer on an aux
 						else if (layer.id === 'BG' && screeninfo.isAux) {
 							const bkginput = this.state.get([...presetpath, 'background', 'source', 'pp', 'content'])
 							if (bkginput === feedback.options.source) return true
@@ -367,7 +368,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
 					{ id: 'SMPTE', label: 'SMPTE' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'SOFTEDGE', label: 'Covering' },
@@ -395,7 +396,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 					{ id: 'BURST_H', label: 'Horizontal Burst' },
 					{ id: 'BURST_V', label: 'Vertical Burst' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'SOFTEDGE', label: 'Covering' },
 					{ id: 'PATHOLOGICAL', label: 'Pathological' },

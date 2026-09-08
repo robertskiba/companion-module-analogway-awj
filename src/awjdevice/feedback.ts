@@ -11,6 +11,7 @@ import {
 	CompanionFeedbackDefinition,
 	CompanionFeedbackDefinitions,
 	CompanionInputFieldDropdown,
+	InstanceStatus,
 } from '@companion-module/base'
 import Constants from './constants.js'
 import { parseBoolean } from '../util.js'
@@ -95,6 +96,7 @@ export default class Feedbacks {
 		'deviceInputSignalStatus',
 		'deviceLayerSignalStatus',
 		'deviceHealthStatus',
+		'deviceConnectionStatus',
 		// 'deviceLayerFreeze',
 		// 'deviceScreenFreeze',
 		'timerState',
@@ -384,7 +386,7 @@ export default class Feedbacks {
 			type: 'boolean',
 			name: 'LIVE - Screen Memory',
 			sortName: '01 LIVE - 03 Screen Memory',
-			description: 'Shows whether a screen Memory is loaded on a screen',
+			description: 'Shows whether a Screen Memory is loaded on a screen',
 			defaultStyle: {
 				color: this.config.color_dark,
 				bgcolor: this.config.color_highlight,
@@ -518,7 +520,7 @@ export default class Feedbacks {
 			type: 'boolean',
 			name: 'LIVE - Aux Memory (Midra only)',
 			sortName: '01 LIVE - 04 Aux Memory',
-			description: 'Shows whether a Aux Memory is loaded on a auxscreen',
+			description: 'Shows whether an Aux Memory is loaded on an auxscreen',
 			defaultStyle: {
 				color: this.config.color_dark,
 				bgcolor: this.config.color_highlight,
@@ -809,7 +811,7 @@ export default class Feedbacks {
 					label: 'Screen',
 					choices: [{ id: 'all', label: 'All Screens' }, ...this.choices.getScreenAuxChoices()],
 					default: 'all',
-					tooltip: '"All" resembels the state of the lock-all button in WebRCS.',
+					tooltip: '"All" resembles the state of the lock-all button in WebRCS.',
 				},
 				{
 					id: 'preset',
@@ -1178,6 +1180,67 @@ export default class Feedbacks {
 		return deviceHealthStatus
 	}
 
+	/**
+	 * MARK: deviceConnectionStatus
+	 * Reflects this connection's own InstanceStatus, as tracked by AWJinstance.updateStatus() - more granular
+	 * than Companion's built-in Connection Status feedback (which only distinguishes good/warning/error/disabled).
+	 * While "Enable Hot Backup Device" is unchecked, the Hot Backup Device reads "Not Configured" rather than
+	 * mirroring Main's status; while enabled, it simply mirrors Main's status, since it has no real connection
+	 * of its own yet (see AWJinstance.updateHotBackupVariables()).
+	 */
+	get deviceConnectionStatus() {
+		type DeviceConnectionStatus = { device: string; status: InstanceStatus | 'not_configured' }
+
+		const deviceConnectionStatus: AWJfeedback<DeviceConnectionStatus> = {
+			type: 'boolean',
+			name: 'Device - Connection Status',
+			sortName: '08 Device - 09 Connection Status',
+			description: 'Shows whether the Main Device or the (currently simulated) Hot Backup Device connection is in a given status.',
+			defaultStyle: {
+				color: this.config.color_bright,
+				bgcolor: combineRgb(0, 200, 0),
+			},
+			options: [
+				{
+					id: 'device',
+					type: 'dropdown',
+					label: 'Device',
+					choices: [
+						{ id: 'main', label: 'Main Device' },
+						{ id: 'hotbackup', label: 'Hot Backup Device' },
+					],
+					default: 'main',
+				},
+				{
+					id: 'status',
+					type: 'dropdown',
+					label: 'Status',
+					choices: [
+						{ id: InstanceStatus.Ok, label: 'Ok' },
+						{ id: InstanceStatus.Connecting, label: 'Connecting' },
+						{ id: InstanceStatus.Disconnected, label: 'Disconnected' },
+						{ id: InstanceStatus.ConnectionFailure, label: 'Connection Failure' },
+						{ id: InstanceStatus.BadConfig, label: 'Bad Config' },
+						{ id: InstanceStatus.UnknownError, label: 'Unknown Error' },
+						{ id: InstanceStatus.UnknownWarning, label: 'Unknown Warning' },
+						{ id: InstanceStatus.AuthenticationFailure, label: 'Authentication Failure' },
+						{ id: InstanceStatus.InsufficientPermissions, label: 'Insufficient Permissions' },
+						{ id: 'not_configured', label: 'Not Configured (Hot Backup only)' },
+					],
+					default: InstanceStatus.Ok,
+				},
+			],
+			callback: (feedback) => {
+				const actual = feedback.options.device === 'hotbackup'
+					? this.instance.getVariableValue('Device.Connected.Hotbackupdevice')
+					: this.instance.currentInstanceStatus
+				return actual === feedback.options.status
+			},
+		}
+
+		return deviceConnectionStatus
+	}
+
 	// MARK: deviceLayerFreeze
 	// Midra only
 	get deviceLayerFreeze() {
@@ -1488,7 +1551,7 @@ export default class Feedbacks {
 					label: 'Check',
 					choices: [
 						{ id: '1', label: 'Text equals' },
-						{ id: '2', label: 'Text containes' },
+						{ id: '2', label: 'Text contains' },
 						{ id: '3', label: 'Text length is' },
 						{ id: '4', label: 'Text matches regular expression' },
 					],

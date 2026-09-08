@@ -106,6 +106,7 @@ export default class ActionsMidra extends Actions {
 		'cstawjcmd',
 		'cstawjgetcmd',
 		'devicePower',
+		'deviceFailoverToHotBackup',
 		// Backup (Input Backup + Background Set Backup) does not exist on Midra/Alta at all - live-confirmed
 		// 2026-08-28 against a Zenith 200 simulator (fw 1.3.7): no `device.backup` anywhere in the state tree.
 		// Unlike the Aquilon firmware-version gate (see isBackupSupportedFirmware() in the base Actions class),
@@ -163,7 +164,9 @@ export default class ActionsMidra extends Actions {
 						unlockedScreens.add(screen)
 					}
 				}
+				this.connection.mirrorUnlockToBackup(screen, preset)
 				this.connection.sendWSmessage(path,false, true)
+				this.connection.mirrorToBackup(path, false, true)
 				this.instance.sendXupdate()
 				// No live Midra/Alta access this session to confirm an equivalent "isLoading" flag - fixed
 				// delay for now, same reasoning as deviceAuxMemory/deviceMasterMemory above.
@@ -174,6 +177,7 @@ export default class ActionsMidra extends Actions {
 						this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 					} else {
 						this.state.set('LOCAL/screenAuxSelection/keys', screens)
+						this.connection.mirrorSelectionToBackup(screens)
 						this.instance.checkFeedbacks('liveScreenSelection')
 					}
 				}
@@ -304,7 +308,11 @@ export default class ActionsMidra extends Actions {
 				'pp',
 				'xRequest',
 			]
+			for (const screen of screens) {
+				this.connection.mirrorUnlockToBackup(screen, preset)
+			}
 			this.connection.sendWSmessage( fullpath, false, true )
+			this.connection.mirrorToBackup(fullpath, false, true)
 			this.instance.sendXupdate()
 			// TODO: no live Midra/Alta access this session to confirm an equivalent per-slot "isLoading" flag
 			// at device/preset/masterBank/control/load/.../pp/isLoading - fixed delay for now, same reasoning
@@ -316,6 +324,7 @@ export default class ActionsMidra extends Actions {
 					this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 				} else {
 					this.state.set('LOCAL/screenAuxSelection/keys', screens)
+					this.connection.mirrorSelectionToBackup(screens)
 					this.instance.checkFeedbacks('liveScreenSelection')
 				}
 			}
@@ -352,7 +361,7 @@ export default class ActionsMidra extends Actions {
 			]
 
 			this.connection.sendWSmessage( fullpath, false, true)
-				
+
 		}
 
 		return deviceMultiviewerMemory
@@ -380,7 +389,8 @@ export default class ActionsMidra extends Actions {
 			const sent = this.instance.serialize(targetScreens, async () => {
 				for (const screen of targetScreens) {
 					const screeninfo = this.choices.getScreenInfo(screen)
-					this.connection.sendWSmessage(['device', 'transition', `${screeninfo.prefixverylong}List`, 'items', screeninfo.numstr, 'control', 'pp', 'xTake'], true)
+					const path = ['device', 'transition', `${screeninfo.prefixverylong}List`, 'items', screeninfo.numstr, 'control', 'pp', 'xTake']
+					this.connection.sendWSmessage(path, true)
 					if (parseBoolean(action.options.waitForComplete)) {
 						const deciseconds = this.state.get(['DEVICE', 'device', 'transition', `${screeninfo.prefixverylong}List`, 'items', screeninfo.numstr, 'control', 'pp', 'takeTime']) ?? 0
 						longestTransitionMs = Math.max(longestTransitionMs, deciseconds * 100)
@@ -408,17 +418,15 @@ export default class ActionsMidra extends Actions {
 				: this.choices.getChosenScreenAuxes(action.options.screens)
 			return this.instance.serialize(targetScreens, async () => {
 			for (const screen of targetScreens) {
-				this.connection.sendWSmessage(
-					[
-						...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
-						'items',
-						screen.replaceAll(/\D/g, ''),
-						'control',
-						'pp',
-						'xCut'
-					],
-					true
-				)
+				const path = [
+					...(screen.startsWith('A') ? this.constants.auxGroupPath : this.constants.screenGroupPath),
+					'items',
+					screen.replaceAll(/\D/g, ''),
+					'control',
+					'pp',
+					'xCut'
+				]
+				this.connection.sendWSmessage(path, true)
 			}
 			// Confirms receipt only, not full completion - see waitForPulseComplete()'s doc comment for why a
 			// fixed delay (not a status poll) is used specifically for Take/Cut.
@@ -1636,7 +1644,7 @@ export default class ActionsMidra extends Actions {
 					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
 					{ id: 'SMPTE', label: 'SMPTE' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'SOFTEDGE', label: 'Covering' },
@@ -1664,7 +1672,7 @@ export default class ActionsMidra extends Actions {
 					{ id: 'BURST_H', label: 'Horizontal Burst' },
 					{ id: 'BURST_V', label: 'Vertical Burst' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'SOFTEDGE', label: 'Covering' },
 					{ id: 'PATHOLOGICAL', label: 'Pathological' },

@@ -105,6 +105,7 @@ export default class ActionsLivepremier extends Actions {
 		'cstawjgetcmd',
 		'deviceGPO',
 		'devicePower',
+		'deviceFailoverToHotBackup',
 		'deviceBackupSetSource',
 		'deviceBackupAutoMode'
 	]
@@ -202,7 +203,9 @@ export default class ActionsLivepremier extends Actions {
 					}
 				}
 
+				this.connection.mirrorUnlockToBackup(screen, preset)
 				this.connection.sendWSmessage(path,false, true)
+				this.connection.mirrorToBackup(path, false, true)
 				this.instance.sendXupdate()
 				// Same reasoning as Recall Master Memory above - not independently live-verified for plain
 				// LivePremier, fixed delay instead of assuming LP4's confirmed isLoading path applies here too.
@@ -213,6 +216,7 @@ export default class ActionsLivepremier extends Actions {
 						this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 					} else {
 						this.state.set('LOCAL/screenAuxSelection/keys', screens)
+						this.connection.mirrorSelectionToBackup(screens)
 						this.instance.checkFeedbacks('liveScreenSelection')
 					}
 				}
@@ -280,7 +284,11 @@ export default class ActionsLivepremier extends Actions {
 				'pp',
 				'xRequest',
 			]
+			for (const screen of screens) {
+				this.connection.mirrorUnlockToBackup(screen, preset)
+			}
 			this.connection.sendWSmessage( fullpath, false, true)
+			this.connection.mirrorToBackup(fullpath, false, true)
 			this.instance.sendXupdate()
 			// masterPresetBank shares LP4's exact path naming, but plain LivePremier hasn't been independently
 			// live-verified this session to actually have the same "isLoading" flag - fixed delay for now
@@ -292,6 +300,7 @@ export default class ActionsLivepremier extends Actions {
 					this.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [screens])
 				} else {
 					this.state.set('LOCAL/screenAuxSelection/keys', screens)
+					this.connection.mirrorSelectionToBackup(screens)
 					this.instance.checkFeedbacks('liveScreenSelection')
 				}
 			}
@@ -965,7 +974,7 @@ export default class ActionsLivepremier extends Actions {
 					{ id: 'GRID_CUSTOM', label: 'Grid Custom' },
 					{ id: 'SMPTE', label: 'SMPTE' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'THIRTY_BPP_1', label: '30bit Testpattern #1' },
@@ -992,7 +1001,7 @@ export default class ActionsLivepremier extends Actions {
 					{ id: 'BURST_H', label: 'Horizontal Burst' },
 					{ id: 'BURST_V', label: 'Vertical Burst' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'MOVING', label: 'Moving Lines' },
@@ -1020,7 +1029,7 @@ export default class ActionsLivepremier extends Actions {
 					{ id: 'BURST_H', label: 'Horizontal Burst' },
 					{ id: 'BURST_V', label: 'Vertical Burst' },
 					{ id: 'VERTICAL_GRADIENT', label: 'Vertical Gradient' },
-					{ id: 'HORIZONTAL_GRADIENT', label: 'Horzontal Gradient' },
+					{ id: 'HORIZONTAL_GRADIENT', label: 'Horizontal Gradient' },
 					{ id: 'CROSSHATCH', label: 'Crosshatch' },
 					{ id: 'CHECKERBOARD', label: 'Checkerboard' },
 					{ id: 'MOVING', label: 'Moving Lines' },

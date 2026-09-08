@@ -7,7 +7,7 @@ const UpgradeScripts = [
 	 * Remember that once it has been added it cannot be removed!
 	 */
 
-	// Update the option types from numbers to strings to accomodate expressions, add values for anchor
+	// Update the option types from numbers to strings to accommodate expressions, add values for anchor
 	function updatePositionAndSizeActionV2_4(_context, props: LooseObj) {
         const actions = props.actions
 		const actionsToUpdate:CompanionMigrationAction[] = []
@@ -71,7 +71,7 @@ const UpgradeScripts = [
         }
 
 	},
-	// Update the power option "wake" from midra to be "on", so it is inline with livepremier
+	// Update the power option "wake" from midra to be "on", so it is in line with LivePremier
 	function updateMidraWakeV2_4(_context, props: LooseObj) {
 		const actions = props.actions
 		const actionsToUpdate:CompanionMigrationAction[] = []
