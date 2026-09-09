@@ -97,7 +97,7 @@ Meant for pre-programming: lists every input/output/image slot up to the theoret
 
 ### Use old (V2) variable names
 
-Companion's variables were renamed to a clearer, consistent scheme (e.g. `SM1.label` instead of `screenMemory1label`) when this module was rebuilt. Existing connections that already reference the old names in button texts or triggers are automatically switched to keep using them, so nothing breaks on update; a brand new connection starts with this off (using the new names). See [About Variables](#variables) for the full picture of old vs. new names.
+Companion's variables were renamed to a clearer, consistent scheme (e.g. `SMx.label` instead of `screenMemoryXlabel` - example: `SM5.label` instead of `screenMemory5label`) when this module was rebuilt. Existing connections that already reference the old names in button texts or triggers are automatically switched to keep using them, so nothing breaks on update; a brand new connection starts with this off (using the new names). See [About Variables](#variables) for the full picture of old vs. new names.
 
 ### Allow Live Thumbnails
 
@@ -118,7 +118,7 @@ Once enabled, you also get a "Hot Backup Device Address" field to enter its addr
 This module dynamically provides a lot of variables, the exact number depends on your device and programming but will usually be in the hundreds. So most of the variables are not promoted in the variables overview but you can use them on buttons anyway. Many presets are making use of variables for dynamic button text. If you want your variables and button texts relying on variables to continue working, you can't rename the label of your connection once you start using presets or you have to modify all variable usages by hand.  
 An example: the preset for recalling screen memory 1 contains a variable with the name of screen memory 1. If you use the preset and change the name of the memory later, the new name will be reflected on the button. The variable with the name is provided by the connection. If you change the label of the connection the button can't get the correct variable value any more because it still listens to a variable from a connection with the old label.
 
-Variable names were reworked into a clearer, consistent scheme (e.g. `SM1.label` instead of `screenMemory1label`, `IN1.freeze` instead of `frozen_IN1`). A brand new connection uses the new names by default; a connection that already existed before this change keeps using the old names automatically (matching whatever your buttons/triggers already reference), unless you change the "Use old (V2) variable names" checkbox in the configuration yourself. Every variable table below the following sections lists the **new** names; where a variable's old name isn't simply a different spelling of the same thing (e.g. it used a different value format), that's called out explicitly. In the following tables often there are variables with a 1, usually the ...1 is only an example and variables for all items are available.
+Variable names were reworked into a clearer, consistent scheme (e.g. `SMx.label` instead of `screenMemoryXlabel`, `INx.freeze` instead of `frozen_INx` - example: `SM5.label` instead of `screenMemory5label`, `IN3.freeze` instead of `frozen_IN3`). A brand new connection uses the new names by default; a connection that already existed before this change keeps using the old names automatically (matching whatever your buttons/triggers already reference), unless you change the "Use old (V2) variable names" checkbox in the configuration yourself. Every variable table below the following sections lists the **new** names; where a variable's old name isn't simply a different spelling of the same thing (e.g. it used a different value format), that's called out explicitly. In the following tables often there are variables with a 1, usually the ...1 is only an example and variables for all items are available.
 
 One thing worth knowing: **tally variables aren't generated for every possible combination up front.** They only appear once you actually place a matching "Source Tally" feedback on a button - at that point the variable is added and can also be used in triggers. Want a variable for source LIVE_3 on screen S2 preview? Add a Source Tally feedback checking exactly that first.
 
@@ -185,14 +185,20 @@ Available at: LivePremier, Alta 4K, Midra 4K
 ### <a name="sync"></a>Sync selection
 
 Available at: LivePremier, Alta 4K, Midra 4K  
-With this action, you can turn selection synchronization on or off. It is the same functionality as the toggle 'Selection Synced to Server' in WebRCS. You most likely want to have this turned on most of the time and you can automatically activate synchronization after connecting to a device in the configuration.  
-**Selection synchronization is a very relevant concept for your daily work with this module!**  
-What is it about: In WebRCS most of the manipulations are a multi-step process. First you select something and then you apply a manipulation to the selection. E.g. first you select a layer and then adjust the source of that layer or first you select a screen and then press Take to transition that screen. WebRCS keeps track of many selections like screen selection, layer selection, widget selection...  
-In Companion you have the choice of whether you want to use direct commands like "Transition S1" or you can use the same procedure as WebRCS where you select first and then do something with the selection. That means Companion has to keep track of the selection as well.  
-All WebRCS Clients, and Companion is in fact a WebRCS client, have their own selection. Client 1 can e.g. have screen S1 selected and client 2 can have screen S2 selected. If client one hits Take, S1 will transition and if client 2 hits take, S2 will transition, but none of the clients knows which screen is selected in the other client. Your Analog Way device itself also can keep track of all the selections. If you turn selection synchronization on, actually the client now will use the selection of the device instead of its local selection. If you change the selection it will be changed on the device. If other clients also syncronize to the device they will immediately see the changes.  
-If you are using only one WebRCS client, selection synchronization doesn't matter, you are absolutely good to go with the local selection of the client. But if you want to integrate Companion into your workflow, usually you want to turn synchronization on on Companion and on your WebRCS client.  
-Having said that, there are also situations where you don't want selection synchronization. As far as it concerns Companion then you can either use direct commands or you can permanently or temporarily disable synchronization. You even could turn sync off, select something locally and turn sync on again with one button.  
-For your convenience Companion can automatically turn on its synchronization after a connection is established. WebRCS clients although will always start without synchronization and you have to turn it on manually in the client.  
+Turns selection synchronization on or off - the same thing as WebRCS's own 'Selection Synced to Server' toggle. You'll most likely want this on most of the time, and you can have Companion turn it on automatically right after connecting (see [Configuration](#configuration)).
+
+**Selection synchronization is a very relevant concept for your daily work with this module!**
+
+**The idea:** most things in WebRCS are a two-step process - you select something, then act on that selection. Select a layer, then change its source. Select a screen, then hit Take. WebRCS keeps track of several such selections (screen, layer, widget, ...) this way, and Companion can work the same way too: select first, then let a following action work on "the selection" - or skip that entirely and use a direct command like "Transition S1" instead, which doesn't care what's selected at all.
+
+**Why synchronization matters:** every WebRCS client - and Companion counts as one - keeps its own separate selection unless synchronization is on. Say Client 1 has Screen S1 selected and Client 2 has S2 selected, with neither aware of the other's choice: Client 1's Take transitions S1, Client 2's Take transitions S2 - two different outcomes from the same button, depending on who presses it. Turning synchronization on makes a client use the *device's* selection instead of its own: change it, and the device - and every other synced client - sees the change immediately.
+
+So, when do you actually want this on or off?
+- **Only using Companion, no other WebRCS client involved?** Synchronization doesn't matter - Companion's own local selection is all you need.
+- **Using Companion alongside WebRCS (or several Companion connections)?** Turn synchronization on on all of them, so they always agree on what's currently selected.
+- **Want Companion to keep its own separate selection anyway?** Either use direct commands that don't depend on "the selection" at all, or turn synchronization off - permanently, or just temporarily. You can even turn it off, select something locally, and turn it back on again with one button.
+
+Companion can turn its own synchronization on automatically right after connecting (see Configuration) - a WebRCS client, on the other hand, never does this by itself; you always have to switch it on by hand there.
 
 **Feedback: Synchronization of the selection** - Available at: LivePremier, Alta 4K, Midra 4K.
 
@@ -208,7 +214,7 @@ Additionally you can choose to select the screens contained in the memory, if yo
 
 **Feedback: Master Memory** - Available at: LivePremier, Alta 4K, Midra 4K. Like on WebRCS this feedback indicates the last used master memory. Don't mistake it for a currently used master memory - due to the nature of master memories, it's not possible to show if a master memory is actually active.
 
-**Variable:** `MM1.label` - the label of the Master Memory.
+**Variable:** `MMx.label` - the label of the Master Memory (example: `MM5.label` shows the label of Master Memory 5).
 
 ### Recall Screen Memory / Save/Revert Screen Memory Changes / Save Screen Memory to Slot
 
@@ -226,10 +232,10 @@ On LivePremier you also get "Unlock Screen if locked?"/"Relock after change" opt
 **Feedback: Screen Memory Slot Occupied** - Available at: LivePremier, Alta 4K, Midra 4K. Shows whether a Screen Memory slot currently has content saved, as opposed to still being empty - helps avoid accidentally overwriting an existing memory, or find a free slot, when using "Save Screen Memory to Slot".
 
 **Variables:**
-- `SM1.label` - the label of the Screen Memory.
+- `SMx.label` - the label of the Screen Memory (example: `SM5.label` shows the label of Screen Memory 5).
 - `SM.nextavailable` - the first currently-empty Screen Memory slot number, safe to target with "Save Screen Memory to Slot".
-- `S1.pgm.memory.active` / `.prw.memory.active` - the memory currently loaded in screen program/preview.
-- `S1.pgm.memory.label` / `.prw.memory.label` - the label of the memory in program/preview.
+- `Sx.pgm.memory.active` / `.prw.memory.active` - the memory currently loaded in screen program/preview (example: `S3.pgm.memory.active` shows which memory is currently active in Screen 3's program).
+- `Sx.pgm.memory.label` / `.prw.memory.label` - the label of the memory in program/preview (example: `S3.prw.memory.label` shows the label of the memory loaded in Screen 3's preview).
 
 ### Recall Aux Memory
 
@@ -241,22 +247,22 @@ Additionally, you can choose to select the chosen auxscreens, if you tick that b
 **Feedback: Aux Memory** - Available at: Alta 4K, Midra 4K.
 
 **Variables:**
-- `AM1.label` - the label of the Aux Memory.
-- `A1.pgm.memory.active` / `.prw.memory.active` - the memory currently loaded in aux program/preview.
-- `A1.pgm.memory.label` / `.prw.memory.label` - the label of the memory in program/preview.
+- `AMx.label` - the label of the Aux Memory (example: `AM5.label` shows the label of Aux Memory 5).
+- `Ax.pgm.memory.active` / `.prw.memory.active` - the memory currently loaded in aux program/preview (example: `A3.pgm.memory.active` shows which memory is currently active in Aux 3's program).
+- `Ax.pgm.memory.label` / `.prw.memory.label` - the label of the memory in program/preview (example: `A3.prw.memory.label` shows the label of the memory loaded in Aux 3's preview).
 
 ### Recall Layer Memory
 
 Available at: LivePremier  
 Recalls a Layer Memory into one or more specific Layers, loading only that Layer's saved source/position/properties without touching the rest of the Screen or Preset. Rebuilt around a single "Use Currently Selected Layers" checkbox instead of the old version's separate method dropdown. The older, deprecated version of this action is documented at the [end of this manual](#deprecated).
 
-**Variable:** `LM1.label` - the label of the Layer Memory.
+**Variable:** `LMx.label` - the label of the Layer Memory (example: `LM5.label` shows the label of Layer Memory 5).
 
 ### Recall Multiviewer Memory
 
 Available at: LivePremier, Alta 4K, Midra 4K
 
-**Variable:** `MV1.label` - the label of the Multiviewer Memory.
+**Variable:** `MVx.label` - the label of the Multiviewer Memory (example: `MV5.label` shows the label of Multiviewer Memory 5).
 
 ## <a name="topic-transitions"></a>Live Transitions
 
@@ -286,7 +292,7 @@ The input in text format has been chosen to make the action compatible with vari
 **Encoder Adjust (Screen)** - Available at: LivePremier, Alta 4K, Midra 4K. Increments or decrements a Screen's/Auxscreen's T-Bar Position or Transition Time by a step amount - built for rotary encoders, so you don't need a "Set" action plus a separately-read current value. You can step by a Raw amount (same scale as "Set T-Bar Position"'s own fields) or by a Percent of the full range - Raw wins if both are filled in.
 
 **Variables:**
-- `S1.pgm.time` / `.prw.time` (and `A1.pgm.time` / `.prw.time`) - the transition time for the screen/aux and preset.
+- `Sx.pgm.time` / `.prw.time` (and `Ax.pgm.time` / `.prw.time`) - the transition time for the screen/aux and preset (example: `S3.pgm.time` shows the transition time for Screen 3's program).
 - `SelectedScreen.number` / `.numberOfLayers` / `.TransitionTime.Pgm` / `.TransitionTime.Pvw` - further properties of the first currently selected Screen/Aux, handy for encoder-driven buttons.
 
 ### Copy Program to Preview
@@ -324,8 +330,8 @@ The properties covered are:
 - `SelectedLayer.count` / `.x` / `.y` / `.width` / `.height` / `.number` / `.opacity` - properties of the first currently selected Layer.
 - `SelectedLayer.Input.Number` / `.Input.Name` / `.Input.width` / `.Input.height` - the source assigned to the first currently selected Layer.
 - `SelectedLayer.Crop.Top` / `.Bottom` / `.Left` / `.Right` / `.Mask.Top` / `.Bottom` / `.Left` / `.Right` - crop/mask of the first currently selected Layer.
-- `S1.layer1.source` / `.status` / `.width` / `.height` / `.x` / `.y` - a Layer's own source, live signal status, size and position, for currently existing layers only. `S1.layerbg.source` covers the background/native layer.
-- `tally_S1_pgm_LIVE_1` - the tally state (0 or 1) of the source LIVE_1 in S1 program (see the caveat on tally variables in [About Variables](#variables)).
+- `Sx.layery.source` / `.status` / `.width` / `.height` / `.x` / `.y` - a Layer's own source, live signal status, size and position, for currently existing layers only (example: `S3.layer2.source` shows the source of Layer 2 on Screen 3). `Sx.layerbg.source` covers the background/native layer.
+- `tally_Sx_pgm_LIVE_y` - the tally state (0 or 1) of a given source in a given screen's program/preview (example: `tally_S2_pgm_LIVE_3` shows the tally state of source LIVE_3 in Screen 2's program - see the caveat on tally variables in [About Variables](#variables)).
 
 ## <a name="topic-freeze"></a>Freeze
 
@@ -336,7 +342,10 @@ Remember that input freeze is not a functionality done in the layer but in the i
 
 **Feedback: Input Freeze** - Available at: LivePremier, Alta 4K, Midra 4K.
 
-**Variables:** `IN1.freeze` - whether input 1 is currently frozen (true/false). `IN1.status` - live signal status (VALID/INVALID) of the input. `IN1.label` - the label of the input.
+**Variables:**
+- `INx.freeze` - whether the input is currently frozen (true/false) (example: `IN3.freeze` shows whether Input 3 is frozen).
+- `INx.status` - live signal status (VALID/INVALID) of the input (example: `IN3.status` shows Input 3's signal status).
+- `INx.label` - the label of the input (example: `IN3.label` shows the label of Input 3).
 
 ### Set Layer Freeze / LIVE - Layer Freeze
 
@@ -346,7 +355,11 @@ Remember that input freeze is not a functionality done in the layer but in the i
 
 **Feedback: Layer Freeze** - Available at: Alta 4K, Midra 4K.
 
-**Variables:** `frozen_S1_L1` - gives a * if layer 1 of screen 1 is frozen. `frozen_S1_NATIVE` - gives a * if the background layer of screen 1 is frozen. Both only available at Alta 4K and Midra 4K.
+**Variables:**
+- `frozen_Sx_Ly` - gives a * if the given layer of the given screen is frozen (example: `frozen_S1_L2` shows whether Layer 2 of Screen 1 is frozen).
+- `frozen_Sx_NATIVE` - gives a * if the background layer of the given screen is frozen (example: `frozen_S1_NATIVE` shows whether Screen 1's background layer is frozen).
+
+Both only available at Alta 4K and Midra 4K.
 
 ### Set Screen Freeze / LIVE - Screen Freeze / LIVE - Output Freeze
 
@@ -356,13 +369,15 @@ Remember that input freeze is not a functionality done in the layer but in the i
 
 **Feedback: Screen/Output Freeze** - Available at: LivePremier, Alta 4K, Midra 4K. Mirrors the matching actions above ("Set Screen Freeze" on Alta/Midra; "LIVE - Screen/Output Freeze" on LivePremier).
 
-**Variables:** `frozen_S1` - gives a * if screen 1 is frozen (Alta 4K/Midra 4K only). `OUT1.freeze` - whether output 1 is currently frozen (true/false), LivePremier only for now.
+**Variables:**
+- `frozen_Sx` - gives a * if the given screen is frozen (example: `frozen_S1` shows whether Screen 1 is frozen), Alta 4K/Midra 4K only.
+- `OUTx.freeze` - whether the given output is currently frozen (true/false) (example: `OUT1.freeze` shows whether Output 1 is frozen), LivePremier only for now.
 
 ## <a name="topic-multiviewer"></a>Multiviewer
 
 Multiviewer Memory recall, Widget Selection, and Select Source in Multiviewer Widget are documented under [Memories](#topic-memories) and [Selection, Locking & Presets](#topic-selection) respectively, since they share those actions' behavior. This section covers a Multiviewer's own live output status.
 
-**Variables:** `MVW1.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a Multiviewer's own output signal (the Multiviewer device/output itself, not a Multiviewer Memory).
+**Variables:** `MVWx.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a Multiviewer's own output signal (the Multiviewer device/output itself, not a Multiviewer Memory) (example: `MVW1.width` shows Multiviewer 1's output width).
 
 ## <a name="topic-preconfig"></a>Preconfig
 
@@ -389,7 +404,7 @@ Assigns the content (a Live Input or a Still Image) that a chosen Background Set
 Available at: LivePremier, Alta 4K, Midra 4K  
 Assigns an image from the Image Library (or, on LivePremier, a Timer) so it becomes available as a Layer source. On LivePremier this targets an Image Store slot; on Alta/Midra it targets a Foreground or Background Frame slot instead, matching how each platform actually uses library images.
 
-**Variable:** `IMG1.label` - the label of the still image (formerly `STILL_1label`).
+**Variable:** `IMGx.label` - the label of the still image (formerly `STILL_xlabel`) (example: `IMG5.label` shows the label of Image 5).
 
 ## <a name="topic-audio"></a>Audio
 
@@ -432,9 +447,9 @@ Times for the Adjust Time command can be entered in the action or any variable w
 **Feedback: Timer State** - Available at: LivePremier, Alta 4K, Midra 4K. Each feedback visualizes one timer state. Remember that you can add multiple feedbacks to one button to monitor different states on one button.
 
 **Variables:**
-- `TIMER1.status` - Running or Stopped and so on.
-- `TIMER1.value` - current time of timer in milliseconds. Only available at LivePremier since firmware 4.03.38.
-- `TIMER1.value.hms` / `.value.h` / `.value.m` / `.value.s` - current time of timer, formatted as hh:mm:ss or split into hours/minutes/seconds.
+- `TIMERx.status` - Running or Stopped and so on (example: `TIMER1.status` shows Timer 1's status).
+- `TIMERx.value` - current time of timer in milliseconds (example: `TIMER1.value` shows Timer 1's current time in ms). Only available at LivePremier since firmware 4.03.38.
+- `TIMERx.value.hms` / `.value.h` / `.value.m` / `.value.s` - current time of timer, formatted as hh:mm:ss or split into hours/minutes/seconds (example: `TIMER1.value.hms` shows Timer 1's current time as hh:mm:ss).
 
 ## <a name="topic-testpatterns"></a>Testpatterns
 
@@ -472,8 +487,8 @@ Manually switches a Backup Set (or every Set in a Backup Group) to show its Prim
 **Feedback: Backups - Active Backup Source / Auto Mode Status** - Available at: LivePremier (firmware 6.0.4+). Shows which source (Primary/Backup1/Backup2) is currently active for a Backup Set or Group, or whether Auto Mode is currently on or off for it - the read-side of the action above.
 
 **Variables:**
-- `backups.set1.activeslot` / `.activesource` / `.automode` / `.primary.source` / `.primary.status` / `.backup1.source` / `.backup1.status` / `.backup2.source` / `.backup2.status` - one Backup Set's full status (LivePremier, firmware 6.0.4+).
-- `backups.group1.activeslot` / `.label` / `.automode` / `.allprimaries.status` / `.allbackup1.status` / `.allbackup2.status` - one Backup Group's full status, worst-case across its members.
+- `backups.setx.activeslot` / `.activesource` / `.automode` / `.primary.source` / `.primary.status` / `.backup1.source` / `.backup1.status` / `.backup2.source` / `.backup2.status` - one Backup Set's full status (example: `backups.set1.activeslot` shows Backup Set 1's currently active slot), LivePremier, firmware 6.0.4+.
+- `backups.groupx.activeslot` / `.label` / `.automode` / `.allprimaries.status` / `.allbackup1.status` / `.allbackup2.status` - one Backup Group's full status, worst-case across its members (example: `backups.group1.label` shows Backup Group 1's label).
 
 ### Device - Failover to Hot Backup
 
@@ -496,11 +511,11 @@ Swaps the "Hot Backup Device Address" with the current "Device Network Address" 
 - `Device.Status.Temperature` / `Device.Status.Fans` - aggregated temperature/fan alarm status.
 - `Device.Connected.Maindevice` - this connection's own connection status.
 - `Device.Connected.Hotbackupdevice` / `Device.IP.Hotbackup` - Hot Backup Device connection status/address (LivePremier only, "not_configured" while disabled).
-- `S1.label` / `A1.label` - the label of the screen/aux screen.
-- `S1.width` / `.height` / `.aspectratio` - a Screen's/Aux's own canvas resolution, for currently-enabled screens/auxes only.
-- `OUT1.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a physical output's current signal and label.
-- `OUT1.hdcp` / `.colorspace` / `.sinkdetected` / `.sinkname` - a physical output's connected-sink status.
-- `OUT1.usedin` - which Screen/Aux a physical output is currently feeding, blank if unused.
+- `Sx.label` / `Ax.label` - the label of the screen/aux screen (example: `S1.label` shows the label of Screen 1).
+- `Sx.width` / `.height` / `.aspectratio` - a Screen's/Aux's own canvas resolution, for currently-enabled screens/auxes only (example: `S1.width` shows Screen 1's canvas width).
+- `OUTx.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a physical output's current signal and label (example: `OUT1.format` shows Output 1's current format).
+- `OUTx.hdcp` / `.colorspace` / `.sinkdetected` / `.sinkname` - a physical output's connected-sink status (example: `OUT1.sinkdetected` shows whether Output 1 has a connected sink).
+- `OUTx.usedin` - which Screen/Aux a physical output is currently feeding, blank if unused (example: `OUT1.usedin` shows which Screen/Aux Output 1 currently feeds).
 
 ## <a name="topic-custom"></a>Custom Commands & Feedback
 
