@@ -1,4 +1,0 @@
-export interface AWJinst {
-	state: any
-	//[key: string | number]: DeviceMapItem;
-}
