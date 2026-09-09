@@ -93,7 +93,7 @@ For every item below: single Layer, "All Selected Layers"/"First/Only Selected L
 
 ## 8. Preconfig
 
-- [ ] Inputs - Set Input Keying - all modes including the two new ones (CremaTTe3D, Cut&Fill firmware-gated 4.0.254+) - confirm Midra's own firmware-version reporting works with the gate. Input field short-id/bare-number/raw-id resolution.
+- [ ] Inputs - Set Input Keying - confirm whether CremaTTe3D and Cut&Fill actually exist/work on Midra's `mode` field at all - both are only live-confirmed on a real Aquilon so far, and Midra's own callback override doesn't carry over the base's `isFirmwareAtLeast('4.0.254')` guard on Cut&Fill (it just sends it unconditionally). If either mode doesn't exist on Midra, remove it from the choices there rather than adding a Midra-specific firmware gate. Input field short-id/bare-number/raw-id resolution.
 - [ ] Inputs - Input Keying Status feedback - same mode coverage.
 - [ ] Set Input Plug **(Midra/Alta)** + Input Plug Status feedback **(Midra/Alta)**.
 - [ ] Assign Image from Library to Foreground/Background Frame **(Midra/Alta)** - Logo vs. Background frame type, all 4 slots, "None (clear)".
