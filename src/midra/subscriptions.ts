@@ -233,7 +233,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 	get masterMemoryLabel():Subscription {
 		return {
 			pat: 'DEVICE/device/preset/masterBank/slotList/items/(\\d+)/control/pp/label',
-			ini: Array.from({ length: 49 }, (_, i) => (i + 1).toString()),
+			ini: Array.from({ length: this.constants.maxMasterMemories }, (_, i) => (i + 1).toString()),
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[6] : path.split('/')[6]
@@ -250,7 +250,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 	get multiviewerMemoryLabel():Subscription {
 		return {
 			pat: 'DEVICE/device/multiviewer/bankList/items/(\\d+)/control/pp/label',
-			ini: Array.from({ length: 49 }, (_, i) => (i + 1).toString()),
+			ini: Array.from({ length: this.constants.maxMultiviewerMemories }, (_, i) => (i + 1).toString()),
 			fun: (path, _value) => {
 				if (!path) return false
 				const memory = Array.isArray(path) ? path[5] : path.split('/')[5]
@@ -705,7 +705,10 @@ export default class SubscriptionsMidra extends Subscriptions {
 
 	get inputPlugStatus(): Subscription {
 		return {
-			pat: 'DEVICE/device/inputList/items/IN_\\d+/status/pp/plug',
+			// Midra's real input id is 'INPUT_n' (see plugChange's own 'ini' above / deviceInputFreeze's fix) -
+			// 'IN_n' never matches any real path here, so this feedback previously never live-updated, only
+			// ever showing its initial value from when the button was placed.
+			pat: 'DEVICE/device/inputList/items/INPUT_\\d+/status/pp/plug',
 			fbk: 'deviceInputPlugStatus'
 		}
 	}

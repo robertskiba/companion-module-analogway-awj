@@ -298,15 +298,12 @@ export default class ChoicesMidra extends Choices {
 	}
 
 	public getWidgetChoices(): Dropdown<string>[] {
-		const ret: Dropdown<string>[] = []
 		return (this.state.get('DEVICE/device/multiviewer/status/pp/widgetValidity') ?? []).map((widget: string) => {
 			return {
 				id: '1:' + widget,
 				label: `Widget ${parseInt(widget)}`,
 			}
 		})
-		
-		return ret
 	}
 
 	public getWidgetSourceChoices(): Dropdown<string>[] {
@@ -485,15 +482,15 @@ export default class ChoicesMidra extends Choices {
 	 * @returns UP or DOWN, whichever is the actual preset for program or preview, during fades the preset is changed only at the end of the fade
 	 */
 	public getPreset(screen: string, preset: string): string {
-		if (screen.match(/^S|A\d+$/) === null) return ''
+		if (screen.match(/^(S|A)\d+$/) === null) return ''
 		// PVW and PRV are accepted for backwards compatibility / typo-tolerance alongside the current PRW -
 		// never remove them
-		if (preset.match(/^UP|DOWN|PGM|PVW|PRW|PRV|SEL$/i) === null) return ''
+		if (preset.match(/^(UP|DOWN|PGM|PVW|PRW|PRV|SEL)$/i) === null) return ''
 		if (preset.toLowerCase() === 'sel') {
 			preset = this.getPresetSelection()
 		}
 		let ret: string
-		if (preset.match(/^UP|DOWN$/i)) {
+		if (preset.match(/^(UP|DOWN)$/i)) {
 			ret = preset.toUpperCase()
 		} else {
 			// the internal state key is always 'pvw', regardless of whether the user typed PVW, PRW or PRV
@@ -511,8 +508,8 @@ export default class ChoicesMidra extends Choices {
 	 * @returns program or preview, during fades the preset is changed only at the end of the fade
 	 */
 	public getPresetRev(screen: string, preset: string, fullName = false): string | null {
-		if (screen.match(/^S|A\d+$/) === null) return null
-		if (preset.match(/^up|down$/i) === null) return null
+		if (screen.match(/^(S|A)\d+$/) === null) return null
+		if (preset.match(/^(up|down)$/i) === null) return null
 		let ret: string
 		if (this.state.get(`LOCAL/screens/${screen}/pgm/preset`) === preset.toUpperCase()) {
 			ret = fullName ? 'PROGRAM' : 'pgm'
@@ -536,7 +533,7 @@ export default class ChoicesMidra extends Choices {
 		if (layer.match(/top/i)) {
 			return ['top']
 		}
-		else if (layer.match(/^bg$|bkg|background|native/i)) {
+		else if (layer.match(/^(bg|bkg|background|native)$/i)) {
 			return ['background']
 		}
 		else {
