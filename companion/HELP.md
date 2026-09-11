@@ -2,6 +2,8 @@
 
 This module was originally developed by Dorian Meid until 2023. After it appeared to sit unmaintained for almost three years, Robert Skiba took it on to bring it into the modern Companion environment and add many features people had long been waiting for.
 
+**Requires Companion 4.3 or newer** - it will not load at all on older Companion versions.
+
 **Most important:**  
 **[Beware of selection synchronization!](#sync)**  
 **There are many presets but many more actions and feedbacks, presets are a good starting point though.**

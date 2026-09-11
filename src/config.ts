@@ -156,6 +156,17 @@ export function GetConfigFields(config?: Config, cardSummaries?: DeviceCardSumma
 		})
 
 	return [
+		// Companion version requirement first of all - if someone ended up here on a Companion old enough to
+		// not support this at all, Companion itself would have refused to even load the module, so this only
+		// reaches people on a new-enough Companion; it's here as a heads-up for anyone deciding whether to roll
+		// this module out to colleagues/other machines that might still be on an older Companion.
+		{
+			id: 'companionVersionRequirement',
+			type: 'static-text' as const,
+			label: 'Companion Version Requirement',
+			value: 'This module requires Companion 4.3 or newer (it relies on @companion-module/base v2, which needs the native expression/local-variable support added in Companion 4.3). It will not load at all on older Companion versions.',
+			width: 12,
+		},
 		// The Leader's own "Update Suggested" notice (if applicable) sits above everything else, including
 		// Device Network Address - it's the one thing here worth seeing immediately, unlike the rest of this
 		// section which is purely informational and lives at the bottom instead.
