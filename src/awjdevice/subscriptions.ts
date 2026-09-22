@@ -335,12 +335,22 @@ export default class Subscriptions {
 		}
 	}
 
-	/** The globally selected Anchor Point changes (from this module, WebRCS, or another client) */
+	/** The globally selected Anchor Point changes (from this module, WebRCS, or another client). Also exposes
+	 *  it as Selection.AnchorPoint - registered here rather than in the static variable list so it only exists
+	 *  on a platform that actually has the setting (Midra does not register this subscription at all). */
 	get globalAnchorPointChange():Subscription {
 		return {
 			pat: 'live/screens/layers/anchorPoint',
 			fbk: 'globalAnchorPoint',
-			fun: this.refreshSelectedLayerRect,
+			fun: () => {
+				this.instance.addVariable({
+					id: 'globalAnchorPointChange',
+					variableId: 'Selection.AnchorPoint',
+					name: 'Globally selected Anchor Point - the reference point Layer positions are measured from, shared with WebRCS',
+				})
+				this.instance.setVariableValues({ 'Selection.AnchorPoint': this.instance.choices.getGlobalAnchorPoint() })
+				return this.refreshSelectedLayerRect()
+			},
 		}
 	}
 

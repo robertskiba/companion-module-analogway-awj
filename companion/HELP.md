@@ -329,6 +329,7 @@ The properties covered are:
 **Feedback: Source Tally** - Available at: LivePremier, Alta 4K, Midra 4K. Shows you whether a source can be seen on screen. It is more enhanced than the tally indicators of WebRCS or the device because it tracks the real visibility. A tally will not light if the source is in the layer but the layer is outside of the screen or if the layer has no area or is masked totally or is completely transparent. At Alta and Midra 4K also visibility of inputs in background sets will also be shown. There is no calculation if a layer completely covers another layer as layer content can also be transparent itself.
 
 **Variables:**
+- `Selection.AnchorPoint` - Available at: LivePremier. The globally selected Anchor Point (`CENTER`, `TOP_LEFT`, ...), i.e. the reference point a Layer's X/Y position is measured from. It is a shared setting, so it also follows changes made in WebRCS or by another client. Not available on Alta 4K / Midra 4K, which have no such setting at all - their Layer positions are always measured from the centre.
 - `SelectedLayer.count` / `.x` / `.y` / `.width` / `.height` / `.number` / `.opacity` - properties of the first currently selected Layer.
 - `SelectedLayer.Input.Number` / `.Input.Name` / `.Input.width` / `.Input.height` - the source assigned to the first currently selected Layer.
 - `SelectedLayer.Crop.Top` / `.Bottom` / `.Left` / `.Right` / `.Mask.Top` / `.Bottom` / `.Left` / `.Right` - crop/mask of the first currently selected Layer.
