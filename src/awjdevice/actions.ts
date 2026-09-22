@@ -5148,14 +5148,12 @@ export default class Actions {
 						let newPosV: number | undefined
 
 						if (action.options.mode === 'fullscreen') {
-							const screninfo = this.choices.getScreenInfo(layer.screenAuxKey)
-							const screenpath = [
-								...(screninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-								'items', screninfo.platformId,
-								...this.constants.screenSizePath
-							]
-							const screenWidth = this.state.get(['DEVICE', ...screenpath, 'sizeH']) ?? 1920
-							const screenHeight = this.state.get(['DEVICE', ...screenpath, 'sizeV']) ?? 1080
+							// Via choices, like every other Screen-resolution lookup: a Midra Aux has no canvas node
+							// and takes its resolution from the output it feeds. Identical to the inline path this
+							// replaced for a Screen, and on LivePremier for an Aux too.
+							const canvas = this.choices.getScreenCanvasSize(layer.screenAuxKey)
+							const screenWidth = canvas.width ?? 1920
+							const screenHeight = canvas.height ?? 1080
 							targetSizeH = screenWidth
 							targetSizeV = screenHeight
 							newPosH = Math.round(screenWidth / 2)
