@@ -37,10 +37,10 @@ Live-confirmed missing in earlier sessions. Just needs a quick sanity check that
 - [ ] Recall Aux Memory **(Midra/Alta)** - same target-resolution sweep as above.
 - [ ] Recall Master Memory - all Screens variant, per-screen variant.
 - [ ] Recall Multiviewer Memory.
-- [ ] Take / Cut (Screen) - all Screen-targeting modes; confirm "First/Only Selected Screen" resolves correctly (this had a bug on Midra's Cut action historically - retest explicitly).
-- [ ] Set T-Bar Position.
-- [ ] Set Transition Time - defaults to Preview; test Both (Preview/Program) too.
-- [ ] Screen - Encoder Adjust (T-Bar Position / Transition Time, Raw/Percent/Pixel steps).
+- [ ] Take / Cut (Screen) - all Screen-targeting modes; confirm "First/Only Selected Screen" resolves correctly (this had a bug on Midra's Cut action historically - retest explicitly). *(Partial 2026-09-22: Take on a single named screen works. The targeting sweep and Cut are still open.)*
+- [x] Set T-Bar Position (verified 2026-09-22: writes `control/pp/tbarPosition`, device follows; `SelectedScreen.tbarPosition` reports the absolute bar position 0-100, where 0 is down and 100 is up. A Take does **not** move the bar back - neither on the device nor in WebRCS - so a variable standing at 100 after a transition is correct, not stale. Needed a subscription-pattern fix first; the Midra screen group lives under `device/transition/screenList` with bare numeric item keys, not `device/screenAuxGroupList`/`S1`).
+- [x] Set Transition Time - defaults to Preview; test Both (Preview/Program) too (verified 2026-09-22).
+- [x] Screen - Encoder Adjust (T-Bar Position / Transition Time, Raw/Percent/Pixel steps) (verified 2026-09-22: Transition Time worked immediately; T-Bar Position needed the same path fix plus a rewrite of the stepping. Now absolute - "+" up, "-" down, a no-op at either end - and stepped in whole percent, converting to raw only at the end, because the raw range does not divide evenly by a typical step and the other order landed on 50.01%. The earlier "always advance the transition" model is deliberately abandoned: over-turning at the top ran the bar back down and triggered a take).
 - [ ] Copy Program to Preview.
 - [ ] Lock Screen(s) / Select Preset (Program/Preview) / Select Screen / Select Layer (+ V3 variant) - all target-resolution modes.
 - [ ] Input Freeze - Freeze/Unfreeze/Toggle, `IN1`/bare number/`IN_1` all accepted, `IN{n}.freeze` variable live-updates.
