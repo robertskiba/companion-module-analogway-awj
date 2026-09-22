@@ -1285,7 +1285,10 @@ export default class ActionsMidra extends Actions {
 							}
 						})
 				} else {
-					ret = this.state.get('LOCAL/layerIds')
+					// `?? []` because LOCAL/layerIds does not exist until a layer has been selected at least
+					// once - and the very next thing done with `ret` is findIndex/push, so without it the first
+					// selection made on a fresh connection throws before it can store anything.
+					ret = this.state.get('LOCAL/layerIds') ?? []
 				}
 			}
 			let scrs: string[] = []
@@ -1397,7 +1400,10 @@ export default class ActionsMidra extends Actions {
 							}
 						})
 				} else {
-					ret = this.state.get('LOCAL/layerIds')
+					// `?? []` because LOCAL/layerIds does not exist until a layer has been selected at least
+					// once - and the very next thing done with `ret` is findIndex/push, so without it the first
+					// selection made on a fresh connection throws before it can store anything.
+					ret = this.state.get('LOCAL/layerIds') ?? []
 				}
 			}
 			const screens = action.options.screens === 'first'
