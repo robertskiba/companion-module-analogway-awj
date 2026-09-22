@@ -1138,11 +1138,10 @@ export default class Actions {
 						// platformId, not the 'S1'-style id - Midra keys this list by the bare number. Identical on
 						// LivePremier, where platformId is the 'S1' form.
 						const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
-						// Read the position from wherever this platform actually reports it - see
-						// constants.tbarPositionReadPath. groupPath already ends in control/pp, so step back up to the
-						// item before appending the read path.
-						const groupItemPath = groupPath.slice(0, -2)
-						const current = this.state.get(['DEVICE', ...groupItemPath, ...this.constants.tbarPositionReadPath]) ?? 0
+						// The control field is a command, not a readback: after a completed transition it keeps the
+						// last value it was sent. Harmless here, because the advance direction below is derived from
+						// which end the bar is parked at - so stepping away from a stuck maximum moves correctly.
+						const current = this.state.get(['DEVICE', ...groupPath, 'tbarPosition']) ?? 0
 						// The user's +/- says "advance" or "go back"; which numeric direction that is depends on the
 						// platform and, on Midra, on which end the bar is currently parked at.
 						const advance = this.choices.getTbarAdvanceDirection(screen)

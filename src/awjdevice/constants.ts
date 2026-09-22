@@ -68,12 +68,6 @@ export default class Constants {
      * platform - it simply clears whatever was there. */
     static readonly crossDepthFlags: { on: string | null, off: string | null, clear: string[], clearPrefix?: string } =
         { on: null, off: 'DEPTH_CUT_MIDDLE', clear: [], clearPrefix: 'DEPTH_CUT_' }
-    /** Where to READ a screen's current T-Bar position from, relative to its screen-group item. Writing
-     * always goes to control/pp/tbarPosition, but that field is a command rather than a readback on
-     * Midra/Alta: once a transition completes it stays at 65535 while status/pp/tbarPosition returns to 0.
-     * Reading the command back therefore made every further step land on 65535 again, which the device
-     * takes as "fully pushed" and cuts. LivePremier keeps its existing behaviour. */
-    static readonly tbarPositionReadPath: string[] = ['control', 'pp', 'tbarPosition']
     /** Whether the platform has layer Keying at all. Midra/Alta does not - its inputs report
      * status/keying/pp/isAvailable false, and the Keying action is not registered there. */
     static readonly hasLayerKeying: boolean = true
