@@ -578,20 +578,32 @@ export default class Choices {
 	 * than this needs). 'NONE' stays 'NONE'; anything unrecognized is passed through unchanged.
 	 */
 	public backgroundContentToShortSource(content: string): string {
-		const match = content.match(/^(LIVE|STILL)_(\d+)$/)
+		const match = this.normalizeSourceId(content).match(/^(LIVE|STILL)_(\d+)$/)
 		if (!match) return content
 		return match[1] === 'LIVE' ? `IN${match[2]}` : `IMG${match[2]}`
+	}
+
+	/**
+	 * Canonical spelling of a source id. Every source id in the AWJ protocol and in this module's own short-id
+	 * convention is uppercase ('NONE', 'COLOR', 'LIVE_3', 'STILL_3', 'NATIVE_1', 'SCREEN_2', 'INPUT_4', 'IN3',
+	 * 'IMG3'), so upper-casing is a lossless canonicalization - but a value typed by hand in Expression Mode
+	 * ('in3', 'img1') otherwise matches nothing at all and silently reads as "not tallied"/"no such source".
+	 */
+	public normalizeSourceId(source: string): string {
+		return source?.toString().trim().toUpperCase() ?? ''
 	}
 
 	/**
 	 * The reverse of backgroundContentToShortSource() - converts this module's short source id ('IN8', 'IMG3')
 	 * back to the raw AWJ `content` id ('LIVE_8', 'STILL_3') a Background Set output's `content` field actually
 	 * expects. 'NONE' stays 'NONE'; anything unrecognized (including 'COLOR', not offered as a Background Set
-	 * choice - see getBackgroundSetContentChoices()) is passed through unchanged.
+	 * choice - see getBackgroundSetContentChoices()) is passed through, canonicalized to uppercase so a
+	 * hand-typed 'native_1' still matches the device's own 'NATIVE_1'.
 	 */
 	public shortSourceToBackgroundContent(shortId: string): string {
-		const match = shortId.match(/^(IN|IMG)(\d+)$/)
-		if (!match) return shortId
+		const normalized = this.normalizeSourceId(shortId)
+		const match = normalized.match(/^(IN|IMG)(\d+)$/)
+		if (!match) return normalized
 		return match[1] === 'IN' ? `LIVE_${match[2]}` : `STILL_${match[2]}`
 	}
 

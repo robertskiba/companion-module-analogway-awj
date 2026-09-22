@@ -835,10 +835,79 @@ export default class Feedbacks {
 		return deviceAuxMemory
 	}
 
+	/**
+	 * Builds the "LIVE - Source Tally" variable name for an already-resolved, sorted set of Screens/Auxes.
+	 * Shared by the base callback and Midra's own callback override so the two can't drift apart.
+	 *
+	 * New (V3) scheme: `{screens}.{preset}.tally.{source}`, e.g. `S1.pgm.tally.IN1` - Screen-first and
+	 * dot-separated like every other V3 variable (`S1.label`, `S1.pgm.memory.active`, `S1.layer1.source`),
+	 * with the preset segment reusing the exact `pgm`/`prw` vocabulary of `S1.pgm.time`. The two "Both"
+	 * choices have no underscore-free equivalent there, so they become `bothand`/`bothor` to keep the
+	 * segment count at a fixed four. Multiple Screens stay dash-joined (`S1-S2-A1.pgm.tally.IN1`) - the one
+	 * part that can't be a clean entity prefix, because the variable genuinely describes a set.
+	 */
+	protected tallyVariableName(screensSegment: string, sortedScreens: string[], preset: string, source: string): string {
+		// The old (V2) name always spelled out the resolved Screen list, tokens included - kept exactly as it
+		// was so a connection running on old names keeps matching whatever its buttons already reference.
+		if (this.instance.config.useOldVariableNames) return `tally_${sortedScreens.join('-')}_${preset}_${source}`
+		const presetSegment = preset === 'both_and' ? 'bothand' : preset === 'both_or' ? 'bothor' : preset
+		return `${screensSegment}.${presetSegment}.tally.${source}`
+	}
+
+	/**
+	 * The Screens segment of a tally variable name. "Any Screen"/"Selected Screens"/"First Selected" keep their
+	 * own token ('ALL'/'SEL'/'FIRSTSEL') instead of being replaced by whatever they happen to resolve to right
+	 * now: resolving them would rename the variable - and orphan the buttons referencing it - every time a
+	 * Screen is enabled or the selection changes, and on the default "Any Screen" setting it would produce
+	 * names like `A1-A2-S1-S2-S3-S4.pgm.tally.IN1`. Only an explicitly named Screen list is spelled out.
+	 */
+	protected tallyScreensSegment(rawScreens: string, sortedScreens: string[]): string {
+		switch (rawScreens?.toString().trim().toLowerCase()) {
+			case 'all': return 'ALL'
+			case 'sel': return 'SEL'
+			case 'first': return 'FIRSTSEL'
+			default: return sortedScreens.join('-')
+		}
+	}
+
+	/**
+	 * Registers (or refreshes) the one tally variable belonging to a single placed "LIVE - Source Tally"
+	 * feedback and returns its name - or null if the feedback's options don't currently describe a real
+	 * target, in which case no variable is exposed at all.
+	 *
+	 * Both guarded cases used to produce a malformed name with an empty segment: no resolved Screen (an
+	 * empty "Selected Screens", or a Screens field still being typed) gave `.pgm.tally.IN1`, and an empty
+	 * Source field gave `S1.pgm.tally.`. Goes through addSoleVariable() so a half-typed option value can't
+	 * leave its intermediate name behind - see that method for why Companion makes that necessary.
+	 *
+	 * The description deliberately does not name the button this came from. A module is never told where a
+	 * feedback sits - CompanionFeedbackInfo carries nothing but an opaque `controlId` nanoid - and the one
+	 * channel that could supply it, an option value holding `$(this:page)`, only resolves in expression mode,
+	 * which an option's `default` cannot request (ExpressionOrValue is accepted for presets and upgrade
+	 * scripts only). Companion's own per-entry note field covers the use case instead.
+	 */
+	protected registerTallyVariable(feedbackId: string, rawScreens: string, sortedScreens: string[], preset: string, source: string): string | null {
+		const canonicalSource = this.choices.normalizeSourceId(source)
+		const screensSegment = this.tallyScreensSegment(rawScreens, sortedScreens)
+		// Old-name mode spells out the resolved list even for the tokens, so there it still takes a non-empty one.
+		const screensPart = this.instance.config.useOldVariableNames ? sortedScreens.join('-') : screensSegment
+		if (!screensPart || !canonicalSource) {
+			this.instance.removeVariable(feedbackId)
+			return null
+		}
+		const varName = this.tallyVariableName(screensSegment, sortedScreens, preset, canonicalSource)
+		this.instance.addSoleVariable({
+			id: feedbackId,
+			variableId: varName,
+			name: `Tally for ${canonicalSource} at screens ${screensSegment}, preset ${preset}`,
+		})
+		return varName
+	}
+
 	// MARK: deviceSourceTally
 	get deviceSourceTally() {
-		
-		const deviceSourceTally: AWJfeedback<{ screens: string, preset: string, source: string }> = {
+
+		const deviceSourceTally: AWJfeedback<{ screens: string, preset: string, source: string, variableInfo: string }> = {
 			type: 'boolean',
 			name: 'LIVE - Source Tally',
 			sortName: '01 LIVE - 05 Source Tally',
@@ -875,12 +944,20 @@ export default class Feedbacks {
 					choices: [...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources],
 					default: 'NONE',
 				},
-			],
+				{
+					id: 'variableInfo',
+					type: 'static-text',
+					label: '',
+					value: '---\n**This feedback also creates and updates a tally variable.**\n\nIts name is built from the three fields above, e.g. `S1.pgm.tally.IN1`. "Any Screen", "Selected Screens" and "First/Only Selected Screen" keep their own `ALL` / `SEL` / `FIRSTSEL` name rather than the Screens they happen to resolve to, so the variable does not get renamed whenever the selection changes.\n\nChanging any of those fields renames the variable - the previous name is dropped, it does not pile up.',
+					disableAutoExpression: true,
+				},
+				],
 			unsubscribe: (feedback: CompanionFeedbackBooleanEvent & { options: { screens: string, preset: string, source: string } }) => {
-				const targetScreens = feedback.options.screens === 'first' ? this.choices.getSelectedScreens().slice(0, 1) : this.choices.getChosenScreenAuxes(feedback.options.screens)
-				const sortedScreens = [...targetScreens].sort()
-				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
-				this.instance.removeVariable(feedback.id, varName)
+				// Drops every name this feedback ever registered, not just the one its options resolve to right
+				// now - the name embeds the *resolved* Screen list, so it changes underneath us whenever the
+				// selection changes while "Selected Screens"/"Any Screen" is in use. Recomputing a single name
+				// here would only ever remove the most recent one and orphan all the earlier ones.
+				this.instance.removeVariable(feedback.id)
 			},
 			callback: (feedback) => {
 				// Screens field follows the module's usual "S1S2A1" concatenated Expression Mode convention
@@ -889,12 +966,7 @@ export default class Feedbacks {
 				// resolved the same way every other "Screens" field in this module already does.
 				const targetScreens = feedback.options.screens === 'first' ? this.choices.getSelectedScreens().slice(0, 1) : this.choices.getChosenScreenAuxes(feedback.options.screens)
 				const sortedScreens = [...targetScreens].sort()
-				const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
-				this.instance.addVariable({
-					id: feedback.id,
-					variableId: varName,
-					name: `Tally for ${feedback.options.source} at screens ${sortedScreens.join(', ')}, preset ${feedback.options.preset}`,
-				})
+				const varName = this.registerTallyVariable(feedback.id, feedback.options.screens, sortedScreens, feedback.options.preset, feedback.options.source)
 				// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n) the
 				// device actually stores - anything else (NONE/COLOR/SCREEN_n/NATIVE_n, or an already-raw id
 				// typed directly via Expression Mode) passes through unchanged.
@@ -977,7 +1049,7 @@ export default class Feedbacks {
 				} else {
 					varValue = '0'
 				}
-				if (varValue != this.instance.getVariableValue(varName)) {
+				if (varName && varValue != this.instance.getVariableValue(varName)) {
 					this.instance.setVariableValues({ [varName]: varValue })
 				}
 				return tally

@@ -577,6 +577,30 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	}
 
 	/**
+	 * Registers `newVariable` as the *only* variable owned by its `id`, dropping every other variableId the
+	 * same owner registered before.
+	 *
+	 * For variables whose name is derived from user-editable option values - the "LIVE - Source Tally"
+	 * feedback builds its name from the Screens/Preset/Source fields. Companion re-evaluates a feedback on
+	 * every keystroke in an option field and does not call `unsubscribe` in between, so typing "LIVE_1" into
+	 * a Source field would otherwise leave `...tally.l`, `...tally.li`, `...tally.liv`, ... behind as
+	 * permanently orphaned variables. Registering through here means each owner keeps exactly one name: the
+	 * one its options currently resolve to.
+	 *
+	 * Behaves exactly like addVariable() for a variable registered without an `id`, since there is no owner
+	 * to scope the cleanup to.
+	 */
+	public addSoleVariable(newVariable: TrackedVariable): void {
+		const ownerId = newVariable.id
+		if (ownerId !== undefined) {
+			for (const stale of this.variables.filter(variable => variable.id === ownerId && variable.variableId !== newVariable.variableId)) {
+				this.removeVariable(ownerId, stale.variableId)
+			}
+		}
+		this.addVariable(newVariable)
+	}
+
+	/**
 	 * Removes a custom variable from the internal list of variables from this instance
 	 * @param id internal ID of the variable to remove
 	 * @param remVariable variableId of the variable to remove, if undefined remove all variables from that ID

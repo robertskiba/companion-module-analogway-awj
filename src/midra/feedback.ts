@@ -213,14 +213,17 @@ export default class FeedbacksMidra extends Feedbacks  {
 
 			const tally = checkTally()
 			const sortedScreens = [...targetScreens].sort()
-			const varName = `tally_${sortedScreens.join('-')}_${feedback.options.preset}_${feedback.options.source}`
+			// The base class registers this variable in its own callback, but this override replaces that
+			// callback wholesale (only `unsubscribe` is inherited) - without registering it here too, Midra
+			// would only ever push a value for a name Companion never learned about.
+			const varName = this.registerTallyVariable(feedback.id, feedback.options.screens, sortedScreens, feedback.options.preset, feedback.options.source)
 			let varValue = '0'
 			if (tally) {
 				varValue = '1'
 			} else {
 				varValue = '0'
 			}
-			if (varValue != this.instance.getVariableValue(varName)) {
+			if (varName && varValue != this.instance.getVariableValue(varName)) {
 				this.instance.setVariableValues({ [varName]: varValue })
 			}
 			return tally
