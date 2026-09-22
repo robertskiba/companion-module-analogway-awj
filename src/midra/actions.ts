@@ -1367,8 +1367,8 @@ export default class ActionsMidra extends Actions {
 				const preset = this.choices.getPresetSelection(action.options.preset, true)
 				this.connection.sendWSmessage(
 					[
-						'device', 'preset', 'bank', 'control', 'save',
-						'screenList', 'items', this.choices.getScreenInfo(screen).platformId,
+						'device', 'preset', isAux ? 'auxBank' : 'bank', 'control', 'save',
+						isAux ? 'auxiliaryScreenList' : 'screenList', 'items', this.choices.getScreenInfo(screen).platformId,
 						'presetList', 'items', preset,
 						'slotList', 'items', String(slot),
 						'pp', 'xRequest',
