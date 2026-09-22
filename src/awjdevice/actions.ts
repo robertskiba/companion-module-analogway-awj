@@ -1145,7 +1145,15 @@ export default class Actions {
 						// The user's +/- says "advance" or "go back"; which numeric direction that is depends on the
 						// platform and, on Midra, on which end the bar is currently parked at.
 						const advance = this.choices.getTbarAdvanceDirection(screen)
-						const newValue = Math.round(Math.min(65535, Math.max(0, current + direction * advance * delta0to100 / 100 * 65535)))
+						// Stepped in percent and only converted to raw at the end. Going the other way round
+						// accumulates error, because the raw range is not divisible by a typical step: 10% is
+						// 6553.5 units, so each step rounded away half a unit and five of them landed on 50.01%
+						// instead of 50%. Percent is also where the 0-100 limit belongs, so a step can neither
+						// undershoot nor overshoot the ends of the bar.
+						const tbarMax = 65535
+						const currentPercent = (current as number) / tbarMax * 100
+						const newPercent = Math.min(100, Math.max(0, Math.round(currentPercent + direction * advance * delta0to100)))
+						const newValue = Math.round(newPercent / 100 * tbarMax)
 						this.connection.sendWSmessage([...groupPath, 'tbarPosition'], newValue)
 					} else {
 						const deltaDeciseconds = hasRaw ? Number(rawStr) : Number(pctStr) / 100 * 3000
