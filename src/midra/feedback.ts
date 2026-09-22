@@ -80,6 +80,64 @@ export default class FeedbacksMidra extends Feedbacks  {
 	}
 
 
+	/**
+	 * MARK: deviceLayerPropertyStatus - Midra
+	 *
+	 * Two differences from the inherited list, both about properties rather than paths - the Border, Effects,
+	 * Mask, Aspect and Transition reads all resolve correctly here already, via the per-platform path
+	 * constants and the cross-flag vocabularies.
+	 *
+	 * "Cut&Fill - Enabled" is dropped: it reads `layerList/items/{n}/status/pp/canUseMask` and
+	 * `cutNFill/pp/type`, neither of which exists on a Midra layer, so it could only ever report false. The
+	 * matching action is not registered here either.
+	 *
+	 * Aspect Override gains Midra's own two extra values. The write side has offered Global Settings and
+	 * Input Setting since the Aspect & Crop pass; the read side still only knew LivePremier's four, so those
+	 * two could be set and then not checked. The four inherited entries keep their own ids untouched, so a
+	 * button built against them during an earlier release candidate keeps working - only the two missing ones
+	 * are added.
+	 */
+	get deviceLayerPropertyStatus() {
+		const deviceLayerPropertyStatus = super.deviceLayerPropertyStatus
+
+		const extraAspects: Record<string, string> = { aspectGlobal: 'GLOBAL_SETTING', aspectInput: 'INPUT_SETTING' }
+
+		const propertyField = deviceLayerPropertyStatus.options.find((opt) => opt.id === 'property') as CompanionInputFieldDropdown | undefined
+		if (propertyField) {
+			const labels = new Map(this.choices.getAspectOverrideChoices().map((choice) => [choice.id, choice.label]))
+			propertyField.choices = [
+				...propertyField.choices.filter((choice) => choice.id !== 'cutFillEnable'),
+				...Object.entries(extraAspects).map(([id, value]) => ({
+					id,
+					label: `Aspect Override - ${labels.get(value) ?? value}`,
+				})),
+			]
+		}
+
+		const inherited = deviceLayerPropertyStatus.callback
+		deviceLayerPropertyStatus.callback = (feedback, context) => {
+			const wanted = extraAspects[String(feedback.options.property ?? '')]
+			if (wanted === undefined) return inherited?.(feedback, context) ?? false
+
+			const screeninfo = this.choices.getScreenInfo(feedback.options.screen)
+			const readFor = (rawPreset: string): boolean => {
+				const path = [
+					'DEVICE',
+					...(screeninfo.isAux ? this.constants.auxPath : this.constants.screenPath),
+					'items', screeninfo.platformId,
+					'presetList', 'items', this.choices.getPreset(feedback.options.screen, rawPreset),
+					...this.choices.getLayerPath(feedback.options.layer),
+				]
+				return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === wanted
+			}
+			if (feedback.options.preset === 'both_and') return readFor('pgm') && readFor('prw')
+			if (feedback.options.preset === 'both_or') return readFor('pgm') || readFor('prw')
+			return readFor(feedback.options.preset)
+		}
+
+		return deviceLayerPropertyStatus
+	}
+
 	// MARK: Screen Memory
 	get deviceScreenMemory() {
 		
