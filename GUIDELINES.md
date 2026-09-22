@@ -115,6 +115,31 @@ word the user never typed.
 
 Numbers and dimensions follow the name rule - blank when unknown, not zero, so `0` always means a real zero.
 
+## A value with a range is clamped to that range, never refused
+
+Whenever a value is computed rather than typed - an encoder step added to the current value, a pixel
+figure converted to a fraction, a percentage scaled into a raw device unit - the result is clamped to the
+property's own range. Overshooting the top sets the maximum, undershooting the bottom sets the minimum:
+91% + 10% is 100%, and 5% - 10% is 0%. Never send the out-of-range number, and never drop the write
+because the arithmetic left the range.
+
+The reason is the encoder. An operator turning a dial cannot see the number and does not stop at exactly
+the limit; a step that silently did nothing near the end would feel broken, and one that sent 110% would
+either be rejected by the device or stored as something surprising. Clamping is what a physical fader does
+and what the user asked for.
+
+Clamp in the unit the user thinks in, then convert - see the T-Bar, where stepping in raw units first put
+five 10% steps at 50.01%.
+
+Only properties that genuinely have a limit are clamped, and the limit has to be the device's, not a
+guess. A layer's position and width have no meaningful maximum - a layer may legitimately sit partly off
+screen or be zoomed past the canvas - so those are clamped only where a bound is real (a width below zero
+is meaningless; a position below zero is not).
+
+This is separate from the "don't change" sentinel. Several option fields use `-1` to mean "leave this
+alone" and are tested with `>= 0` before anything is sent. That test stays a sentinel check: `-1` means
+skip the write, not "clamp to the minimum".
+
 ## V2/V3 variable naming
 
 New variables use the V3 scheme (`Object{n}.property`, e.g. `IN{n}.status`). Only add the `useOldVariableNames`-gated V2-compatible alias (via the `varName()` helper) when a real V2 predecessor of that exact variable existed and worked - not for a variable that's genuinely new in V3, even if it conceptually resembles something from V2 (see the Input Freeze variable-registration fix, 2026-09-08, which dropped V2 compatibility for exactly this reason: the V2 version had a different bug profile and was never actually usable during any V3 beta).

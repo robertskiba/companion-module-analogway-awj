@@ -101,3 +101,19 @@ export const compareFirmwareVersions = (a: string, b: string): number => {
 	}
 	return 0
 }
+
+/**
+ * Clamps `value` into `[min, max]` and rounds it to a whole number, the device's own unit.
+ *
+ * The one place this module turns a computed value into something it sends. Per GUIDELINES.md, arithmetic
+ * that leaves a property's range sets the nearer limit rather than sending the out-of-range figure or
+ * dropping the write: an operator turning an encoder cannot see the number and does not stop exactly at
+ * the end, so 91% + 10% has to be 100% and 5% - 10% has to be 0%, the way a physical fader behaves.
+ *
+ * NaN clamps to `min`, so a non-numeric expression result cannot escape the range either. This is not the
+ * place to handle a "don't change" sentinel - those are tested for before any value is computed.
+ */
+export const clampRound = (value: number, min: number, max: number): number => {
+	if (!Number.isFinite(value)) return min
+	return Math.round(Math.min(max, Math.max(min, value)))
+}

@@ -15,7 +15,7 @@ import { AWJconnection } from '../connection.js'
 import { splitRgb, InstanceStatus } from '@companion-module/base'
 import { StateMachine } from '../state.js'
 import Constants from './constants.js'
-import { timeToSeconds, parseBoolean, stripMemoryPrefix } from '../util.js'
+import { timeToSeconds, parseBoolean, stripMemoryPrefix, clampRound } from '../util.js'
 
 /**
  * T = Object like {option1id: type, option2id: type}
@@ -1155,7 +1155,7 @@ export default class Actions {
 						// 50.01% instead of 50%. Percent is also where the 0-100 limit belongs.
 						const tbarMax = 65535
 						const currentPercent = (current as number) / tbarMax * 100
-						const newPercent = Math.min(100, Math.max(0, Math.round(currentPercent + direction * delta0to100)))
+						const newPercent = clampRound(currentPercent + direction * delta0to100, 0, 100)
 						const newValue = Math.round(newPercent / 100 * tbarMax)
 						// Already at that end - send nothing at all, so over-turning cannot re-trigger anything.
 						if (newValue === current) continue
@@ -1166,7 +1166,7 @@ export default class Actions {
 						const presetPgm = this.choices.getPreset(screen, 'PGM')
 						const adjust = (prop: 'takeUpTime' | 'takeDownTime' | 'takeTime') => {
 							const current = this.state.get(['DEVICE', ...groupPath, prop]) ?? 0
-							const newValue = Math.round(Math.min(3000, Math.max(0, current + direction * deltaDeciseconds)))
+							const newValue = clampRound(current + direction * deltaDeciseconds, 0, 3000)
 							this.connection.sendWSmessage([...groupPath, prop], newValue)
 						}
 						// same direction mapping as deviceTakeTime: when the screen's current PGM side is preset
@@ -3564,7 +3564,7 @@ export default class Actions {
 			})
 		}
 
-		const clamp255 = (n: number) => Math.round(Math.min(255, Math.max(0, n)))
+		const clamp255 = (n: number) => clampRound(n, 0, 255)
 
 		const deviceLayerBorderV3: AWJaction<DeviceLayerBorderV3> = {
 			name: 'Layer Properties - Border',
@@ -4411,11 +4411,14 @@ export default class Actions {
 								: action.options.linear === 'on'
 							this.connection.sendWSmessage([...path, 'speed', 'pp', 'type'], turnOn ? speedTypes.linear : speedTypes.smooth)
 						}
+						// -1 remains the "don't change" sentinel, so the >= 0 test stays a sentinel check; a value the
+						// slider cannot produce but Expression Mode can is clamped to the device's own 0-255 instead of
+						// being sent as-is (GUIDELINES.md, clamping rule).
 						if (Number(action.options.point1) >= 0) {
-							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point1'], Math.round(Number(action.options.point1)))
+							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point1'], clampRound(Number(action.options.point1), 0, 255))
 						}
 						if (Number(action.options.point2) >= 0) {
-							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point2'], Math.round(Number(action.options.point2)))
+							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point2'], clampRound(Number(action.options.point2), 0, 255))
 						}
 					}
 				}
@@ -4623,20 +4626,26 @@ export default class Actions {
 							else if (hasPct) delta = Number(pctStr) / 100 * 65536
 							else if (hasPx && dimension !== '') delta = Number(pxStr) / dimension * 65536
 							if (delta === undefined) return
-							const newValue = Math.round(Math.min(65536, Math.max(0, current + direction * delta)))
+							const newValue = clampRound(current + direction * delta, 0, 65536)
 							this.connection.sendWSmessage([...path, ...propPath], newValue)
 						}
 
 						// Position X/Y and Width/Height are already raw pixels at the protocol level, so Raw and
 						// Pixel are the same input here - Percent is of the screen's own canvas size instead.
-						const applyLinear = (propPath: string[], screenDimension: number) => {
+						//
+						// `min` is 0 for a width or height, where a negative figure is meaningless, and left out for
+						// a position, which legitimately goes negative when a layer sits partly off screen. Neither
+						// has a meaningful maximum: a layer may be zoomed well past the canvas. See GUIDELINES.md's
+						// clamping rule - a bound is only enforced where the device really has one.
+						const applyLinear = (propPath: string[], screenDimension: number, min?: number) => {
 							const current = this.state.get(['DEVICE', ...path, ...propPath]) ?? 0
 							let delta: number | undefined
 							if (hasRaw) delta = Number(rawStr)
 							else if (hasPct) delta = Number(pctStr) / 100 * screenDimension
 							else if (hasPx) delta = Number(pxStr)
 							if (delta === undefined) return
-							this.connection.sendWSmessage([...path, ...propPath], Math.round(current + direction * delta))
+							const raw = Math.round(current + direction * delta)
+							this.connection.sendWSmessage([...path, ...propPath], min === undefined ? raw : Math.max(min, raw))
 						}
 
 						// Each mode targets a different property, and Midra's Background/Foreground layers only have some of
@@ -4659,7 +4668,7 @@ export default class Actions {
 								else if (hasPct) delta = Number(pctStr) / 100 * 256
 								// Pixel not applicable to Opacity - deliberately not checked
 								if (delta === undefined) break
-								const newValue = Math.round(Math.min(256, Math.max(0, current + direction * delta)))
+								const newValue = clampRound(current + direction * delta, 0, 256)
 								this.connection.sendWSmessage([...path, 'opacity', 'pp', 'opacity'], newValue)
 								break
 							}
@@ -4671,8 +4680,8 @@ export default class Actions {
 								const screenSizeV = canvas.height ?? 1080
 								if (action.options.value === 'posX') applyLinear([...this.constants.propsPositionPath, 'posH'], screenSizeH)
 								else if (action.options.value === 'posY') applyLinear([...this.constants.propsPositionPath, 'posV'], screenSizeV)
-								else if (action.options.value === 'sizeW') applyLinear([...this.constants.propsSizePath, 'sizeH'], screenSizeH)
-								else applyLinear([...this.constants.propsSizePath, 'sizeV'], screenSizeV)
+								else if (action.options.value === 'sizeW') applyLinear([...this.constants.propsSizePath, 'sizeH'], screenSizeH, 0)
+								else applyLinear([...this.constants.propsSizePath, 'sizeV'], screenSizeV, 0)
 								break
 							}
 							case 'cropTop': case 'cropBottom': case 'cropLeft': case 'cropRight': {
@@ -4907,8 +4916,7 @@ export default class Actions {
 							if (msStr === '' || isNaN(Number(msStr))) continue
 							transitionMs ??= getRelevantTransitionMs(layer.screenAuxKey, presetKey)
 							if (transitionMs === undefined || transitionMs <= 0) continue
-							const value = Math.round(Number(msStr) / transitionMs * 65535)
-							this.connection.sendWSmessage([...path, ...prop], Math.min(65535, Math.max(0, value)))
+							this.connection.sendWSmessage([...path, ...prop], clampRound(Number(msStr) / transitionMs * 65535, 0, 65535))
 						}
 					}
 				}
