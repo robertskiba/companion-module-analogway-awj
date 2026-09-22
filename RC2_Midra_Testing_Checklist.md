@@ -117,6 +117,21 @@ For every item below: single Layer, "All Selected Layers"/"First/Only Selected L
 - [ ] Connection Status feedback - Main Device states; Hot Backup Device state once configured.
 - [ ] Custom Commands (raw get/replace).
 
+## 9a. The four Midra models, and why Eikos is enough
+
+Surveyed in the simulator on 2026-09-22. The models differ only in which preconfig templates they offer, and the Eikos offers all of them:
+
+| Model | Templates | Note |
+|---|---|---|
+| **Eikos 4K** | Mixer, Matrix, Softedge | the superset - what this list is tested against |
+| **Pulse 4K** | Mixer, Matrix | otherwise identical to Eikos; no Softedge mode |
+| **QuickMatrix 4K** | Matrix only | two Screens, one live Layer each |
+| **QuickVu 4K** | Mixer only | S1 + A1 |
+
+So an Eikos can be put into every configuration any of the others can reach, and verifying here covers all four - no per-model testing pass is needed, and there is nothing to gate per model. Checked while writing this down: the module never reads `templateUsed` or the Softedge/`isCoveringEnabled` flag at all, and the `SOFTEDGE` entries in the code are a test pattern named "Covering", unrelated to the blending mode. The preconfig subscription deliberately matches the whole `CURRENT` subtree rather than named fields, precisely so a model that carries a difference in a field an Eikos does not move still triggers a rebuild.
+
+`maxScreens`/`maxAuxScreens` are 4 on this platform, which is the Eikos's count; a model with fewer simply reports the rest as disabled and they never get variables.
+
 ## 9b. Aux screens
 
 Found and fixed 2026-09-22 after the user noticed that Aux screens delivered no usable variables. An Aux on Midra turned out to be a very different object from a Screen, and several pieces of shared code were reading Screen-shaped paths for both. All of it is confirmed against an Eikos 4K simulator; **none of it is confirmed on Alta**, which runs through the same `midra` platform class - re-check each line in the RC3 Alta pass.
