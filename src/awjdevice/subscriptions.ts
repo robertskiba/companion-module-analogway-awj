@@ -2329,6 +2329,11 @@ export default class Subscriptions {
 		const checkSub = (sub: string): boolean => {
 			let update = false
 			const subscriptionobj = subscriptions[sub]
+			// A named subscription that this platform does not register at all is simply nothing to do - not an
+			// error. connection.ts re-runs three of them by name after connecting, and when one of those was
+			// dropped for a platform (globalAnchorPointChange on Midra, which has no anchor point) the throw
+			// took the rest of that try block with it, leaving every SelectedScreen.* variable unset.
+			if (!subscriptionobj) return false
 			let pattern = subscriptionobj.pat
 			if (subscriptionobj.fun && typeof subscriptionobj.fun === 'function') {
 				if (pattern.indexOf('(') === -1) {
