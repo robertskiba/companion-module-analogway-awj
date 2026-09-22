@@ -802,7 +802,7 @@ export default class ActionsLivepremier4 extends Actions {
 			let ret: Record<string, string>[] = []
 			if (action.options.method?.endsWith('tgl')) {
 				if (this.state.syncSelection) {
-					ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+					ret = (this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? [])
 						.map((layer: Record<string, string>) => {
 							if (layer.type === 'SCREEN_LAYER_ID') return {
 								screenAuxKey: layer.screenKey,
@@ -826,7 +826,7 @@ export default class ActionsLivepremier4 extends Actions {
 							}
 						})
 				} else {
-					ret = this.state.get('LOCAL/layerIds')
+					ret = this.state.get('LOCAL/layerIds') ?? []
 				}
 			}
 			let scrs: string[] = []
@@ -941,7 +941,7 @@ export default class ActionsLivepremier4 extends Actions {
 			let ret: Record<string, string>[] = []
 			if (action.options.mode !== 'exclusive') {
 				if (this.state.syncSelection) {
-					ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+					ret = (this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? [])
 						.map((layer: Record<string, string>) => {
 							if (layer.type === 'SCREEN_LAYER_ID') return {
 								screenAuxKey: layer.screenKey,
@@ -965,7 +965,7 @@ export default class ActionsLivepremier4 extends Actions {
 							}
 						})
 				} else {
-					ret = this.state.get('LOCAL/layerIds')
+					ret = this.state.get('LOCAL/layerIds') ?? []
 				}
 			}
 			const screens = action.options.screens === 'first'

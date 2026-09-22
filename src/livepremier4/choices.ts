@@ -402,7 +402,7 @@ export default class ChoicesLivepremier4 extends Choices {
 		let ret: { screenAuxKey: string; layerKey: string}[] = [] 
 
 		if (this.instance.state.syncSelection) {
-			ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+			ret = (this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? [])
 				.map((layer: Record<string, string>) => {
 					if (layer.type === 'SCREEN_LAYER_ID') return {
 						screenAuxKey: layer.screenKey,
@@ -428,7 +428,7 @@ export default class ChoicesLivepremier4 extends Choices {
 
 
 		} else {
-			ret = this.state.get('LOCAL/layerIds')
+			ret = this.state.get('LOCAL/layerIds') ?? []
 		}
 		return ret
 	}

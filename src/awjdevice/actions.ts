@@ -6338,9 +6338,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				let ret: Record<'screenAuxKey' | 'layerKey', string>[] = []
 				if (action.options.method?.endsWith('tgl')) {
 					if (this.state.syncSelection) {
-						ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+						ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? []
 					} else {
-						ret = this.state.get('LOCAL/layerIds')
+						ret = this.state.get('LOCAL/layerIds') ?? []
 					}
 				}
 				let scrs: string[] = []
@@ -6520,9 +6520,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				let ret: Record<'screenAuxKey' | 'layerKey', string>[] = []
 				if (action.options.mode !== 'exclusive') {
 					if (this.state.syncSelection) {
-						ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+						ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? []
 					} else {
-						ret = this.state.get('LOCAL/layerIds')
+						ret = this.state.get('LOCAL/layerIds') ?? []
 					}
 				}
 				for (const screen of screens) {

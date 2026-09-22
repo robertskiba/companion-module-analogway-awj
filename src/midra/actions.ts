@@ -1277,7 +1277,7 @@ export default class ActionsMidra extends Actions {
 			let ret: Key[] = []
 			if (action.options.method?.endsWith('tgl')) {
 				if (this.state.syncSelection) {
-					ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+					ret = (this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? [])
 						.map((key: Key) => {
 							return {
 								screenAuxKey: key.screenAuxKey.replace(/(?<!^)\D/g, ''), 
@@ -1392,7 +1392,7 @@ export default class ActionsMidra extends Actions {
 			let ret: Key[] = []
 			if (action.options.mode !== 'exclusive') {
 				if (this.state.syncSelection) {
-					ret = this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+					ret = (this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? [])
 						.map((key: Key) => {
 							return {
 								screenAuxKey: key.screenAuxKey.replace(/(?<!^)\D/g, ''),
