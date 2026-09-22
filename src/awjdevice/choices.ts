@@ -1085,18 +1085,6 @@ export default class Choices {
 		return { pgm, prw: pgm === 'A' ? 'B' : 'A' }
 	}
 
-	/**
-	 * Which way a T-Bar step has to move to advance the transition, as a multiplier for the user's own
-	 * +/- choice. Midra parks the bar at whichever end it last travelled to and swaps ends with every
-	 * transition, so "advance" is upward from the low end and downward from the high end.
-	 *
-	 * Derived from the completed transition side rather than the current value on purpose: mid-travel the
-	 * value alone cannot tell you which end you started from, while the side stays put until the move
-	 * finishes. Always 1 here, so LivePremier keeps simply adding, exactly as before.
-	 */
-	public getTbarAdvanceDirection(_screenAuxKey: string): 1 | -1 {
-		return 1
-	}
 	public getMaxConfiguredLayerCount(): number {
 		return this.getScreenAuxChoices().reduce((max, screen) => {
 			return Math.max(max, this.getLayersAsArray(screen.id, false).length)

@@ -547,22 +547,6 @@ export default class ChoicesMidra extends Choices {
 		]
 	}
 
-	/**
-	 * Midra's real per-layer property matrix, live-confirmed against an Eikos 4K simulator by walking the
-	 * device tree. The Background and the Foreground frame are addressable layers but carry far less than a
-	 * numbered layer, and writing into a node the device does not have is silently ignored - so callers ask
-	 * here first and skip the write instead.
-	 *
-	 * Background: source, opacity, mask, transition (opening/closing type only), timing, speed.
-	 * Foreground: the same plus position, crop and flying, with transition also offering `way`.
-	 * Neither has size, effects or border; only a numbered layer has those, plus the transition flags.
-	 */
-	/** Midra's own Aspect Override list, in WebRCS's own order - no NONE, but a Global Settings entry at the
-	 *  top and Input Setting (the equivalent of LivePremier's NONE) at the bottom. */
-	/** Parked at 0 after AT_DOWN and at the maximum after AT_UP, so advancing means moving the other way. */
-	public override getTbarAdvanceDirection(screenAuxKey: string): 1 | -1 {
-		return this.getLivePresetKey(screenAuxKey) === 'UP' ? -1 : 1
-	}
 	/** Midra reports the live side as 'AT_UP'/'AT_DOWN' while its preset keys are 'UP'/'DOWN'. */
 	public override getLivePresetKey(screenAuxKey: string): string | undefined {
 		const raw = super.getLivePresetKey(screenAuxKey)
@@ -590,6 +574,8 @@ export default class ChoicesMidra extends Choices {
 		return super.getTransitionTypeChoices().filter((choice) => choice.id !== 'WIPE_ADVANCED')
 	}
 
+	/** Midra's own Aspect Override list, in WebRCS's own order - no NONE, but a Global Settings entry at the
+	 *  top and Input Setting (the equivalent of LivePremier's NONE) at the bottom. */
 	public override getAspectOverrideChoices(): Dropdown<string>[] {
 		return [
 			{ id: 'GLOBAL_SETTING', label: 'Global Settings' },
@@ -607,6 +593,16 @@ export default class ChoicesMidra extends Choices {
 		return false
 	}
 
+	/**
+	 * Midra's real per-layer property matrix, live-confirmed against an Eikos 4K simulator by walking the
+	 * device tree. The Background and the Foreground frame are addressable layers but carry far less than a
+	 * numbered layer, and writing into a node the device does not have is silently ignored - so callers ask
+	 * here first and skip the write instead.
+	 *
+	 * Background: source, opacity, mask, transition (opening/closing type only), timing, speed.
+	 * Foreground: the same plus position, crop and flying, with transition also offering `way`.
+	 * Neither has size, effects or border; only a numbered layer has those, plus the transition flags.
+	 */
 	public override layerSupports(layerKey: string, property: LayerProperty): boolean {
 		const isBackground = /^(bg|bkg|background|native)$/i.test(layerKey)
 		const isForeground = /^top$/i.test(layerKey)

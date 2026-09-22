@@ -1144,16 +1144,21 @@ export default class Actions {
 						const current = this.state.get(['DEVICE', ...groupPath, 'tbarPosition']) ?? 0
 						// The user's +/- says "advance" or "go back"; which numeric direction that is depends on the
 						// platform and, on Midra, on which end the bar is currently parked at.
-						const advance = this.choices.getTbarAdvanceDirection(screen)
-						// Stepped in percent and only converted to raw at the end. Going the other way round
-						// accumulates error, because the raw range is not divisible by a typical step: 10% is
-						// 6553.5 units, so each step rounded away half a unit and five of them landed on 50.01%
-						// instead of 50%. Percent is also where the 0-100 limit belongs, so a step can neither
-						// undershoot nor overshoot the ends of the bar.
+						// Absolute, like the bar itself: "+" moves up, "-" moves down, and at either end further
+						// turning does nothing. Deliberately not "advance the transition regardless of which end
+						// you are at" - that made over-turning at the top run back down and start another
+						// transition, so a knob that had simply been turned too far triggered a take.
+						//
+						// Stepped in percent and converted to raw only at the end. The other way round
+						// accumulates error, because the raw range does not divide evenly by a typical step: 10%
+						// is 6553.5 units, so each step rounded away half a unit and five of them landed on
+						// 50.01% instead of 50%. Percent is also where the 0-100 limit belongs.
 						const tbarMax = 65535
 						const currentPercent = (current as number) / tbarMax * 100
-						const newPercent = Math.min(100, Math.max(0, Math.round(currentPercent + direction * advance * delta0to100)))
+						const newPercent = Math.min(100, Math.max(0, Math.round(currentPercent + direction * delta0to100)))
 						const newValue = Math.round(newPercent / 100 * tbarMax)
+						// Already at that end - send nothing at all, so over-turning cannot re-trigger anything.
+						if (newValue === current) continue
 						this.connection.sendWSmessage([...groupPath, 'tbarPosition'], newValue)
 					} else {
 						const deltaDeciseconds = hasRaw ? Number(rawStr) : Number(pctStr) / 100 * 3000
