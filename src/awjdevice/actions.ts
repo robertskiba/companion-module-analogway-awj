@@ -2035,13 +2035,6 @@ export default class Actions {
 			{ id: 'NW_TO_SE', label: 'NW to SE' },
 			{ id: 'NE_TO_SW', label: 'NE to SW' },
 		]
-		const flyingCurveChoices = [
-			{ id: 'LINEAR', label: 'Linear' },
-			{ id: 'BEZIER_1PT', label: 'Bezier (1 point)' },
-			{ id: 'BEZIER_2PT', label: 'Bezier (2 points)' },
-			{ id: 'DEVIANT_CLOCKWISE', label: 'Deviant Clockwise' },
-			{ id: 'DEVIANT_ANTICLOCKWISE', label: 'Deviant Anticlockwise' },
-		]
 
 		const resolveLayers = (opt: {screen: string, layersel: string}): {screenAuxKey: string, layerKey: string}[] => {
 			const targetScreens = opt.screen === 'first'
@@ -2148,7 +2141,7 @@ export default class Actions {
 					id: 'flyingCurve',
 					type: 'dropdown',
 					label: 'Type',
-					choices: [{ id: 'keep', label: "Don't change" }, ...flyingCurveChoices],
+					choices: [{ id: 'keep', label: "Don't change" }, ...this.choices.getFlyingCurveChoices()],
 					default: 'keep',
 				},
 				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
@@ -2265,9 +2258,9 @@ export default class Actions {
 						// presence means "off" - so there, turning it on means removing a token rather than adding one. Cross
 						// Depth does not exist on Midra at all and is skipped there.
 						const crossEffect = this.constants.crossEffectFlags
-						const depthPrefix = this.constants.crossDepthFlagPrefix
+						const crossDepth = this.constants.crossDepthFlags
 						const wantsEffect = action.options.allowCrossEffect !== 'keep'
-						const wantsDepth = action.options.allowCrossDepth !== 'keep' && depthPrefix !== null
+						const wantsDepth = action.options.allowCrossDepth !== 'keep'
 						if ((wantsEffect || wantsDepth) && this.choices.layerSupports(layer.layerKey, 'transitionFlags')) {
 							let flags: string[] = this.state.get(['DEVICE', ...path, 'transition', 'pp', 'flags']) ?? []
 							if (wantsEffect) {
@@ -2279,10 +2272,13 @@ export default class Actions {
 								const token = turnOn ? crossEffect.on : crossEffect.off
 								if (token !== null) flags.push(token)
 							}
-							if (wantsDepth && depthPrefix !== null) {
-								const turnOn = action.options.allowCrossDepth === 'toggle' ? !flags.some(flag => flag.startsWith(depthPrefix)) : action.options.allowCrossDepth === 'on'
-								flags = flags.filter(flag => !flag.startsWith(depthPrefix))
-								if (!turnOn) flags.push(`${depthPrefix}MIDDLE`)
+							if (wantsDepth) {
+								const isCleared = (flag: string) => crossDepth.clear.includes(flag) || (crossDepth.clearPrefix !== undefined && flag.startsWith(crossDepth.clearPrefix))
+								const currentlyOn = crossDepth.on !== null ? flags.includes(crossDepth.on) : !flags.some(isCleared)
+								const turnOn = action.options.allowCrossDepth === 'toggle' ? !currentlyOn : action.options.allowCrossDepth === 'on'
+								flags = flags.filter(flag => !isCleared(flag))
+								const token = turnOn ? crossDepth.on : crossDepth.off
+								if (token !== null) flags.push(token)
 							}
 							this.connection.sendWSmessage([...path, 'transition', 'pp', 'flags'], flags)
 						}

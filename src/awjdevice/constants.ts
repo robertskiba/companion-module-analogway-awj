@@ -62,9 +62,12 @@ export default class Constants {
     static readonly crossEffectFlags: { on: string | null, off: string | null, clear: string[] } =
         { on: 'FORCE_CROSS', off: 'FORCE_TRANSITION', clear: ['FORCE_CROSS', 'FORCE_TRANSITION'] }
 
-    /** Prefix of the "Allow Cross Depth" transition flag, or null on a platform that has no such setting -
-     * Midra/Alta carries no DEPTH_CUT token at all. */
-    static readonly crossDepthFlagPrefix: string | null = 'DEPTH_CUT_'
+    /** Same shape as crossEffectFlags, for "Allow Cross Depth". LivePremier expresses "off" as one of
+     * several DEPTH_CUT_* tokens (hence the prefix used to clear them); Midra/Alta uses the single
+     * negative DISABLE_CROSS_DEPTH, matching how it handles the cross effect. "On" adds nothing on either
+     * platform - it simply clears whatever was there. */
+    static readonly crossDepthFlags: { on: string | null, off: string | null, clear: string[], clearPrefix?: string } =
+        { on: null, off: 'DEPTH_CUT_MIDDLE', clear: [], clearPrefix: 'DEPTH_CUT_' }
     /** The two `speed/pp/type` enum values, or null on a platform that has no Linear/Smooth speed switch at
      * all - Midra/Alta only offers Pt1/Pt2 and stores a plain 'SMOOTH', so there is nothing to write there. */
     static readonly layerSpeedTypes: { linear: string, smooth: string } | null = { linear: 'LINEAR_TRANSITION', smooth: 'SMOOTH_TRANSITION' }

@@ -572,6 +572,15 @@ export default class ChoicesMidra extends Choices {
 		return { pgm, prw: pgm === 'UP' ? 'DOWN' : 'UP' }
 	}
 
+	/** Midra offers only Linear and the two arcs - no Bezier curves. Labelled the way WebRCS names them there. */
+	public override getFlyingCurveChoices(): Dropdown<string>[] {
+		return [
+			{ id: 'LINEAR', label: 'Linear' },
+			{ id: 'DEVIANT_CLOCKWISE', label: 'Clockwise Arc' },
+			{ id: 'DEVIANT_ANTICLOCKWISE', label: 'Anticlockwise Arc' },
+		]
+	}
+
 	/** Midra has every transition type except "Wipe 2" (WIPE_ADVANCED). */
 	public override getTransitionTypeChoices(): Dropdown<string>[] {
 		return super.getTransitionTypeChoices().filter((choice) => choice.id !== 'WIPE_ADVANCED')

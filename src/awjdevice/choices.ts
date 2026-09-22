@@ -1034,6 +1034,21 @@ export default class Choices {
 		]
 	}
 
+	/**
+	 * A Layer transition's flying curve. Same enum ids on both platforms (live-confirmed by reading them back
+	 * off an Eikos 4K simulator), but Midra/Alta offers only Linear and the two arcs - it overrides this to
+	 * drop the Bezier entries.
+	 */
+	public getFlyingCurveChoices(): Dropdown<string>[] {
+		return [
+			{ id: 'LINEAR', label: 'Linear' },
+			{ id: 'BEZIER_1PT', label: 'Bezier (1 point)' },
+			{ id: 'BEZIER_2PT', label: 'Bezier (2 points)' },
+			{ id: 'DEVIANT_CLOCKWISE', label: 'Deviant Clockwise' },
+			{ id: 'DEVIANT_ANTICLOCKWISE', label: 'Deviant Anticlockwise' },
+		]
+	}
+
 	public getAspectOverrideChoices(): Dropdown<string>[] {
 		return [
 			{ id: 'NONE', label: 'None (use input aspect ratio)' },
