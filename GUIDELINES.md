@@ -101,6 +101,20 @@ AWJ does not reject a write to an out-of-range index (a Layer number beyond a Sc
 
 Any action that resolves a target from a raw number, a dropdown value, or a concatenated Expression Mode string (not from a live "what currently exists" list like `getScreenOutputArray()`/`getLayersAsArray()`) must filter the resolved target(s) against the real, currently-configured set before sending anything - per-Screen where the valid range can differ by Screen (Layer counts), not just once globally. Silently drop anything that doesn't currently exist rather than sending it or raising an error - the same "doesn't exist right now" case a keyword like `all` already resolves to nothing for.
 
+## Empty values: sources say NONE, names stay blank
+
+A variable holding a **source** reports the literal `NONE` when nothing is assigned - `Sx.pgm.layer1.source`,
+`Sx.pgm.layerbg.source`, `Sx.pgm.layerfg.source`. A blank there is ambiguous: it reads the same as "not
+reported yet" or "no such layer", and it forces an expression to test for emptiness instead of comparing
+against a value.
+
+A variable holding a **name or label** stays `""` when there is nothing to name - `SelectedLayer.Input.Name`,
+`INx.label`, `Sx.label`. Never substitute a placeholder word like `none` there: the empty string is what the
+device itself reports for an unnamed item, and a button printing the label should show nothing rather than a
+word the user never typed.
+
+Numbers and dimensions follow the name rule - blank when unknown, not zero, so `0` always means a real zero.
+
 ## V2/V3 variable naming
 
 New variables use the V3 scheme (`Object{n}.property`, e.g. `IN{n}.status`). Only add the `useOldVariableNames`-gated V2-compatible alias (via the `varName()` helper) when a real V2 predecessor of that exact variable existed and worked - not for a variable that's genuinely new in V3, even if it conceptually resembles something from V2 (see the Input Freeze variable-registration fix, 2026-09-08, which dropped V2 compatibility for exactly this reason: the V2 version had a different bug profile and was never actually usable during any V3 beta).

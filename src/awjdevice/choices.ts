@@ -1226,7 +1226,9 @@ export default class Choices {
 
 		if (input === 'COLOR') return { number: '', name: 'Color', width: '', height: '' }
 		if (typeof input === 'string' && input.match(/^TIMER_/)) return { number: input.replace(/^TIMER_/, ''), name: `Timer ${input.replace(/^TIMER_/, '')}`, width: '', height: '' }
-		return { number: '', name: 'none', width: '', height: '' }
+		// Empty rather than a literal word: a *source* may report NONE (see refreshLayerVariables), but a
+		// *label* stays blank when there is nothing to name - see GUIDELINES.md, "Empty values".
+		return { number: '', name: '', width: '', height: '' }
 	}
 
 	/** Is a screen / preset combination locked */
