@@ -982,7 +982,10 @@ export default class Subscriptions {
 			},
 			fun: (path) => {
 				if (!path || typeof path !== 'string') return false
-				const match = path.match(/inputList\/items\/IN_(\d+)\/control\/pp\/freeze/)
+				// Built from the same prefix constant as `pat` above - a second, hardcoded IN_ here meant the
+				// pattern matched on Midra (so the feedback fired) while this bailed out, leaving IN{n}.freeze
+				// stuck at whatever ini() had seeded.
+				const match = path.match(new RegExp(`inputList/items/${this.constants.inputKeyPrefix}(\\d+)/control/pp/freeze`))
 				if (!match) return false
 				if (!this.instance.state.get(availablePath(match[1]))) return false
 				this.instance.setVariableValues({ [`IN${match[1]}.freeze`]: !!this.instance.state.get(path) })
@@ -1677,6 +1680,12 @@ export default class Subscriptions {
 			// generous 1000ms coalescing window is fine per explicit user direction.
 			fun: (path) => {
 				if (typeof path === 'string') {
+					// Deliberately still LivePremier's IN_ prefix. This is only a "skip the refresh if that input is not
+					// on any layer" optimisation, and isInputShownOnAnyLayer() is itself LivePremier-shaped (LIVE_ ids,
+					// presetUp, source/pp/inputNum), so it answers false for everything on Midra. Because the prefix does
+					// not match there either, the guard is skipped and the refresh simply always runs - correct, just less
+					// economical. Teaching this regex INPUT_ without rewriting the helper first would flip it into skipping
+					// every refresh instead. Fix both together or neither.
 					const match = path.match(/inputList\/items\/(IN_\d+)\/plugList/)
 					if (match && !this.isInputShownOnAnyLayer(match[1])) return false
 				}
