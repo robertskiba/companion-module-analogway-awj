@@ -2949,13 +2949,6 @@ export default class Actions {
 
 		// PE_ASPECTOUT, confirmed live (2026-08-27) both via WebRCS's own bundle and by recording the app while
 		// clicking through the options against a real Aquilon (192.168.20.112)
-		const aspectOverrideChoices = [
-			{ id: 'NONE', label: 'None (use input aspect ratio)' },
-			{ id: '1_1', label: '1:1 (no zoom, black bands or cropped)' },
-			{ id: 'CENTERED', label: 'Centered (black bands added)' },
-			{ id: 'FULLSCREEN', label: 'Fullscreen (distorted)' },
-			{ id: 'CROPPED', label: 'Cropped (no black bands)' },
-		]
 
 		const resolveLayers = (opt: {screen: string, layersel: string}): {screenAuxKey: string, layerKey: string}[] => {
 			const targetScreens = opt.screen === 'first'
@@ -3009,7 +3002,7 @@ export default class Actions {
 					id: 'aspectOverride',
 					type: 'dropdown',
 					label: 'Aspect Override',
-					choices: [{ id: 'keep', label: "Don't change" }, ...aspectOverrideChoices],
+					choices: [{ id: 'keep', label: "Don't change" }, ...this.choices.getAspectOverrideChoices()],
 					default: 'keep',
 				},
 				{ id: 'cropHeader', type: 'static-text', label: '', value: '---\n**Crop** (pixels take priority over % when both are set - see tooltips)', disableAutoExpression: true },

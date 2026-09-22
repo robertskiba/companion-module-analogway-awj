@@ -1011,6 +1011,22 @@ export default class Choices {
 		return ids
 	}
 
+	/**
+	 * The "Aspect Override" value list for a layer's crop settings. The four explicit modes are the same on
+	 * every platform; what differs is the entry that means "don't override" - LivePremier calls it NONE,
+	 * while Midra/Alta splits it into GLOBAL_SETTING and INPUT_SETTING and has no NONE at all (both values
+	 * live-confirmed by reading them back off an Eikos 4K simulator).
+	 */
+	public getAspectOverrideChoices(): Dropdown<string>[] {
+		return [
+			{ id: 'NONE', label: 'None (use input aspect ratio)' },
+			{ id: '1_1', label: '1:1 (no zoom, black bands or cropped)' },
+			{ id: 'CENTERED', label: 'Centered (black bands added)' },
+			{ id: 'FULLSCREEN', label: 'Fullscreen (distorted)' },
+			{ id: 'CROPPED', label: 'Cropped (no black bands)' },
+		]
+	}
+
 	public getMaxConfiguredLayerCount(): number {
 		return this.getScreenAuxChoices().reduce((max, screen) => {
 			return Math.max(max, this.getLayersAsArray(screen.id, false).length)

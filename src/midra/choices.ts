@@ -557,6 +557,19 @@ export default class ChoicesMidra extends Choices {
 	 * Foreground: the same plus position, crop and flying, with transition also offering `way`.
 	 * Neither has size, effects or border; only a numbered layer has those, plus the transition flags.
 	 */
+	/** Midra's own Aspect Override list, in WebRCS's own order - no NONE, but a Global Settings entry at the
+	 *  top and Input Setting (the equivalent of LivePremier's NONE) at the bottom. */
+	public override getAspectOverrideChoices(): Dropdown<string>[] {
+		return [
+			{ id: 'GLOBAL_SETTING', label: 'Global Settings' },
+			{ id: '1_1', label: '1:1 (no zoom, black bands or cropped)' },
+			{ id: 'CENTERED', label: 'Centered (black bands added)' },
+			{ id: 'FULLSCREEN', label: 'Fullscreen (distorted)' },
+			{ id: 'CROPPED', label: 'Cropped (no black bands)' },
+			{ id: 'INPUT_SETTING', label: 'Input Setting (use input aspect ratio)' },
+		]
+	}
+
 	public override layerPropertyTargetAllowed(layerKey: string, extras?: { background?: boolean, foreground?: boolean }): boolean {
 		if (/^(bg|bkg|background|native)$/i.test(layerKey)) return extras?.background === true
 		if (/^top$/i.test(layerKey)) return extras?.foreground === true
