@@ -264,14 +264,14 @@ export default class Subscriptions {
 				// isn't known (e.g. Color/Timer source for crop - mask always has a size to normalize against).
 				const toPixels = (raw: unknown, dimension: number | ''): number | '' =>
 					typeof raw === 'number' && dimension !== '' ? Math.round(raw / 65536 * dimension) : ''
-				const cropTop = this.instance.state.get(['DEVICE', ...path, 'cropping', 'classic', 'pp', 'top'])
-				const cropBottom = this.instance.state.get(['DEVICE', ...path, 'cropping', 'classic', 'pp', 'bottom'])
-				const cropLeft = this.instance.state.get(['DEVICE', ...path, 'cropping', 'classic', 'pp', 'left'])
-				const cropRight = this.instance.state.get(['DEVICE', ...path, 'cropping', 'classic', 'pp', 'right'])
-				const maskTop = this.instance.state.get(['DEVICE', ...path, 'cropping', 'mask', 'pp', 'top'])
-				const maskBottom = this.instance.state.get(['DEVICE', ...path, 'cropping', 'mask', 'pp', 'bottom'])
-				const maskLeft = this.instance.state.get(['DEVICE', ...path, 'cropping', 'mask', 'pp', 'left'])
-				const maskRight = this.instance.state.get(['DEVICE', ...path, 'cropping', 'mask', 'pp', 'right'])
+				const cropTop = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsCroppingPath, 'top'])
+				const cropBottom = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsCroppingPath, 'bottom'])
+				const cropLeft = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsCroppingPath, 'left'])
+				const cropRight = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsCroppingPath, 'right'])
+				const maskTop = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsMaskPath, 'top'])
+				const maskBottom = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsMaskPath, 'bottom'])
+				const maskLeft = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsMaskPath, 'left'])
+				const maskRight = this.instance.state.get(['DEVICE', ...path, ...this.constants.propsMaskPath, 'right'])
 
 				this.instance.setVariableValues({
 					'SelectedLayer.x': anchorPos.x,
@@ -372,7 +372,7 @@ export default class Subscriptions {
 	/** The selected layer's classic crop or mask changes - refreshes SelectedLayer.Crop.* and .Mask.*, see refreshSelectedLayerRect */
 	get selectedLayerCroppingChange():Subscription {
 		return {
-			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/cropping/(classic|mask)/pp/(top|bottom|left|right)',
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(?:cropping/(?:classic|mask)|crop|mask)/pp/(top|bottom|left|right)',
 			fun: this.refreshSelectedLayerRect,
 		}
 	}
@@ -383,7 +383,7 @@ export default class Subscriptions {
 	 * auxiliaryScreenList/auxiliaryList and layerList/liveLayerList naming. */
 	get layerPropertyStatusChange():Subscription {
 		return {
-			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(?:border/(?:edge|shadow)/pp/style|effects/pp/flags|keying/pp/enable|cutNFill/pp/type|cropping/mask/pp/(?:top|bottom|left|right)|cropping/classic/pp/aspectOverride|transition/pp/flags)',
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/(?:border/(?:edge|shadow)/pp/style|effects/pp/flags|keying/pp/enable|cutNFill/pp/type|(?:cropping/mask|mask)/pp/(?:top|bottom|left|right)|(?:cropping/classic|crop)/pp/aspectOverride|transition/pp/flags)',
 			fbk: 'deviceLayerPropertyStatus',
 		}
 	}

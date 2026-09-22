@@ -330,16 +330,16 @@ export default class Feedbacks {
 							return !!canUseCutFill && this.state.get([...path, 'cutNFill', 'pp', 'type']) === 'CUT_N_FILL'
 						}
 						case 'maskActive': {
-							const top = this.state.get([...path, 'cropping', 'mask', 'pp', 'top']) ?? 0
-							const bottom = this.state.get([...path, 'cropping', 'mask', 'pp', 'bottom']) ?? 0
-							const left = this.state.get([...path, 'cropping', 'mask', 'pp', 'left']) ?? 0
-							const right = this.state.get([...path, 'cropping', 'mask', 'pp', 'right']) ?? 0
+							const top = this.state.get([...path, ...this.constants.propsMaskPath, 'top']) ?? 0
+							const bottom = this.state.get([...path, ...this.constants.propsMaskPath, 'bottom']) ?? 0
+							const left = this.state.get([...path, ...this.constants.propsMaskPath, 'left']) ?? 0
+							const right = this.state.get([...path, ...this.constants.propsMaskPath, 'right']) ?? 0
 							return top !== 0 || bottom !== 0 || left !== 0 || right !== 0
 						}
-						case 'aspect1_1': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === '1_1'
-						case 'aspectCentered': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CENTERED'
-						case 'aspectFullscreen': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'FULLSCREEN'
-						case 'aspectCropped': return this.state.get([...path, 'cropping', 'classic', 'pp', 'aspectOverride']) === 'CROPPED'
+						case 'aspect1_1': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === '1_1'
+						case 'aspectCentered': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === 'CENTERED'
+						case 'aspectFullscreen': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === 'FULLSCREEN'
+						case 'aspectCropped': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === 'CROPPED'
 						case 'allowCrossEffect': return (this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).includes('FORCE_CROSS')
 						case 'allowCrossDepth': return !(this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).some((f: string) => f.startsWith('DEPTH_CUT_'))
 						default: return false
@@ -997,17 +997,17 @@ export default class Feedbacks {
 								this.state.get([...layerpath, 'position', 'pp', 'sizeH']) === 0 ||
 								this.state.get([...layerpath, 'position', 'pp', 'sizeV']) === 0 ||
 								this.state.get([...layerpath, 'opacity', 'pp', 'opacity']) === 0 ||
-								this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'top']) +
-									this.state.get([...layerpath,'cropping', 'classic', 'pp', 'bottom']) >
+								this.state.get([...layerpath, ...this.constants.propsCroppingPath, 'top']) +
+									this.state.get([...layerpath,...this.constants.propsCroppingPath, 'bottom']) >
 									65528 ||
-								this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'left']) +
-									this.state.get([...layerpath, 'cropping', 'classic', 'pp', 'right']) >
+								this.state.get([...layerpath, ...this.constants.propsCroppingPath, 'left']) +
+									this.state.get([...layerpath, ...this.constants.propsCroppingPath, 'right']) >
 									65528 ||
-								this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'top']) +
-									this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'bottom']) >
+								this.state.get([...layerpath, ...this.constants.propsMaskPath, 'top']) +
+									this.state.get([...layerpath, ...this.constants.propsMaskPath, 'bottom']) >
 									65528 ||
-								this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'left']) +
-									this.state.get([...layerpath, 'cropping', 'mask', 'pp', 'right']) >
+								this.state.get([...layerpath, ...this.constants.propsMaskPath, 'left']) +
+									this.state.get([...layerpath, ...this.constants.propsMaskPath, 'right']) >
 									65528 ||
 								this.state.get([...layerpath, 'position', 'pp', 'posH']) + this.state.get([...layerpath, 'position', 'pp', 'sizeH']) / 2 <= 0 ||
 								this.state.get([...layerpath, 'position', 'pp', 'posV']) + this.state.get([...layerpath, 'position', 'pp', 'sizeV']) / 2 <= 0 ||

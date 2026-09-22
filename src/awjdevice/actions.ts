@@ -3112,7 +3112,7 @@ export default class Actions {
 					screen: screenInfo.id,
 					layersel: layers[0].layerKey,
 					preset,
-					aspectOverride: this.state.get(['DEVICE', ...path, 'cropping', 'classic', 'pp', 'aspectOverride']) ?? 'keep',
+					aspectOverride: this.state.get(['DEVICE', ...path, ...this.constants.propsCroppingPath, 'aspectOverride']) ?? 'keep',
 				}
 
 				const source = this.choices.getLayerSourceInfo(path)
@@ -3121,7 +3121,7 @@ export default class Actions {
 					['cropLeftPx', 'cropLeftPct', 'left', 'h'], ['cropRightPx', 'cropRightPct', 'right', 'h'],
 				]
 				for (const [pxId, pctId, prop, axis] of cropReadFields) {
-					const raw = this.state.get(['DEVICE', ...path, 'cropping', 'classic', 'pp', prop])
+					const raw = this.state.get(['DEVICE', ...path, ...this.constants.propsCroppingPath, prop])
 					if (typeof raw !== 'number') continue
 					const dimension = axis === 'v' ? source.height : source.width
 					;(newoptions[pxId] as string) = dimension !== '' ? Math.round(raw / 65536 * dimension).toString() : ''
@@ -3167,7 +3167,7 @@ export default class Actions {
 							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
 							...this.choices.getLayerPath(layer.layerKey),
 						]
-						if (action.options.aspectOverride !== 'keep') this.connection.sendWSmessage([...path, 'cropping', 'classic', 'pp', 'aspectOverride'], action.options.aspectOverride)
+						if (action.options.aspectOverride !== 'keep') this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, 'aspectOverride'], action.options.aspectOverride)
 
 						let source: {width: number | '', height: number | ''} | undefined
 						for (const [pxId, pctId, prop, axis] of cropFields) {
@@ -3187,7 +3187,7 @@ export default class Actions {
 								if (pct >= 0) fraction = pct / 100 // -1 (the field's default) is the "don't change" sentinel, so 0% stays usable as a real value
 							}
 							if (fraction !== undefined) {
-								this.connection.sendWSmessage([...path, 'cropping', 'classic', 'pp', prop], Math.round(fraction * 65536))
+								this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, prop], Math.round(fraction * 65536))
 							}
 						}
 					}
@@ -3394,7 +3394,7 @@ export default class Actions {
 					['maskLeftPx', 'maskLeftPct', 'left', 'h'], ['maskRightPx', 'maskRightPct', 'right', 'h'],
 				]
 				for (const [pxId, pctId, prop, axis] of maskReadFields) {
-					const raw = this.state.get(['DEVICE', ...path, 'cropping', 'mask', 'pp', prop])
+					const raw = this.state.get(['DEVICE', ...path, ...this.constants.propsMaskPath, prop])
 					if (typeof raw !== 'number') continue
 					const dimension = axis === 'v' ? sizeV : sizeH
 					;(newoptions[pxId] as string) = Math.round(raw / 65536 * dimension).toString()
@@ -3456,7 +3456,7 @@ export default class Actions {
 								if (pct >= 0) fraction = pct / 100
 							}
 							if (fraction !== undefined) {
-								this.connection.sendWSmessage([...path, 'cropping', 'mask', 'pp', prop], Math.round(fraction * 65536))
+								this.connection.sendWSmessage([...path, ...this.constants.propsMaskPath, prop], Math.round(fraction * 65536))
 							}
 						}
 					}
@@ -4614,7 +4614,7 @@ export default class Actions {
 								const source = this.choices.getLayerSourceInfo(path)
 								const edge = action.options.value.replace('crop', '').toLowerCase()
 								const dimension = (edge === 'top' || edge === 'bottom') ? source.height : source.width
-								applyFraction(['cropping', 'classic', 'pp', edge], dimension)
+								applyFraction([...this.constants.propsCroppingPath, edge], dimension)
 								break
 							}
 							case 'maskTop': case 'maskBottom': case 'maskLeft': case 'maskRight': {
@@ -4622,7 +4622,7 @@ export default class Actions {
 								const sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
 								const edge = action.options.value.replace('mask', '').toLowerCase()
 								const dimension = (edge === 'top' || edge === 'bottom') ? sizeV : sizeH
-								applyFraction(['cropping', 'mask', 'pp', edge], dimension)
+								applyFraction([...this.constants.propsMaskPath, edge], dimension)
 								break
 							}
 						}
