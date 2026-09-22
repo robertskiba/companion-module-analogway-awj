@@ -473,8 +473,12 @@ export default class SubscriptionsMidra extends Subscriptions {
 				...this.instance.choices.getScreensArray().map((s) => `DEVICE/device/transition/screenList/items/${s.id.replace(/\D/g, '')}/status/pp/transition`),
 				...this.instance.choices.getAuxArray().map((a) => `DEVICE/device/transition/auxiliaryScreenList/items/${a.id.replace(/\D/g, '')}/status/pp/transition`),
 			],
-			fun: (path, _value) => {
+		fun: (path, _value) => {
 				const setMemoryVariables = (preset: string, variableSuffix: string): void => {
+					// An Aux has no memory capability on Midra, so it has no "which memory is loaded" to report -
+					// registering the variables anyway would leave three per Aux and preset permanently blank.
+					// The Screen memories keep working exactly as before.
+					if (prefix === 'A') return
 					const newPresetSegment = variableSuffix === 'PVW' ? 'prw' : 'pgm'
 					const mem = this.instance.state.get([
 						'DEVICE',
@@ -498,7 +502,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 					this.instance.setVariableValues({ [modVarId]: !!(mem && modified) });
 					this.instance.setVariableValues({
 						[this.varName(`screen${prefix}${screenNum}memoryLabel${variableSuffix}`, `${prefix}${screenNum}.${newPresetSegment}.memory.label`)]: mem
-							? this.instance.state.get(['DEVICE', 'device', 'preset', prefix === 'A' ? 'auxBank' : 'bank', 'slotList', 'items', mem, 'control', 'pp', 'label'])
+							? this.instance.state.get(['DEVICE', 'device', 'preset', 'bank', 'slotList', 'items', mem, 'control', 'pp', 'label'])
 							: ''
 					});
 				}
@@ -568,6 +572,10 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7];
 				const presname = pres === this.instance.state.get(`LOCAL/screens/${screenPrefix}${screenNum}/pgm/preset`) ? 'PGM' : 'PVW';
 				const newPresetSegment = presname === 'PVW' ? 'prw' : 'pgm'
+				// An Aux has no memory capability on Midra, so there is no active memory to report and the
+				// A{n}.{pgm|prw}.memory.* variables are not registered at all. The subscription itself still
+				// fires for an Aux, because the Aux Memory feedbacks listed above depend on it.
+				if (screenPrefix === 'A') return false;
 				const memorystr = value ? value.toString() : '';
 				const memVarId = this.varName(`screen${screenPrefix}${screenNum}memory${presname}`, `${screenPrefix}${screenNum}.${newPresetSegment}.memory.active`)
 				this.instance.addVariable({ id: 'screenMemoryChange', variableId: memVarId, name: `Active memory for ${screenPrefix}${screenNum} ${presname}` })
@@ -605,6 +613,8 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const pres = Array.isArray(path) ? path[7] : path.split('/')[7];
 				const presName = pres === this.instance.state.get(`LOCAL/screens/${screenPrefix}${screenNum}/pgm/preset`) ? 'PGM' : 'PVW';
 				const newPresetSegment = presName === 'PVW' ? 'prw' : 'pgm'
+				// See screenMemoryChange above - an Aux has no memory, so no .memory.modified either.
+				if (screenPrefix === 'A') return false;
 				const modVarId = this.varName(`screen${screenPrefix}${screenNum}memoryModified${presName}`, `${screenPrefix}${screenNum}.${newPresetSegment}.memory.modified`)
 				this.instance.addVariable({ id: 'screenMemoryModifiedChange', variableId: modVarId, name: `Modified flag of active memory for ${screenPrefix}${screenNum} ${presName}` })
 				this.instance.setVariableValues({
