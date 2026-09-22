@@ -402,6 +402,62 @@ export default class SubscriptionsMidra extends Subscriptions {
 	}
 
 	/**
+	 * Which Screen or Aux each output feeds. The inherited subscription reads
+	 * `outputList/items/{n}/canvas/status/pp/usedInScreenAux`, which Midra does not have - it only has a
+	 * boolean `isUsedInScreen` there, so `OUT{n}.usedin` stayed empty on every Midra.
+	 *
+	 * The assignment lives in the applied preconfig, and only one direction of it can be trusted. The
+	 * output's own `pp/usedOnScreen`/`usedOnAux` look like the answer and are not: live on an Eikos 4K
+	 * simulator, outputs 3-6 sit at `mode: DISABLE` while still reporting `usedOnScreen: "1"`, and in the
+	 * MIXER template output 2 fed Aux 1 while reporting `usedOnScreen: "2"`. They are stale defaults. The
+	 * per-Screen and per-Aux `pp/outputList` arrays are correct in both templates, so this inverts those
+	 * instead - and only for Screens and Auxes that are currently enabled, so a retired Screen's leftover
+	 * assignment cannot claim an output.
+	 */
+	private refreshOutputUsedIn(): void {
+		const usedBy = new Map<string, string>()
+		for (const scr of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
+			const info = this.instance.choices.getScreenInfo(scr.id)
+			const outputs = this.instance.state.get([
+				'DEVICE', 'device', 'preconfig', 'status', 'stateList', 'items', 'CURRENT',
+				info.isAux ? 'auxiliaryScreenList' : 'screenList', 'items', info.platformId, 'pp', 'outputList',
+			])
+			if (!Array.isArray(outputs)) continue
+			for (const output of outputs) usedBy.set(String(output), info.id)
+		}
+
+		// Same remove-all-then-re-add shape the inherited subscription's own ini uses, and the same gating:
+		// the multiviewer's entry is not a physical output here, and an output slot the hardware does not
+		// have gets no variable at all. Both happen in one synchronous pass, so the definition list is
+		// republished once.
+		this.instance.removeVariable('outputUsedIn')
+		const items: string[] = this.instance.state.get('DEVICE/device/outputList/itemKeys') ?? []
+		for (const item of items) {
+			if (this.instance.choices.getMultiviewerOutputListKeys().includes(item)) continue
+			if (!this.instance.state.get(`DEVICE/device/outputList/items/${item}/status/pp/isAvailable`)) continue
+			this.instance.addVariable({ id: 'outputUsedIn', variableId: `OUT${item}.usedin`, name: `Screen/Aux using Output ${item}` })
+			this.instance.setVariableValues({ [`OUT${item}.usedin`]: usedBy.get(item) ?? '' })
+		}
+	}
+
+	get outputUsedIn():Subscription {
+		return {
+			// Matches the preconfig subtree itself rather than being called from screenEnabled, which watches the
+			// same subtree: both would then run this on every patch of an apply. isAvailable is a second trigger,
+			// since an output slot can appear or disappear without the preconfig moving.
+			pat: '(?:DEVICE/device/preconfig/status/stateList/items/CURRENT/|device/outputList/items/\\w+/status/pp/isAvailable)',
+			ini: () => {
+				this.refreshOutputUsedIn()
+				return []
+			},
+			fun: () => {
+				this.refreshOutputUsedIn()
+				return false
+			},
+		}
+	}
+
+	/**
 	 * Adds or removes the per-Screen/Aux variables whose own subscriptions cannot do it, so they follow the
 	 * preconfig the way refreshScreenSize already makes the size variables follow it.
 	 *
