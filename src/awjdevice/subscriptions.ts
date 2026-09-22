@@ -1370,7 +1370,7 @@ export default class Subscriptions {
 				const num = input.replace(/^\w+_/, '')
 				const varId = this.varName(`INPUT_${num}label`, `IN${num}.label`)
 				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isAvailable'))) {
-					this.instance.addVariable({ id: 'inputLabel', variableId: varId, name: `Label of Input ${input}` })
+					this.instance.addVariable({ id: 'inputLabel', variableId: varId, name: `Label of Input ${num}` })
 				}
 				this.instance.setVariableValues({ [varId]: this.instance.state.get(path) });
 				return true;
@@ -2199,7 +2199,7 @@ export default class Subscriptions {
 				const num = input.replace(/^\w+_/, '')
 				const varId = this.varName(`INPUT_${num}label`, `IN${num}.label`)
 				if (this.instance.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'status', 'pp', 'isAvailable'])) {
-					this.instance.addVariable({ id: 'plugChange', variableId: varId, name: `Label of Input ${input}` })
+					this.instance.addVariable({ id: 'plugChange', variableId: varId, name: `Label of Input ${num}` })
 				}
 				this.instance.setVariableValues({
 					[varId]: this.instance.state.get([
