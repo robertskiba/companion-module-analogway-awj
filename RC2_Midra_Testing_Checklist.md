@@ -54,20 +54,20 @@ Live-confirmed missing in earlier sessions. Just needs a quick sanity check that
 
 For every item below: single Layer, "All Selected Layers"/"First/Only Selected Layer", concatenated `L1L2`; Preview/Program/Both (Preview/Program) on the action side; "Both (Preview AND Program)"/"Both (Preview OR Program)" on the feedback side.
 
-- [ ] Position & Size (V3) + Reset Size or Ratio (Source Ratio / Content Size / Fullscreen) + Set Anchor Point.
-- [ ] Source (V3) - short-id (`IN{n}`/`IMG{n}`) resolution, raw id fallback; "Get current values" (Learn).
+- [x] Position & Size (V3) - verified 2026-09-22 on numbered layers and the Foreground. The Foreground is positioned but not resized (it has no size node); a note in the form says so. "Use Global Anchor Point" and the "Set Anchor Point" action are gone here: Midra has no global anchor at all - its REMOTE snapshot carries no live/screens/layers node and positions are always centre-relative, so a fullscreen 1920x1080 layer reads 960/540. The per-action anchor choices stay, since the corner-to-centre conversion is done by this module rather than the device. Reset Size or Ratio still open.
+- [x] Source (V3) - verified 2026-09-22. One Source field drives every target; `INPUT_n` confirmed as the real wire id and shown as `IN{n}`; Aux background, Foreground image, Background Set and Color all apply, invalid picks are dropped. Round-trip and Learn confirmed.
 - [ ] Transitions.
-- [ ] Opacity + Encoder Adjust (Opacity/Position/Size/Crop/Mask).
-- [ ] Aspect & Crop.
-- [ ] Mask.
+- [ ] Opacity (verified 2026-09-22: numbered layers, Background and Foreground) + Encoder Adjust (Opacity/Position/Size/Crop/Mask) - Encoder Adjust still open.
+- [x] Aspect & Crop - verified 2026-09-22. Midra has its own value list: no NONE, but GLOBAL_SETTING first and INPUT_SETTING (the equivalent of LivePremier's NONE) last, both read back off the device rather than guessed. Foreground is offered without Aspect Override, which only numbered layers have.
+- [x] Mask - verified 2026-09-22 on all three layer kinds, pixels and percent. Pixel round-trip is exact within the device's own 16-bit resolution (150px of 1080 stores as 9102 = 149.9963px; this module rounds back to 150, WebRCS displays 149).
 - [ ] Border.
 - [ ] Effects (Filter/Transform/Strobe - note Strobe needs firmware 6.0.4+, confirm the simulator's reported firmware and that the gate behaves correctly either way).
-- [ ] Speed.
-- [ ] Timing.
+- [x] Speed - verified 2026-09-22. Pt1/Pt2 work on all three layer kinds. The Linear/Smooth switch is removed on Midra: WebRCS has no such setting and the device stores a plain 'SMOOTH' rather than LivePremier's 'SMOOTH_TRANSITION'/'LINEAR_TRANSITION'.
+- [x] Timing - verified 2026-09-22. Needed a fix first: the ms-to-raw conversion reads the screen's transition time, and did so the LivePremier way (screen group keyed by 'S1', presetUp/presetDown, takeUpTime/takeDownTime). Midra keys by the bare number and has a single takeTime, so every write was silently skipped.
 - [ ] "Toggle" choice on every on/off flag (Effects, Border, Transitions Allow Cross, Speed Linear).
 - [ ] Property Status feedback - every property in the dropdown, both Both-combinators.
 - [ ] Layer Source feedback.
-- [ ] Global Anchor Point feedback.
+- [x] ~~Global Anchor Point feedback~~ - removed for Midra (2026-09-22): confirmed in the protocol that its REMOTE snapshot has no live/screens/layers node and no anchorPoint anywhere, so the feedback could only ever report CENTER for a setting the device does not have. Nothing to test.
 - [ ] ~~Cut&Fill action/feedback~~ - see Known Gaps above, not yet registered.
 - [ ] ~~Keying~~ - confirmed not applicable to Midra, nothing to test.
 
