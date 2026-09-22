@@ -551,7 +551,9 @@ export default class ChoicesMidra extends Choices {
 	/** Returns selected layers in LP format */
 	public getSelectedLayers(): { screenAuxKey: string; layerKey: string} [] {
 		if (this.instance.state.syncSelection) {
-			return this.state.get('REMOTE/live/screens/layerSelection/layerIds')
+			// `?? []` matches getSelectedScreens() below - REMOTE has no REST snapshot, so this path is simply
+			// absent until the websocket's INIT lands, and .map() on undefined would throw during that window.
+			return (this.state.get('REMOTE/live/screens/layerSelection/layerIds') ?? [])
 				.map(sel => {
 					return {
 						screenAuxKey: sel.screenAuxKey.replace(/CREEN_|UX_/, ''), 

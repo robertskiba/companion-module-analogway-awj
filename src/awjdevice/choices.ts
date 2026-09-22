@@ -1458,7 +1458,9 @@ export default class Choices {
 		if (this.instance.state.syncSelection) {
 			path = 'REMOTE/live/screens/layerSelection/layerIds'
 		}
-		return this.state.get(path)
+		// REMOTE has no REST snapshot, so this path does not exist until the websocket's INIT arrives - every
+		// caller treats the result as an array (.length/[0]/.filter), so it must never be undefined.
+		return this.state.get(path) ?? []
 	}
 	
     /**
