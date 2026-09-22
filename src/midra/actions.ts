@@ -1162,42 +1162,45 @@ export default class ActionsMidra extends Actions {
 	/**
 	 * MARK: Save/Revert Screen Memory Changes - Midra
 	 *
-	 * The WebRCS function behind the SM number in the editor's corner: a Screen Memory is loaded into a
-	 * preset, something gets changed, and the change is either written back into that memory or thrown away.
+	 * The WebRCS function behind the memory number in the editor's corner: a memory is loaded into a preset,
+	 * something gets changed, and the change is either written back into that memory or thrown away. Covers
+	 * Screens and Auxes alike, matching what this action already does on LivePremier.
 	 *
-	 * Read off the wire on an Eikos 4K simulator (2026-09-22). Saving turned out to be **the same command**
-	 * as "Save Screen Memory to Slot" - there is no separate update command - just aimed at whichever slot is
-	 * currently loaded:
-	 *   device/preset/bank/control/save/screenList/items/{screen}/presetList/items/{PROGRAM|PREVIEW}
-	 *     /slotList/items/{slot}/pp/xRequest
+	 * Read off the wire on an Eikos 4K simulator (2026-09-22), both banks separately. Saving turned out to be
+	 * **the same command** as saving to a slot - there is no separate update command - just aimed at whichever
+	 * slot is currently loaded:
+	 *   device/preset/{bank|auxBank}/control/save/{screenList|auxiliaryScreenList}/items/{screen}
+	 *     /presetList/items/{PROGRAM|PREVIEW}/slotList/items/{slot}/pp/xRequest
 	 *
-	 * Reverting was not captured, so it is done by reloading the same memory, which is what restoring the
-	 * saved state means and produces the identical result whatever WebRCS does internally. That load command
-	 * came from the same capture, and note it nests the other way round - slot first, then screen, then
-	 * preset:
-	 *   device/preset/bank/control/load/slotList/items/{slot}/screenList/items/{screen}
-	 *     /presetList/items/{PROGRAM|PREVIEW}/pp/xRequest
+	 * Reverting was never captured, on either bank, so it is done by reloading the same memory - which is what
+	 * restoring the saved state means and gives the identical result whatever WebRCS does internally. Verified
+	 * working that way. Note the load command nests the other way round, slot first:
+	 *   device/preset/{bank|auxBank}/control/load/slotList/items/{slot}
+	 *     /{screenList|auxiliaryScreenList}/items/{screen}/presetList/items/{PROGRAM|PREVIEW}/pp/xRequest
 	 *
+	 * Screens and Auxes use entirely separate banks and address their own list, but are otherwise identical.
 	 * Both forms of the preset key are needed and they are not interchangeable: the command paths take the
 	 * logical PROGRAM/PREVIEW, while the loaded slot number is read from the screen's own physical UP/DOWN
-	 * bank. Screens only - Aux memories live in a separate bank.
+	 * bank.
 	 */
 	get deviceUpdatePreset() {
 		const deviceUpdatePreset = super.deviceUpdatePreset
 
+		deviceUpdatePreset.options[0]['label'] = 'Screen / Aux'
 		deviceUpdatePreset.options[0]['choices'] = [
 			{ id: 'first', label: 'First/Only Selected Screen' },
+			{ id: 'all', label: 'All Screens' },
 			{ id: 'sel', label: 'All Selected Screens' },
-			...this.choices.getScreenChoices(),
+			...this.choices.getScreenAuxChoices(),
 		]
+		deviceUpdatePreset.options[0]['tooltip'] = 'Screens and Auxes are treated the same here, each going to its own memory bank - so "All Screens" and "All Selected Screens" cover both. A target with no memory loaded on the chosen preset is skipped.'
 
 		deviceUpdatePreset.callback = (action) => {
-			const screens = (action.options.screens === 'first'
+			const screens = action.options.screens === 'first'
 				? this.choices.getSelectedScreens().slice(0, 1)
 				: action.options.screens === 'sel'
 					? this.choices.getSelectedScreens()
 					: this.choices.getChosenScreenAuxes(action.options.screens)
-			).filter((screen) => screen.startsWith('S'))
 
 			return this.instance.serialize(screens, async () => {
 				const preset = this.choices.getPresetSelection(action.options.preset, true)
@@ -1205,11 +1208,16 @@ export default class ActionsMidra extends Actions {
 				const waitPromises: Promise<boolean>[] = []
 
 				for (const screen of screens) {
-					const platformId = this.choices.getScreenInfo(screen).platformId
+					const screeninfo = this.choices.getScreenInfo(screen)
+					const platformId = screeninfo.platformId
+					// Screens and Auxes have entirely separate memory banks here, each addressing its own list -
+					// live-confirmed on the wire for both. Everything else about the two is identical.
+					const bank = screeninfo.isAux ? 'auxBank' : 'bank'
+					const listKey = screeninfo.isAux ? 'auxiliaryScreenList' : 'screenList'
 					// The physical bank key, not the logical one the commands use - this is where the device
 					// reports which memory is loaded and whether it has unsaved changes.
 					const bankKey = this.choices.getPreset(screen, action.options.preset)
-					const statusPath = ['DEVICE', 'device', 'screenList', 'items', platformId, 'presetList', 'items', bankKey, 'status', 'pp']
+					const statusPath = ['DEVICE', 'device', listKey, 'items', platformId, 'presetList', 'items', bankKey, 'status', 'pp']
 					const slot = this.state.get([...statusPath, 'memoryId'])
 					// 0 means no memory is loaded into this preset, so there is nothing to save or revert.
 					if (!slot) continue
@@ -1223,8 +1231,8 @@ export default class ActionsMidra extends Actions {
 					}
 
 					const path = action.options.mode === 'revert'
-						? ['device', 'preset', 'bank', 'control', 'load', 'slotList', 'items', String(slot), 'screenList', 'items', platformId, 'presetList', 'items', preset, 'pp', 'xRequest']
-						: ['device', 'preset', 'bank', 'control', 'save', 'screenList', 'items', platformId, 'presetList', 'items', preset, 'slotList', 'items', String(slot), 'pp', 'xRequest']
+						? ['device', 'preset', bank, 'control', 'load', 'slotList', 'items', String(slot), listKey, 'items', platformId, 'presetList', 'items', preset, 'pp', 'xRequest']
+						: ['device', 'preset', bank, 'control', 'save', listKey, 'items', platformId, 'presetList', 'items', preset, 'slotList', 'items', String(slot), 'pp', 'xRequest']
 					this.connection.sendWSmessage(path, false, true)
 					// Both operations end with the preset no longer carrying unsaved changes, which is the thing
 					// the user is actually waiting for - and the one signal that reads the same either way.
