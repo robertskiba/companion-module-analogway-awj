@@ -278,15 +278,15 @@ export default class Feedbacks {
 						{ id: 'transformFlipH', label: 'Effects - Transform Flip Horizontal' },
 						{ id: 'transformFlipV', label: 'Effects - Transform Flip Vertical' },
 						...(this.constants.hasStrobeEffect ? [{ id: 'strobeEnable', label: this.choices.isFirmwareAtLeast('6.0.4') ? 'Effects - Strobe Active' : `Effects - Strobe Active${this.choices.firmwareGateNote('6.0.4')}` }] : []),
-						{ id: 'keyingEnable', label: this.choices.isFirmwareAtLeast('5.0.128') ? 'Keying Enabled' : `Keying Enabled${this.choices.firmwareGateNote('5.0.128')}` },
+						...(this.constants.hasLayerKeying ? [{ id: 'keyingEnable', label: this.choices.isFirmwareAtLeast('5.0.128') ? 'Keying Enabled' : `Keying Enabled${this.choices.firmwareGateNote('5.0.128')}` }] : []),
 						{ id: 'cutFillEnable', label: 'Cut&Fill - Enabled' },
 						{ id: 'maskActive', label: 'Mask Active' },
 						{ id: 'aspect1_1', label: 'Aspect Override - 1:1' },
 						{ id: 'aspectCentered', label: 'Aspect Override - Centered' },
 						{ id: 'aspectFullscreen', label: 'Aspect Override - Fullscreen' },
 						{ id: 'aspectCropped', label: 'Aspect Override - Cropped' },
-						{ id: 'allowCrossEffect', label: 'Transitions - Allow Cross Effect (not verified live)' },
-						{ id: 'allowCrossDepth', label: 'Transitions - Allow Cross Depth (not verified live)' },
+						{ id: 'allowCrossEffect', label: 'Transitions - Allow Cross Effect' },
+						{ id: 'allowCrossDepth', label: 'Transitions - Allow Cross Depth' },
 					],
 					default: 'edgeEnable',
 				},
@@ -340,8 +340,22 @@ export default class Feedbacks {
 						case 'aspectCentered': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === 'CENTERED'
 						case 'aspectFullscreen': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === 'FULLSCREEN'
 						case 'aspectCropped': return this.state.get([...path, ...this.constants.propsCroppingPath, 'aspectOverride']) === 'CROPPED'
-						case 'allowCrossEffect': return (this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).includes('FORCE_CROSS')
-						case 'allowCrossDepth': return !(this.state.get([...path, 'transition', 'pp', 'flags']) ?? []).some((f: string) => f.startsWith('DEPTH_CUT_'))
+						case 'allowCrossEffect': {
+							// Same two vocabularies the action writes: LivePremier's positive FORCE_CROSS, or Midra's
+							// negative DISABLE_CROSS_EFFECT whose absence means on. Hardcoding the former reported
+							// permanently off on Midra, which never carries that token.
+							const flags: string[] = this.state.get([...path, 'transition', 'pp', 'flags']) ?? []
+							const cross = this.constants.crossEffectFlags
+							return cross.on !== null ? flags.includes(cross.on) : !flags.includes(cross.off as string)
+						}
+						case 'allowCrossDepth': {
+							// LivePremier clears a DEPTH_CUT_* family, Midra a single DISABLE_CROSS_DEPTH - in both cases
+							// the absence of the token means on.
+							const flags: string[] = this.state.get([...path, 'transition', 'pp', 'flags']) ?? []
+							const depth = this.constants.crossDepthFlags
+							const isCleared = (flag: string) => depth.clear.includes(flag) || (depth.clearPrefix !== undefined && flag.startsWith(depth.clearPrefix))
+							return depth.on !== null ? flags.includes(depth.on) : !flags.some(isCleared)
+						}
 						default: return false
 					}
 				}

@@ -52,6 +52,7 @@ export default class ConstantsMidra extends Constants {
     static override readonly presetSideIndicator = ['status', 'pp', 'transition']
     static override readonly crossEffectFlags = { on: null, off: 'DISABLE_CROSS_EFFECT', clear: ['DISABLE_CROSS_EFFECT'] }
     static override readonly crossDepthFlags = { on: null, off: 'DISABLE_CROSS_DEPTH', clear: ['DISABLE_CROSS_DEPTH'] }
+    static override readonly hasLayerKeying = false
     static override readonly hasStrobeEffect = false
     static override readonly layerSpeedTypes = null
     static override readonly layerSourceProp = 'input' as const

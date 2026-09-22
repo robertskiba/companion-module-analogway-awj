@@ -68,6 +68,9 @@ export default class Constants {
      * platform - it simply clears whatever was there. */
     static readonly crossDepthFlags: { on: string | null, off: string | null, clear: string[], clearPrefix?: string } =
         { on: null, off: 'DEPTH_CUT_MIDDLE', clear: [], clearPrefix: 'DEPTH_CUT_' }
+    /** Whether the platform has layer Keying at all. Midra/Alta does not - its inputs report
+     * status/keying/pp/isAvailable false, and the Keying action is not registered there. */
+    static readonly hasLayerKeying: boolean = true
     /** Whether the platform has a layer Strobe effect at all. LivePremier gained it with firmware 6.0.4;
      * Midra/Alta has no such effect in WebRCS and no STROBE token in effects/pp/flags (live-confirmed by
      * toggling every Effects control on an Eikos 4K and watching which flags appeared). Kept separate from
