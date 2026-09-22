@@ -949,7 +949,7 @@ export default class Subscriptions {
 	 * whether a "Freeze - Input" feedback happens to be placed on a button for it (same registration-scope
 	 * reasoning as inputStatus above). */
 	get inputFreeze():Subscription {
-		const availablePath = (num: string) => `DEVICE/device/inputList/items/IN_${num}/status/pp/isAvailable`
+		const availablePath = (num: string) => `DEVICE/device/inputList/items/${this.constants.inputKeyPrefix}${num}/status/pp/isAvailable`
 
 		return {
 			pat: 'device/inputList/items/IN_(\\d+)/control/pp/freeze',
@@ -1376,26 +1376,26 @@ export default class Subscriptions {
 	 * registration-scope rule - this is exactly the axis that caused the 1486-variable spike when done wrong).
 	 */
 	get inputStatus():Subscription {
-		const availablePath = (num: string) => `DEVICE/device/inputList/items/IN_${num}/status/pp/isAvailable`
+		const availablePath = (num: string) => `DEVICE/device/inputList/items/${this.constants.inputKeyPrefix}${num}/status/pp/isAvailable`
 
 		return {
-			pat: 'device/inputList/items/IN_(\\d+)/plugList/items/\\w+/status/signal/pp/isValid',
+			pat: `device/inputList/items/${this.constants.inputKeyPrefix}(\\d+)/plugList/items/\\w+/status/signal/pp/isValid`,
 			fbk: 'deviceInputSignalStatus',
 			ini: () => {
 				this.instance.removeVariable('inputStatus')
 				for (let i = 1; i <= this.constants.maxInputs; i += 1) {
 					if (!this.instance.state.get(availablePath(i.toString()))) continue
 					this.instance.addVariable({ id: 'inputStatus', variableId: `IN${i}.status`, name: `Signal status of Input ${i}` })
-					this.instance.setVariableValues({ [`IN${i}.status`]: this.getInputSignalStatus(`IN_${i}`) })
+					this.instance.setVariableValues({ [`IN${i}.status`]: this.getInputSignalStatus(`${this.constants.inputKeyPrefix}${i}`) })
 				}
 				return []
 			},
 			fun: (path) => {
 				if (!path || typeof path !== 'string') return false
-				const match = path.match(/inputList\/items\/IN_(\d+)\/plugList\/items\/\w+\/status\/signal\/pp\/isValid/)
+				const match = path.match(new RegExp(`inputList/items/${this.constants.inputKeyPrefix}(\\d+)/plugList/items/\\w+/status/signal/pp/isValid`))
 				if (!match) return false
 				if (!this.instance.state.get(availablePath(match[1]))) return false
-				this.instance.setVariableValues({ [`IN${match[1]}.status`]: this.getInputSignalStatus(`IN_${match[1]}`) })
+				this.instance.setVariableValues({ [`IN${match[1]}.status`]: this.getInputSignalStatus(`${this.constants.inputKeyPrefix}${match[1]}`) })
 				return false
 			},
 		}
@@ -1527,8 +1527,8 @@ export default class Subscriptions {
 		// getInputSignalStatus()/inputList are keyed by "IN_n", so the id has to be normalized first.
 		const layerSourceStatus = (raw: string | undefined): string => {
 			if (!raw || raw === 'NONE') return 'INVALID'
-			const liveMatch = raw.match(/^(?:LIVE|IN)_(\d+)$/)
-			if (liveMatch) return this.getInputSignalStatus(`IN_${liveMatch[1]}`)
+			const liveMatch = raw.match(/^(?:LIVE|INPUT|IN)_(\d+)$/)
+			if (liveMatch) return this.getInputSignalStatus(`${this.constants.inputKeyPrefix}${liveMatch[1]}`)
 			return 'VALID'
 		}
 
@@ -1553,9 +1553,9 @@ export default class Subscriptions {
 
 			for (let i = 1; i <= layerCount; i += 1) {
 				const layerPath = [...presetPath, ...this.instance.choices.getLayerPath(i)]
-				const source = this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum'])
-				const sizeH = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'sizeH'])
-				const sizeV = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'sizeV'])
+				const source = this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', this.constants.layerSourceProp])
+				const sizeH = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeH'])
+				const sizeV = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeV'])
 				const posH = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'posH']) ?? 0
 				const posV = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'posV']) ?? 0
 				// Same anchor conversion as SelectedLayer.x/.y (refreshSelectedLayerRect above) - the device
@@ -1589,7 +1589,7 @@ export default class Subscriptions {
 			// .layerbg.source always exists per screen - addVariable's own dedup makes calling it every time
 			// a cheap no-op once registered, no need for its own new/existing distinction.
 			const bgPath = [...presetPath, ...this.instance.choices.getLayerPath('NATIVE')]
-			const bgSource = this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', 'inputNum'])
+			const bgSource = this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', this.constants.layerSourceProp])
 			this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layerbg.source`, name: `Source of Background Layer on ${info.id}` })
 			this.instance.setVariableValues({ [`${info.id}.layerbg.source`]: sourceValue(bgSource) })
 		}

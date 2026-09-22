@@ -452,7 +452,7 @@ export default class Feedbacks {
 						'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
 						...this.choices.getLayerPath(layer.layerKey),
 					]
-					return this.state.get([...path, 'source', 'pp', 'inputNum']) === expected
+					return this.state.get([...path, 'source', 'pp', this.constants.layerSourceProp]) === expected
 				})
 				if (feedback.options.preset === 'both_and') return matchesAllLayersForPreset('pgm') && matchesAllLayersForPreset('prw')
 				if (feedback.options.preset === 'both_or') return matchesAllLayersForPreset('pgm') || matchesAllLayersForPreset('prw')
@@ -1452,16 +1452,15 @@ export default class Feedbacks {
 					'presetList', 'items', preset,
 					'layerList', 'items', feedback.options.layer,
 				]
-				// TODO: 'source'/'pp'/'inputNum' and the IN_{n} raw id below are confirmed correct for LivePremier/
-				// LivePremier4 only - Midra's own deviceSelectSourceV3 action writes numbered layers' source to
-				// .../source/pp/input (singular, not inputNum) and uses INPUT_{n} elsewhere for its raw input ids,
-				// so this feedback is suspected to also need a Midra-specific override, but the exact field name/
-				// value format on Midra has not been live-verified this session - not guessing at a protocol
-				// value, left as-is pending live confirmation.
-				const source = this.state.get([...layerpath, 'source', 'pp', 'inputNum'])
-				const liveMatch = typeof source === 'string' ? source.match(/^(?:LIVE|IN)_(\d+)$/) : null
+				// The field name and the raw input id both differ per platform - LivePremier stores the source as
+				// `source/pp/inputNum` holding `LIVE_n` and keys its inputList by `IN_n`, Midra stores it as
+				// `source/pp/input` holding `INPUT_n` and keys the list by `INPUT_n` too (live-confirmed against
+				// an Eikos 4K simulator). Both now come from constants instead of the LivePremier spelling, which
+				// previously made this feedback read nothing at all on Midra.
+				const source = this.state.get([...layerpath, 'source', 'pp', this.constants.layerSourceProp])
+				const liveMatch = typeof source === 'string' ? source.match(/^(?:LIVE|INPUT|IN)_(\d+)$/) : null
 				if (!liveMatch) return true
-				const inputKey = `IN_${liveMatch[1]}`
+				const inputKey = `${this.constants.inputKeyPrefix}${liveMatch[1]}`
 				const activePlug = this.state.get(['DEVICE', 'device', 'inputList', 'items', inputKey, 'status', 'pp', 'plug']) ?? '1'
 				return !!this.state.get(['DEVICE', 'device', 'inputList', 'items', inputKey, 'plugList', 'items', activePlug, 'status', 'signal', 'pp', 'isValid'])
 			},

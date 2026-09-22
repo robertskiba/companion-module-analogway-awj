@@ -1091,16 +1091,17 @@ export default class Choices {
 	 * width/height are '' if unknown (e.g. Color, a Timer, or no signal detected). `layerPath` is a layer's
 	 * DEVICE-relative path as returned by getLayerPath (prefixed onto screenPath/auxPath + presetList/items/{preset}). */
 	public getLayerSourceInfo(layerPath: string[]): {number: string, name: string, width: number | '', height: number | ''} {
-		const input = this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum'])
+		const input = this.state.get(['DEVICE', ...layerPath, 'source', 'pp', this.constants.layerSourceProp])
 
 		// A layer's own source uses "LIVE_n" for a live input when assigned via WebRCS drag&drop (confirmed
-		// live, matching the Backup subsystem's own convention) - "IN_n" accepted too defensively, but
-		// inputList/plugList are keyed by "IN_n" either way, so the id must be normalized before lookup.
+		// live, matching the Backup subsystem's own convention) - "IN_n" accepted too defensively, and Midra
+		// spells the very same thing "INPUT_n". inputList/plugList are keyed by the platform's own prefix
+		// (constants.inputKeyPrefix), so the id has to be normalized to that before any lookup.
 		// Also fixed: the active plug lives at status.pp.plug, not control.pp.plug (which doesn't exist -
 		// silently fell back to the '1' default every time, masking the bug on single-plug inputs).
-		const liveMatch = typeof input === 'string' ? input.match(/^(?:LIVE|IN)_(\d+)$/) : null
+		const liveMatch = typeof input === 'string' ? input.match(/^(?:LIVE|INPUT|IN)_(\d+)$/) : null
 		if (liveMatch) {
-			const inputKey = `IN_${liveMatch[1]}`
+			const inputKey = `${this.constants.inputKeyPrefix}${liveMatch[1]}`
 			const number = liveMatch[1]
 			const name = this.state.get(`DEVICE/device/inputList/items/${inputKey}/control/pp/label`) || `Input ${number}`
 			const plug = this.state.get(`DEVICE/device/inputList/items/${inputKey}/status/pp/plug`) || '1'
