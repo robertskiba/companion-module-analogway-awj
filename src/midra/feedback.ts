@@ -1,4 +1,5 @@
 ﻿import Feedbacks from '../awjdevice/feedback.js'
+import { LayerProperty } from '../awjdevice/choices.js'
 import {AWJinstance} from '../index.js'
 import {
 	CompanionFeedbackDefinition,
@@ -102,6 +103,27 @@ export default class FeedbacksMidra extends Feedbacks  {
 
 		const extraAspects: Record<string, string> = { aspectGlobal: 'GLOBAL_SETTING', aspectInput: 'INPUT_SETTING' }
 
+		// The Background and the Foreground frame are addressable here too, so the properties they do carry can
+		// be checked and not only set. Which ones those are differs per layer kind and is not expressible in a
+		// static list - live on an Eikos 4K a Screen's background has a mask but no aspect override, its
+		// foreground has crop edges and a mask but also no aspect override, and an Aux background is the exact
+		// mirror image with an aspect override and no mask. The callback therefore asks layerSupports() and
+		// answers a plain false for a combination the device does not have, rather than reading a phantom node.
+		const layerField = deviceLayerPropertyStatus.options.find((opt) => opt.id === 'layer') as CompanionInputFieldDropdown | undefined
+		if (layerField) {
+			layerField.choices = this.choices.getLayerChoices(this.choices.getMaxConfiguredLayerCount(), true, true)
+		}
+
+		/** Which property group each entry of the dropdown belongs to, for the layerSupports() check. */
+		const propertyGroup = (property: string): LayerProperty | undefined => {
+			if (property.startsWith('edge') || property.startsWith('shadow')) return 'border'
+			if (property.startsWith('filter') || property.startsWith('transform') || property === 'strobeEnable') return 'effects'
+			if (property === 'maskActive') return 'mask'
+			if (property.startsWith('aspect')) return 'aspectOverride'
+			if (property.startsWith('allowCross')) return 'transitionFlags'
+			return undefined
+		}
+
 		const propertyField = deviceLayerPropertyStatus.options.find((opt) => opt.id === 'property') as CompanionInputFieldDropdown | undefined
 		if (propertyField) {
 			const labels = new Map(this.choices.getAspectOverrideChoices().map((choice) => [choice.id, choice.label]))
@@ -116,7 +138,11 @@ export default class FeedbacksMidra extends Feedbacks  {
 
 		const inherited = deviceLayerPropertyStatus.callback
 		deviceLayerPropertyStatus.callback = (feedback, context) => {
-			const wanted = extraAspects[String(feedback.options.property ?? '')]
+			const property = String(feedback.options.property ?? '')
+			const group = propertyGroup(property)
+			if (group !== undefined && !this.choices.layerSupports(feedback.options.screen, feedback.options.layer, group)) return false
+
+			const wanted = extraAspects[property]
 			if (wanted === undefined) return inherited?.(feedback, context) ?? false
 
 			const screeninfo = this.choices.getScreenInfo(feedback.options.screen)
