@@ -89,16 +89,6 @@ export default class ChoicesMidra extends Choices {
 	}
 
 	/**
-	 * A Screen's or Aux's name, falling back to "Screen 1"/"Aux 1" when the device reports none.
-	 *
-	 * Midra's protocol has the `control/pp/label` field, but WebRCS offers no way to set it, so in practice it
-	 * is always empty - confirmed across all four Screens and all four Auxes on an Eikos 4K simulator. That is
-	 * not "the operator left the name blank" (where blank is the honest answer, see GUIDELINES.md), it is a
-	 * platform with no naming feature at all, and leaving it empty made every dropdown entry and every
-	 * `S{n}.label`/`A{n}.label` variable read as nothing. A LivePremier user switching to a Midra gets the
-	 * same shape of value either way.
-	 */
-	/**
 	 * A Midra Aux has no canvas node at all - it is always full screen on whatever output it feeds, so its
 	 * resolution is that output's. Confirmed on an Eikos 4K simulator: the preconfig assigns Aux 1 to output
 	 * 2, and only `device/outputList/items/2/status/pp/sizeH|sizeV` carries a resolution. Reading the Screen
@@ -138,11 +128,6 @@ export default class ChoicesMidra extends Choices {
 		return this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'input'])
 	}
 
-	public override defaultScreenLabel(label: unknown, isAux: boolean, index: string | number): string {
-		if (typeof label === 'string' && label !== '') return label
-		return `${isAux ? 'Aux' : 'Screen'} ${index}`
-	}
-
 	/** returns array of the currently available and active screens only (no auxes)*/
 	public getScreensArray(getAlsoDisabled = false): Choicemeta[] {
 		const ret: Choicemeta[] = []
@@ -153,7 +138,7 @@ export default class ChoicesMidra extends Choices {
 				if (getAlsoDisabled || this.state.get('DEVICE/device/preconfig/status/stateList/items/CURRENT/screenList/items/' + screen + '/pp/enable') === true) {
 					ret.push({
 						id: 'S' + screen,
-						label: this.defaultScreenLabel(this.state.get('DEVICE/device/screenList/items/' + screen + '/control/pp/label'), false, screen),
+						label: this.state.get('DEVICE/device/screenList/items/' + screen + '/control/pp/label'),
 						index: screen
 					})
 				}
@@ -175,7 +160,7 @@ export default class ChoicesMidra extends Choices {
 				if (getAlsoDisabled || this.state.get('DEVICE/device/preconfig/status/stateList/items/CURRENT/auxiliaryScreenList/items/' + screen + '/pp/mode') != 'DISABLE') {
 					ret.push({
 						id: 'A' + screen,
-						label: this.defaultScreenLabel(this.state.get('DEVICE/device/auxiliaryScreenList/items/' + screen + '/control/pp/label'), true, screen.replace(/\D/g, '')),
+						label: this.state.get('DEVICE/device/auxiliaryScreenList/items/' + screen + '/control/pp/label'),
 						index: screen.replace(/\D/g, '')
 					})
 				}

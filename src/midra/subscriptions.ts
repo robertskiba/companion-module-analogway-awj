@@ -304,9 +304,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				// Midra reports no Screen/Aux name at all - see choices.defaultScreenLabel() for why this falls back
-				// to "Screen {n}"/"Aux {n}" rather than staying blank.
-				const label = this.instance.choices.defaultScreenLabel(this.instance.state.get(path), false, input)
+				const label = this.instance.state.get(path)
 				const exists = this.instance.choices.getScreensArray().some(scr => scr.id === 'S' + input)
 				if (this.instance.config.useOldVariableNames) {
 					if (exists) {
@@ -333,7 +331,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				const label = this.instance.choices.defaultScreenLabel(this.instance.state.get(path), true, input)
+				const label = this.instance.state.get(path)
 				const exists = this.instance.choices.getAuxArray().some(scr => scr.id === 'A' + input)
 				if (this.instance.config.useOldVariableNames) {
 					if (exists) {
@@ -444,8 +442,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 			if (this.instance.config.useOldVariableNames) continue
 			if (live.has(entry.id)) {
 				this.instance.addVariable({ id: entry.labelGroup, variableId: `${entry.id}.label`, name: `Label of ${entry.kind} ${entry.id}` })
-				const raw = this.instance.state.get(`DEVICE/device/${entry.list}/items/${entry.index}/control/pp/label`)
-				this.instance.setVariableValues({ [`${entry.id}.label`]: this.instance.choices.defaultScreenLabel(raw, entry.isAux, entry.index) })
+				this.instance.setVariableValues({ [`${entry.id}.label`]: this.instance.state.get(`DEVICE/device/${entry.list}/items/${entry.index}/control/pp/label`) })
 			} else {
 				this.instance.removeVariable(entry.labelGroup, `${entry.id}.label`)
 			}

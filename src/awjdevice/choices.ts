@@ -1082,15 +1082,6 @@ export default class Choices {
 	}
 
 	/**
-	 * A Screen's or Aux's display name. LivePremier lets the operator name them in WebRCS, so whatever the
-	 * device reports stands as-is - an empty one there honestly means "not named", and inventing a name would
-	 * hide that. Midra, which has no naming feature at all, overrides this with a generated default.
-	 */
-	public defaultScreenLabel(label: unknown, _isAux: boolean, _index: string | number): string {
-		return typeof label === 'string' ? label : ''
-	}
-
-	/**
 	 * Where the transition state (live side, T-Bar, take time) of one Screen or Aux lives.
 	 *
 	 * LivePremier keeps both in the same `device/screenAuxGroupList`, so the two constants are the identical

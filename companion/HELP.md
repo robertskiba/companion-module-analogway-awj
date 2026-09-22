@@ -514,7 +514,7 @@ Swaps the "Hot Backup Device Address" with the current "Device Network Address" 
 - `Device.Status.Temperature` / `Device.Status.Fans` - aggregated temperature/fan alarm status.
 - `Device.Connected.Maindevice` - this connection's own connection status.
 - `Device.Connected.Hotbackupdevice` / `Device.IP.Hotbackup` - Hot Backup Device connection status/address (LivePremier only, "not_configured" while disabled).
-- `Sx.label` / `Ax.label` - the label of the screen/aux screen (example: `S1.label` shows the label of Screen 1). On Alta 4K and Midra 4K the device has no naming feature, so these are generated as "Screen 1", "Aux 1" and so on rather than read from the device.
+- `Sx.label` / `Ax.label` - the label of the screen/aux screen (example: `S1.label` shows the label of Screen 1). A screen you have not named reports an empty string, on every series.
 - `Sx.width` / `.height` / `.aspectratio` - a Screen's/Aux's own canvas resolution, for currently-enabled screens/auxes only (example: `S1.width` shows Screen 1's canvas width). On Alta 4K and Midra 4K an Aux has no canvas of its own - it is always full screen on the output it feeds, so `Ax.*` reports that output's resolution.
 - `OUTx.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a physical output's current signal and label (example: `OUT1.format` shows Output 1's current format).
 - `OUTx.hdcp` / `.colorspace` / `.sinkdetected` / `.sinkname` - a physical output's connected-sink status (example: `OUT1.sinkdetected` shows whether Output 1 has a connected sink).
