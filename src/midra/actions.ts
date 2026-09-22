@@ -46,8 +46,9 @@ export default class ActionsMidra extends Actions {
 		// 'deviceUpdatePreset' - LivePremier/LivePremier4-specific "Save/Revert Screen Memory Changes" action, only
 		// live-confirmed against a real Aquilon (LivePremier4) so far. Midra addresses its screen-memory-load
 		// path differently (device/preset/bank/..., see deviceScreenMemory above) - needs its own live
-		// verification (does a matching device/preset/bank/control/save/... path even exist?) before enabling.
-		// 'deviceSaveScreenMemory' - same presetBank-family dependency as deviceUpdatePreset above, same caveat.
+		// verification before enabling: what it does is revert a *loaded* memory to its saved state, which is a
+		// different command from the plain save below and has not been observed on the wire here.
+		'deviceSaveScreenMemory',
 		'deviceAuxMemory',
 		'deviceMasterMemory',
 		// 'deviceLayerMemory',
@@ -1160,6 +1161,109 @@ export default class ActionsMidra extends Actions {
 
 		return devicePositionSizeV3
 
+	}
+
+	/**
+	 * MARK: Save Screen Memory to Slot - Midra
+	 *
+	 * Read off the wire on an Eikos 4K simulator (2026-09-22) by watching the websocket while a Screen Memory
+	 * was saved, relabelled and deleted in WebRCS, because the REST snapshot does not carry these write-only
+	 * command nodes at all - `control/save/screenList/items/{n}/presetList` shows an empty `items` until it is
+	 * actually used, so its absence proved nothing.
+	 *
+	 * Saving is one pulse:
+	 *   device/preset/bank/control/save/screenList/items/{screen}/presetList/items/{PROGRAM|PREVIEW}
+	 *     /slotList/items/{slot}/pp/xRequest = true
+	 *
+	 * Two details differ from Aquilon beyond the bank root. The screen is keyed by its bare number, like every
+	 * other Midra list, and the preset segment is the *logical* PROGRAM/PREVIEW - not the UP/DOWN key that
+	 * getPreset() returns for this platform, which addresses the physical bank and would be wrong here.
+	 *
+	 * Screens only: Midra keeps Aux memories in a separate `auxBank` with its own save path, so an Aux is not
+	 * a valid target for this one at all and is left out of the dropdown rather than silently doing nothing.
+	 */
+	get deviceSaveScreenMemory() {
+		const deviceSaveScreenMemory = super.deviceSaveScreenMemory
+
+		deviceSaveScreenMemory.name = 'LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory)'
+		deviceSaveScreenMemory.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, ...this.choices.getScreenChoices()]
+		deviceSaveScreenMemory.options[0]['tooltip'] = 'A Screen Memory always holds exactly one Screen\'s state, so there is no multi-selection here, unlike Recall - an expression resolving to several Screens uses the first one. Auxes are not offered: they have their own separate Aux Memory bank on this platform.'
+
+		deviceSaveScreenMemory.callback = (action) => {
+			const slot = action.options.memory === 'next' ? this.choices.getNextAvailableScreenMemorySlot() : stripMemoryPrefix(action.options.memory, 'SM')
+			if (!slot) return Promise.resolve()
+
+			// Serialized on the slot (two buttons racing for the same one) and, for a save, on the source
+			// screen too - same reasoning as the Aquilon version. Relabel and delete touch no live Screen.
+			const screen = action.options.action === 'save'
+				? (action.options.screens === 'first' ? this.choices.getSelectedScreens() : this.choices.getChosenScreenAuxes(action.options.screens)).filter((scr) => scr.startsWith('S'))[0]
+				: undefined
+			const keys = [`SM:${slot}`, ...(screen ? [screen] : [])]
+
+			return this.instance.serialize(keys, async () => {
+				const alreadyValid = this.choices.getScreenMemoryArray().some((mem) => mem.id === slot)
+				if (alreadyValid && !parseBoolean(action.options.allowExisting)) return
+
+				const slotPath = [...this.constants.screenMemoryPath, 'items', String(slot)]
+				const bankItemPath = [...slotPath, 'control', 'pp']
+				const bankValidPath = ['DEVICE', ...slotPath, 'status', 'pp', 'isValid']
+
+				if (action.options.action === 'delete') {
+					// Unlike the save, this one was not observed on the wire - the capture session produced two
+					// relabels and no delete - so it follows the Aquilon version's false-then-true pulse, which is
+					// how every other x-command in this module is sent. Worth confirming against a real delete.
+					this.connection.sendWSmessage([...bankItemPath, 'xDelete'], false, true)
+					this.instance.sendXupdate()
+					await this.waitForStateValue(bankValidPath, (v) => v === false)
+					return
+				}
+
+				if (action.options.action === 'updateLabel') {
+					this.connection.sendWSmessage([...bankItemPath, 'label'], action.options.label)
+					this.instance.sendXupdate()
+					await this.waitForStateValue(['DEVICE', ...bankItemPath, 'label'], (v) => v === action.options.label)
+					return
+				}
+
+				if (!screen) return
+				const preset = this.choices.getPresetSelection(action.options.preset, true)
+				this.connection.sendWSmessage(
+					[
+						'device', 'preset', 'bank', 'control', 'save',
+						'screenList', 'items', this.choices.getScreenInfo(screen).platformId,
+						'presetList', 'items', preset,
+						'slotList', 'items', String(slot),
+						'pp', 'xRequest',
+					],
+					true
+				)
+
+				// A typed label always applies. Midra does not invent one of its own when saving into an empty
+				// slot - watching the wire, no label was written at all until it was set by hand - so the same
+				// generated fallback the Aquilon version uses is applied here, from the device's own clock
+				// rather than the Companion host's. That clock sits under system/rtc/cmd/pp here, not
+				// system/rtc/status/pp.
+				if (action.options.label !== '') {
+					this.connection.sendWSmessage([...bankItemPath, 'label'], action.options.label)
+				} else if (!alreadyValid) {
+					const pad = (n: number) => String(n).padStart(2, '0')
+					const monthAbbrev: Record<string, string> = {
+						JANUARY: 'Jan', FEBRUARY: 'Feb', MARCH: 'Mar', APRIL: 'Apr', MAY: 'May', JUNE: 'Jun',
+						JULY: 'Jul', AUGUST: 'Aug', SEPTEMBER: 'Sep', OCTOBER: 'Oct', NOVEMBER: 'Nov', DECEMBER: 'Dec',
+					}
+					const rtcPath = ['DEVICE', 'device', 'system', 'rtc', 'cmd', 'pp']
+					const day = this.state.get([...rtcPath, 'day'])
+					const month = monthAbbrev[this.state.get([...rtcPath, 'month'])] ?? '???'
+					const hours = this.state.get([...rtcPath, 'hours'])
+					const minutes = this.state.get([...rtcPath, 'minutes'])
+					this.connection.sendWSmessage([...bankItemPath, 'label'], `Saved from ${screen} - ${month} ${day}, ${pad(hours)}:${pad(minutes)}`)
+				}
+				this.instance.sendXupdate()
+				await this.waitForStateValue(bankValidPath, (v) => v === true)
+			})
+		}
+
+		return deviceSaveScreenMemory
 	}
 
 	/**
