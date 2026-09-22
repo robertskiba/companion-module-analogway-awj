@@ -1027,6 +1027,20 @@ export default class Choices {
 		]
 	}
 
+	/**
+	 * The preset key (`presetList/items/...`) currently live on Program for a Screen/Aux, read straight off
+	 * the device rather than through getPreset() - that one goes via LOCAL, which is only written by the
+	 * transition handler and never seeded at connect, so it stays stale until the first Take.
+	 *
+	 * LivePremier reports it as `control/pp/presetUp` holding the key itself ('A'/'B'); Midra reports
+	 * `status/pp/transition` holding 'AT_UP'/'AT_DOWN' against keys 'UP'/'DOWN', so the override strips the
+	 * prefix. Returns undefined if the device has not reported it (yet).
+	 */
+	public getLivePresetKey(screenAuxKey: string): string | undefined {
+		const info = this.getScreenInfo(screenAuxKey)
+		return this.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', info.platformId, ...this.constants.presetSideIndicator])
+	}
+
 	public getMaxConfiguredLayerCount(): number {
 		return this.getScreenAuxChoices().reduce((max, screen) => {
 			return Math.max(max, this.getLayersAsArray(screen.id, false).length)

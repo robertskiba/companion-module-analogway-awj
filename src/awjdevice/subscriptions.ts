@@ -1558,9 +1558,17 @@ export default class Subscriptions {
 			const info = this.instance.choices.getScreenInfo(scr.id)
 			seenScreenIds.add(info.id)
 			const screenListPath = info.isAux ? this.constants.auxPath : this.constants.screenPath
-			const layerCount: number = this.instance.state.get(['DEVICE', ...screenListPath, 'items', info.platformId, 'status', 'pp', 'layerCount']) ?? 0
+			// Via choices, not a raw path: Midra has no status/pp/layerCount on the screen at all (it keeps the
+			// count under preconfig/status/stateList), so reading it directly yielded zero layers there and no
+			// Sx.layerY.* variables were ever created. getLayersAsArray() already resolves this per platform.
+			const layerCount: number = this.instance.choices.getLayersAsArray(scr.id, false).length
 			const previousLayerCount = this.lastLayerCountByScreen.get(info.id) ?? 0
-			const presetKey = this.instance.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', info.id, 'control', 'pp', 'presetUp'])
+			// Keyed by info.id and reading presetUp, this resolved to nothing on Midra, so every path built from
+			// it failed and even layerbg.source stayed blank. getLivePresetKey() reads the device directly and
+			// knows both platforms' field name and value shape.
+			// '' keeps the downstream paths typed and simply reads nothing, exactly as the undefined value did
+			// before, for the brief window before the device has reported the live side.
+			const presetKey = this.instance.choices.getLivePresetKey(info.id) ?? ''
 			const presetPath = [...screenListPath, 'items', info.platformId, 'presetList', 'items', presetKey]
 
 			// Layers that used to exist but no longer do - deregister only their own exact variables.

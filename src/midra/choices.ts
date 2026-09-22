@@ -559,6 +559,12 @@ export default class ChoicesMidra extends Choices {
 	 */
 	/** Midra's own Aspect Override list, in WebRCS's own order - no NONE, but a Global Settings entry at the
 	 *  top and Input Setting (the equivalent of LivePremier's NONE) at the bottom. */
+	/** Midra reports the live side as 'AT_UP'/'AT_DOWN' while its preset keys are 'UP'/'DOWN'. */
+	public override getLivePresetKey(screenAuxKey: string): string | undefined {
+		const raw = super.getLivePresetKey(screenAuxKey)
+		return typeof raw === 'string' ? raw.replace(/^AT_/, '') : undefined
+	}
+
 	public override getAspectOverrideChoices(): Dropdown<string>[] {
 		return [
 			{ id: 'GLOBAL_SETTING', label: 'Global Settings' },
