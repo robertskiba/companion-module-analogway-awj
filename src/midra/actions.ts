@@ -1034,6 +1034,11 @@ export default class ActionsMidra extends Actions {
 		const linearIndex = deviceLayerSpeedV3.options.findIndex((opt) => opt.id === 'linear')
 		if (linearIndex !== -1) deviceLayerSpeedV3.options.splice(linearIndex, 1)
 
+		// Linear sat between the plain target separator and the labelled "Acceleration" heading, so removing it
+		// leaves two rules back to back. Drops the unlabelled one and keeps the heading.
+		const targetHeaderIndex = deviceLayerSpeedV3.options.findIndex((opt) => opt.id === 'targetHeader')
+		if (targetHeaderIndex !== -1) deviceLayerSpeedV3.options.splice(targetHeaderIndex, 1)
+
 		return deviceLayerSpeedV3
 	}
 
