@@ -396,7 +396,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (): boolean => {
 				this.screenSize.fun?.()
 				this.layerVariables.fun?.()
-				this.refreshScreenAuxLabels()
+				this.refreshScreenAuxRegistrations()
 				this.debounce('preconfigApplied', 1000, () => void this.instance.updateInstance())
 				return false
 			},
@@ -404,27 +404,50 @@ export default class SubscriptionsMidra extends Subscriptions {
 	}
 
 	/**
-	 * Adds or removes the S{n}.label/A{n}.label variables so they follow the preconfig, the same way
-	 * refreshScreenSize does for the size variables. The label subscriptions themselves only ever fire when
-	 * the device reports a new label, which never happens when a Screen is simply switched off.
+	 * Adds or removes the per-Screen/Aux variables whose own subscriptions cannot do it, so they follow the
+	 * preconfig the way refreshScreenSize already makes the size variables follow it.
+	 *
+	 * Those subscriptions only fire when the device reports a new label or a new transition time, and it
+	 * reports neither when a Screen is simply switched off - so they register what exists at connect and then
+	 * have no occasion to clean up. Switching an Eikos to its MATRIX template, which leaves two Screens and
+	 * no Aux at all, left A1.pgm.time and A1.prw.time behind with a frozen value.
 	 */
-	private refreshScreenAuxLabels(): void {
-		if (this.instance.config.useOldVariableNames) return
+	private refreshScreenAuxRegistrations(): void {
 		const live = new Set([
 			...this.instance.choices.getScreensArray().map((scr) => scr.id),
 			...this.instance.choices.getAuxArray().map((scr) => scr.id),
 		])
 		const all = [
-			...Array.from({ length: this.constants.maxScreens }, (_, i) => ({ id: `S${i + 1}`, kind: 'Screen', group: 'screenLabel', isAux: false, index: i + 1 })),
-			...Array.from({ length: this.constants.maxAuxScreens }, (_, i) => ({ id: `A${i + 1}`, kind: 'Auxscreen', group: 'auxscreenLabel', isAux: true, index: i + 1 })),
+			...Array.from({ length: this.constants.maxScreens }, (_, i) => ({
+				id: `S${i + 1}`, index: i + 1, isAux: false, kind: 'Screen',
+				labelGroup: 'screenLabel', timeGroup: 'screenTransitionTime', list: 'screenList',
+			})),
+			...Array.from({ length: this.constants.maxAuxScreens }, (_, i) => ({
+				id: `A${i + 1}`, index: i + 1, isAux: true, kind: 'Auxscreen',
+				labelGroup: 'auxscreenLabel', timeGroup: 'auxScreenTransitionTime', list: 'auxiliaryScreenList',
+			})),
 		]
 		for (const entry of all) {
+			const pgmVarId = this.varName(`screen${entry.id}timePGM`, `${entry.id}.pgm.time`)
+			const prwVarId = this.varName(`screen${entry.id}timePVW`, `${entry.id}.prw.time`)
 			if (live.has(entry.id)) {
-				this.instance.addVariable({ id: entry.group, variableId: `${entry.id}.label`, name: `Label of ${entry.kind} ${entry.id}` })
-				const raw = this.instance.state.get(`DEVICE/device/${entry.isAux ? 'auxiliaryScreenList' : 'screenList'}/items/${entry.index}/control/pp/label`)
+				const deciseconds = this.instance.state.get(`DEVICE/device/transition/${entry.list}/items/${entry.index}/control/pp/takeTime`)
+				this.instance.addVariable({ id: entry.timeGroup, variableId: pgmVarId, name: `Transition time for ${entry.id} PGM` })
+				this.instance.addVariable({ id: entry.timeGroup, variableId: prwVarId, name: `Transition time for ${entry.id} PVW` })
+				this.instance.setVariableValues({ [pgmVarId]: deciSecondsToString(deciseconds), [prwVarId]: deciSecondsToString(deciseconds) })
+			} else {
+				this.instance.removeVariable(entry.timeGroup, pgmVarId)
+				this.instance.removeVariable(entry.timeGroup, prwVarId)
+			}
+			// The old-name scheme exposes each label under two names at once, which varName() cannot express,
+			// so that side is left to the label subscriptions themselves there.
+			if (this.instance.config.useOldVariableNames) continue
+			if (live.has(entry.id)) {
+				this.instance.addVariable({ id: entry.labelGroup, variableId: `${entry.id}.label`, name: `Label of ${entry.kind} ${entry.id}` })
+				const raw = this.instance.state.get(`DEVICE/device/${entry.list}/items/${entry.index}/control/pp/label`)
 				this.instance.setVariableValues({ [`${entry.id}.label`]: this.instance.choices.defaultScreenLabel(raw, entry.isAux, entry.index) })
 			} else {
-				this.instance.removeVariable(entry.group, `${entry.id}.label`)
+				this.instance.removeVariable(entry.labelGroup, `${entry.id}.label`)
 			}
 		}
 	}
