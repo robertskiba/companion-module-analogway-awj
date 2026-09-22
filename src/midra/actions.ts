@@ -82,7 +82,8 @@ export default class ActionsMidra extends Actions {
 		'deviceLayerSpeedV3',
 		'deviceLayerTimingV3',
 		'deviceLayerEncoderAdjustV3',
-		'deviceSetAnchorPoint',
+		// 'deviceSetAnchorPoint', // sets the global Anchor Point, which Midra does not have - see
+		// dropGlobalAnchorChoice() below. The per-action anchor choices remain available.
 		'deviceResetLayerSize',
 		'deviceCopyProgram',
 		'devicePresetToggle',
@@ -1042,8 +1043,26 @@ export default class ActionsMidra extends Actions {
 		return deviceLayerSpeedV3
 	}
 
+	/**
+	 * Midra has no global Anchor Point - its REMOTE snapshot carries no live/screens/layers node at all, and
+	 * positions are always stored relative to the centre. "Use Global Anchor Point" would therefore refer to
+	 * a setting that does not exist, so it is dropped and the field defaults to Center instead.
+	 *
+	 * The remaining anchor choices deliberately stay: converting a corner-relative position into the centre-
+	 * relative value the device stores is done by this module, not by the device, so it works here just as
+	 * well - and offers something WebRCS itself does not.
+	 */
+	private dropGlobalAnchorChoice(options: { id?: string }[]): void {
+		const anchor = options.find((opt) => opt.id === 'anchor') as { choices?: { id: string | number }[], default?: unknown } | undefined
+		if (!anchor?.choices) return
+		anchor.choices = anchor.choices.filter((choice) => choice.id !== 'sel')
+		if (anchor.default === 'sel') anchor.default = 'CENTER'
+	}
+
 	get devicePositionSizeV3() {
 		const devicePositionSizeV3 = super.devicePositionSizeV3
+
+		this.dropGlobalAnchorChoice(devicePositionSizeV3.options)
 
 		// The Foreground frame can be moved but not resized - it has a position node and no size node at all
 		// (live-confirmed on an Eikos 4K simulator). The size fields stay visible because Companion cannot
@@ -1075,6 +1094,8 @@ export default class ActionsMidra extends Actions {
 	 */
 	get deviceResetLayerSize() {
 		const deviceResetLayerSize = super.deviceResetLayerSize
+
+		this.dropGlobalAnchorChoice(deviceResetLayerSize.options)
 
 		deviceResetLayerSize.options[0] = {
 			id: 'screen',
