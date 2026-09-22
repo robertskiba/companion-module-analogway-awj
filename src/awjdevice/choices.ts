@@ -1060,6 +1060,16 @@ export default class Choices {
 	}
 
 	/**
+	 * The canvas resolution of one Screen or Aux, feeding the S{n}/A{n}.width/.height/.aspectratio variables.
+	 * Either value is undefined when the device has not reported it, which the caller turns into a blank.
+	 */
+	public getScreenCanvasSize(screenAuxKey: string): { width?: number, height?: number } {
+		const info = this.getScreenInfo(screenAuxKey)
+		const path = ['DEVICE', ...(info.isAux ? this.constants.auxPath : this.constants.screenPath), 'items', info.platformId, ...this.constants.screenSizePath]
+		return { width: this.state.get([...path, 'sizeH']), height: this.state.get([...path, 'sizeV']) }
+	}
+
+	/**
 	 * The source id a layer is currently showing, read from wherever that platform keeps it and returned in
 	 * the AWJ id form the rest of the module speaks ('NONE', 'LIVE_3'/'INPUT_3', 'NATIVE_2', 'PROGRAM_1').
 	 *

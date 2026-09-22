@@ -99,6 +99,22 @@ export default class ChoicesMidra extends Choices {
 	 * same shape of value either way.
 	 */
 	/**
+	 * A Midra Aux has no canvas node at all - it is always full screen on whatever output it feeds, so its
+	 * resolution is that output's. Confirmed on an Eikos 4K simulator: the preconfig assigns Aux 1 to output
+	 * 2, and only `device/outputList/items/2/status/pp/sizeH|sizeV` carries a resolution. Reading the Screen
+	 * shape instead left A{n}.width/.height/.aspectratio permanently blank. Screens keep their own canvas.
+	 */
+	public override getScreenCanvasSize(screenAuxKey: string): { width?: number, height?: number } {
+		const info = this.getScreenInfo(screenAuxKey)
+		if (!info.isAux) return super.getScreenCanvasSize(screenAuxKey)
+		const outputs = this.state.get(['DEVICE', 'device', 'preconfig', 'status', 'stateList', 'items', 'CURRENT', 'auxiliaryScreenList', 'items', info.platformId, 'pp', 'outputList'])
+		const output = Array.isArray(outputs) ? outputs[0] : undefined
+		if (output === undefined) return {}
+		const path = ['DEVICE', 'device', 'outputList', 'items', String(output), 'status', 'pp']
+		return { width: this.state.get([...path, 'sizeH']), height: this.state.get([...path, 'sizeV']) }
+	}
+
+	/**
 	 * Midra names the source property differently for each of its three layer kinds - live-confirmed on an
 	 * Eikos 4K simulator by reading all three off the same device at once:
 	 *

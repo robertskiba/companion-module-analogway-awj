@@ -354,6 +354,19 @@ export default class SubscriptionsMidra extends Subscriptions {
 	}
 
 	/**
+	 * An Aux takes its resolution from the output it feeds (see choices.getScreenCanvasSize()), so the
+	 * inherited pattern - which only watches a Screen's own canvas - has to cover the output's size and the
+	 * preconfig entry that says which output an Aux is on.
+	 */
+	get screenSize():Subscription {
+		const base = super.screenSize
+		return {
+			...base,
+			pat: `(?:${base.pat}|device/outputList/items/\\d+/status/pp/size(?:H|V)|device/preconfig/status/stateList/items/CURRENT/auxiliaryScreenList/items/\\d+/pp/outputList)`,
+		}
+	}
+
+	/**
 	 * A Screen or Aux is switched on or off in the preconfig - on an Eikos that is the difference between
 	 * S1+A1, S1+S2 and a single S1 driving two outputs, and it can be changed at any time while Companion is
 	 * connected.

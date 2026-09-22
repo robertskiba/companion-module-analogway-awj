@@ -1457,14 +1457,6 @@ export default class Subscriptions {
 	 * removes its .width/.height/.aspectratio entirely; re-enabling it re-adds them.
 	 */
 	private refreshScreenSize = (): boolean => {
-		const pathForProp = (isAux: boolean, platformId: string, prop: 'sizeH' | 'sizeV') => [
-			'DEVICE',
-			...(isAux ? this.constants.auxPath : this.constants.screenPath),
-			'items', platformId,
-			...this.constants.screenSizePath,
-			prop,
-		].join('/')
-
 		const currentIds = new Set<string>()
 		for (const scr of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
 			const info = this.instance.choices.getScreenInfo(scr.id)
@@ -1475,8 +1467,9 @@ export default class Subscriptions {
 				this.instance.addVariable({ id: 'screenSize', variableId: `${info.id}.height`, name: `Height of ${kind} ${info.id}` })
 				this.instance.addVariable({ id: 'screenSize', variableId: `${info.id}.aspectratio`, name: `aspectratio of ${kind} ${info.id}` })
 			}
-			const w = this.instance.state.get(pathForProp(info.isAux, info.platformId, 'sizeH'))
-			const h = this.instance.state.get(pathForProp(info.isAux, info.platformId, 'sizeV'))
+			// Via choices, not a raw path: a Midra Aux has no canvas node of its own and takes its resolution
+			// from the output it feeds instead.
+			const { width: w, height: h } = this.instance.choices.getScreenCanvasSize(info.id)
 			this.instance.setVariableValues({
 				[`${info.id}.width`]: w ?? '',
 				[`${info.id}.height`]: h ?? '',
