@@ -10,6 +10,9 @@ export type Choicemeta = { id: string, label: string, index?: string, longname?:
 
 export type AnchorPoint = 'TOP_LEFT' | 'TOP_CENTER' | 'TOP_RIGHT' | 'LEFT_CENTER' | 'CENTER' | 'RIGHT_CENTER' | 'BOTTOM_LEFT' | 'BOTTOM_CENTER' | 'BOTTOM_RIGHT'
 
+/** Property groups a layer may or may not have, see Choices.layerSupports(). */
+export type LayerProperty = 'position' | 'size' | 'crop' | 'aspectOverride' | 'effects' | 'border' | 'transitionWay' | 'transitionFlags' | 'flying'
+
 /**
  * Anchor-point math ported 1:1 from WebRCS's own source (aw-utils/geometry/position/anchor/anchor.ts,
  * changeAnchorPoint()), so this module's behavior matches WebRCS exactly, including its documented
@@ -957,6 +960,42 @@ export default class Choices {
 	 * any real show ever uses - e.g. 128 on LivePremier4 - making such a dropdown needlessly long). Screen-
 	 * specific Layer dropdowns already get this for free via getLayerChoices(screenId, ...), which reads that
 	 * one screen's own configured layerCount - this is only needed where no single screen is chosen yet. */
+	/**
+	 * The Layer dropdown for the "Layer Properties" action family: the numbered layers, plus whichever of the
+	 * platform's extra addressable layers the calling action actually supports. Each action passes only the
+	 * ones whose property it can really write, so an option that the device has no node for never appears in
+	 * the first place.
+	 *
+	 * LivePremier has no extras to offer here, so both flags are deliberately no-ops on this base class and
+	 * its lists stay exactly as they were - only Midra/Alta overrides this.
+	 */
+	public getLayerPropertyChoices(_extras?: { background?: boolean, foreground?: boolean }): Dropdown<string>[] {
+		return Array.from({length: this.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))
+	}
+
+	/**
+	 * Whether a given layer supports a given property group on this platform. On LivePremier every addressable
+	 * layer - the background (NATIVE) included - is a full layer carrying the whole property set, so the answer
+	 * is always yes here and nothing changes for it; Midra/Alta overrides this with its real, much narrower
+	 * matrix. Callers use it to skip writes instead of sending values into nodes the device does not have.
+	 */
+	public layerSupports(_layerKey: string, _property: LayerProperty): boolean {
+		return true
+	}
+
+	/**
+	 * Whether a "Layer Properties" action may act on a non-numbered layer (Background/Foreground) that its
+	 * dropdown offered. Pass the same flags the dropdown was built with, so the two can't drift apart.
+	 *
+	 * False for everything here: LivePremier deliberately keeps these actions to numbered layers, even though
+	 * its background is a full layer that would technically accept them - that exclusion predates this and is
+	 * left exactly as it was. Midra/Alta overrides this, since there the Background and Foreground are the
+	 * only way to reach those properties at all.
+	 */
+	public layerPropertyTargetAllowed(_layerKey: string, _extras?: { background?: boolean, foreground?: boolean }): boolean {
+		return false
+	}
+
 	public getMaxConfiguredLayerCount(): number {
 		return this.getScreenAuxChoices().reduce((max, screen) => {
 			return Math.max(max, this.getLayersAsArray(screen.id, false).length)

@@ -1751,7 +1751,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS) of a multi-selection - safer to use when the X/Y/W/H values were read from the SelectedLayer.* variables, which also only ever describe that first layer, so applying them to every selected layer could move layers you did not intend to touch. To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: (e+1).toString(), label: `Layer ${e+1}`}})],
+					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, ...this.choices.getLayerPropertyChoices({ foreground: true })],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2083,7 +2083,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ background: true, foreground: true })],
 					default: 'first',
 				},
 				{ id: 'openingHeader', type: 'static-text', label: '', value: '---\n**Opening Transition**', disableAutoExpression: true },
@@ -2332,7 +2332,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices()],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2805,7 +2805,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ background: true, foreground: true })],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -2843,7 +2843,7 @@ export default class Actions {
 			// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
 			// current opacity and pins screen/preset/layer to the concrete values it read from.
 			learn: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				if (layers.length === 0) return undefined
 
 				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
@@ -2871,7 +2871,7 @@ export default class Actions {
 			callback: (action) => {
 				const rawOpacity = Number(action.options.opacity) >= 0 ? Math.round(Math.min(256, Number(action.options.opacity))) : undefined
 
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // opacity only applies to numbered content layers, not background
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true })) // opacity only applies to numbered content layers, not background
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -2981,7 +2981,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ foreground: true })],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -3264,7 +3264,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ background: true, foreground: true })],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -3366,7 +3366,7 @@ export default class Actions {
 			// current mask and fills every field with it, pinning screen/preset/layer to the concrete values it
 			// read from. Converts against the layer's current on-screen size, same as the callback does.
 			learn: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				if (layers.length === 0) return undefined
 
 				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
@@ -3404,7 +3404,7 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // mask only applies to numbered content layers, not background
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true })) // mask only applies to numbered content layers, not background
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -3548,7 +3548,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices()],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -4022,7 +4022,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices()],
 					default: 'first',
 				},
 				{ id: 'filterHeader', type: 'static-text', label: '', value: '---\n**Filter**', disableAutoExpression: true },
@@ -4236,7 +4236,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ background: true, foreground: true })],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -4293,7 +4293,7 @@ export default class Actions {
 			// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
 			// current speed settings and pins screen/preset/layer to the concrete values it read from.
 			learn: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				if (layers.length === 0) return undefined
 
 				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
@@ -4324,7 +4324,7 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -4461,7 +4461,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ background: true, foreground: true })],
 					default: 'first',
 				},
 				{ id: 'targetHeader', type: 'static-text', label: '', value: '---', disableAutoExpression: true },
@@ -4724,7 +4724,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e: number) => ({id: (e + 1).toString(), label: `Layer ${e + 1}`}))],
+					choices: [{ id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, { id: 'sel', label: 'All Selected Layers' }, ...this.choices.getLayerPropertyChoices({ background: true, foreground: true })],
 					default: 'first',
 				},
 				{ id: 'openingHeader', type: 'static-text', label: '', value: '---\n**Opening**', disableAutoExpression: true },
@@ -4755,7 +4755,7 @@ export default class Actions {
 			// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
 			// current timing and pins screen/preset/layer to the concrete values it read from.
 			learn: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				if (layers.length === 0) return undefined
 
 				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
@@ -4794,7 +4794,7 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -4975,7 +4975,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Layer',
 					tooltip: 'When using "selected layer" and screen or preset are not using "Selected", you can narrow the selection. "First/Only Selected Layer" targets just the first (Ctrl-clicked first in WebRCS, same layer the SelectedLayer.* variables describe) of a multi-selection - safer to use with Source Ratio/Content Size, which resize relative to each layer\'s own current size, so applying to every selected layer at once could resize layers differently than intended. To target multiple specific Layers other than "All Layers" or "All Selected Layers", switch to Expression Mode and use a format like \'L1L2\' (in quotes, so it is recognized as text).',
-					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, ...Array.from({length: this.choices.getMaxConfiguredLayerCount()}, (_i, e:number) => {return {id: (e+1).toString(), label: `Layer ${e+1}`}})],
+					choices: [{ id: 'sel', label: 'All Selected Layers' }, { id: 'first', label: 'First/Only Selected Layer' }, { id: 'all', label: 'All Layers' }, ...this.choices.getLayerPropertyChoices()],
 					default: 'first',
 				},
 				{

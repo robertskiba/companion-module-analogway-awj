@@ -1,5 +1,5 @@
 import { AWJinstance } from '../index.js'
-import Choices from '../awjdevice/choices.js'
+import Choices, { LayerProperty } from '../awjdevice/choices.js'
 
 type Dropdown<t> = {id: t, label: string}
 
@@ -532,6 +532,47 @@ export default class ChoicesMidra extends Choices {
 	 * @param layerId can be a layer number, optionally with a prefix, or bkg/background/native/top
 	 * @returns 
 	 */
+	/**
+	 * Midra additionally exposes the Background and the Foreground frame as addressable layers, but neither
+	 * carries the full property set of a numbered layer (live-confirmed against an Eikos 4K simulator):
+	 * Background has source/opacity/mask/transition/timing/speed and no position, size, crop, effects or
+	 * border; Foreground has all of those except size, effects and border. Each action therefore asks only
+	 * for the ones it can actually write - see the callers in midra/actions.ts.
+	 */
+	public override getLayerPropertyChoices(extras?: { background?: boolean, foreground?: boolean }): Dropdown<string>[] {
+		return [
+			...(extras?.background ? [{ id: 'BG', label: 'Background' }] : []),
+			...super.getLayerPropertyChoices(extras),
+			...(extras?.foreground ? [{ id: 'TOP', label: 'Foreground' }] : []),
+		]
+	}
+
+	/**
+	 * Midra's real per-layer property matrix, live-confirmed against an Eikos 4K simulator by walking the
+	 * device tree. The Background and the Foreground frame are addressable layers but carry far less than a
+	 * numbered layer, and writing into a node the device does not have is silently ignored - so callers ask
+	 * here first and skip the write instead.
+	 *
+	 * Background: source, opacity, mask, transition (opening/closing type only), timing, speed.
+	 * Foreground: the same plus position, crop and flying, with transition also offering `way`.
+	 * Neither has size, effects or border; only a numbered layer has those, plus the transition flags.
+	 */
+	public override layerPropertyTargetAllowed(layerKey: string, extras?: { background?: boolean, foreground?: boolean }): boolean {
+		if (/^(bg|bkg|background|native)$/i.test(layerKey)) return extras?.background === true
+		if (/^top$/i.test(layerKey)) return extras?.foreground === true
+		return false
+	}
+
+	public override layerSupports(layerKey: string, property: LayerProperty): boolean {
+		const isBackground = /^(bg|bkg|background|native)$/i.test(layerKey)
+		const isForeground = /^top$/i.test(layerKey)
+		if (!isBackground && !isForeground) return true
+		if (property === 'size' || property === 'effects' || property === 'border' || property === 'transitionFlags') return false
+		if (property === 'aspectOverride') return false
+		// Everything still open here - position, crop, transitionWay, flying - exists on the Foreground only.
+		return isForeground
+	}
+
 	getLayerPath(layerId: string | number): string[] {
 		let layer: string
 		if (typeof layerId === 'string') layer = layerId
