@@ -12,7 +12,7 @@
 
 ## New Variables
 
-- **`Selection.AnchorPoint`** - the globally selected Anchor Point (`CENTER`, `TOP_LEFT`, ...), the reference point a Layer's X/Y position is measured from. V3 already offered this as an action and a feedback, but there was no way to simply display the current value on a button. Being a WebRCS-wide shared setting, it also follows changes made there or by another client. LivePremier only - Alta 4K and Midra 4K have no such setting, and correspondingly do not get the variable.
+- **`Device.GlobalAnchorPoint`** - the globally selected Anchor Point (`CENTER`, `TOP_LEFT`, ...), the reference point a Layer's X/Y position is measured from. V3 already offered this as an action and a feedback, but there was no way to simply display the current value on a button. Being a WebRCS-wide shared setting, it also follows changes made there or by another client. LivePremier only - Alta 4K and Midra 4K have no such setting, and correspondingly do not get the variable.
 
 ## Fixed
 
