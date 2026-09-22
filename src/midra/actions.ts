@@ -683,6 +683,14 @@ export default class ActionsMidra extends Actions {
 			const choices = [...sourceField['choices']]
 			const firstBackgroundSet = choices.findIndex((c: { id: string | number }) => /^NATIVE_\d+$/.test(String(c.id)))
 			choices.splice(firstBackgroundSet === -1 ? choices.length : firstBackgroundSet, 0, ...foreground)
+			// A Screen's own Program output can be re-inserted into an Aux background, so every configured
+			// Screen is offered too - right at the end, because it is valid for exactly one target (an Aux
+			// background) while everything above it applies to the far more common Screen targets. The V2
+			// action's Aux field has always offered these; the V3 one simply never carried them over.
+			choices.push(...this.choices.getScreensArray().map((screen) => ({
+				id: `PROGRAM_${screen.index}`,
+				label: `${screen.id} PGM${screen.label === '' ? '' : ' - ' + screen.label}`,
+			})))
 			sourceField['choices'] = choices
 		}
 
@@ -752,7 +760,19 @@ export default class ActionsMidra extends Actions {
 				// now takes it from - converted to this module's short id (INPUT_2 -> IN2) like every other
 				// source, so Learn produces a value the dropdown actually contains.
 				const raw = this.state.get(['DEVICE', ...presetpath, 'background', 'source', 'pp', 'content'])
-				if (typeof raw === 'string') newoptions.sourceLayer = this.choices.backgroundContentToShortSource(raw)
+				if (typeof raw !== 'string') return newoptions
+				if (raw === 'NONE') {
+					// Same NONE-vs-COLOR disambiguation as the Screen background below: `content` has no COLOR
+					// value, so Color is stored as "no source plus a colour" and the two are told apart by the
+					// colour itself - the callback always forces black for None.
+					const backgroundColor = readColor([...presetpath, 'background', 'color', 'pp'])
+					newoptions.sourceLayer = backgroundColor === 0 ? 'NONE' : 'COLOR'
+					if (backgroundColor !== 0) newoptions.sourceColor = backgroundColor
+					return newoptions
+				}
+				// PROGRAM_{n} (a Screen's re-inserted Program) is already the id the dropdown offers and passes
+				// through backgroundContentToShortSource() unchanged; an input becomes IN{n} like everywhere else.
+				newoptions.sourceLayer = this.choices.backgroundContentToShortSource(raw)
 				return newoptions
 			}
 
@@ -814,12 +834,30 @@ export default class ActionsMidra extends Actions {
 					]
 					// On Midra an Aux screen only has a background - no per-layer addressing at all - so the Layer
 					// field is irrelevant here and the shared "Source" field drives it, exactly like every other
-					// target type. An Aux background stores a plain input in `content`, so Color and Background
-					// Sets are silently ignored rather than sent, the same way an invalid pick on a Screen's
-					// background layer is a no-op below.
+					// target type. `content` takes an input, a Screen's Program re-insertion, or NONE; Background
+					// Sets and Foreground Images are not valid here and are ignored rather than sent, the same way
+					// an invalid pick on a Screen's background layer is a no-op below.
 					if (screen.isAux) {
 						const source = this.choices.shortSourceToBackgroundContent(action.options['sourceLayer'])
-						if (action.options['sourceLayer'] !== 'keep' && (source === 'NONE' || /^INPUT_\d+$/.test(source))) {
+						// Same shape as the Screen background below: `content` has no COLOR value of its own, so
+						// the picked colour only becomes visible once the source is cleared - Color is therefore
+						// sent as NONE plus the colour, and plain None resets the colour to black.
+						const colorpath = [...presetpath, 'background', 'color', 'pp']
+						const sendColor = (r: number, g: number, b: number) => {
+							this.connection.sendWSmessage([...colorpath, 'red'], r)
+							this.connection.sendWSmessage([...colorpath, 'green'], g)
+							this.connection.sendWSmessage([...colorpath, 'blue'], b)
+						}
+						if (action.options['sourceLayer'] === 'keep') {
+							// nothing to do
+						} else if (source === 'NONE') {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], 'NONE')
+							sendColor(0, 0, 0)
+						} else if (source === 'COLOR') {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], 'NONE')
+							const color = Number(action.options['sourceColor'])
+							sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
+						} else if (/^INPUT_\d+$/.test(source) || /^PROGRAM_\d+$/.test(source)) {
 							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], source)
 						}
 					} else if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
