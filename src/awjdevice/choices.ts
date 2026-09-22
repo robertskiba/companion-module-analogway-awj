@@ -996,6 +996,21 @@ export default class Choices {
 		return false
 	}
 
+	/**
+	 * The Layer ids a "Layer Properties" action may address on one Screen/Aux: the real live layers, plus
+	 * whichever extra addressable layers that action offered. Ids are the internal ones getChosenLayers()
+	 * produces - 'NATIVE' for the background, 'TOP' for the foreground - not the dropdown's own 'BG'.
+	 *
+	 * Pass the same flags the dropdown was built with. On LivePremier the extras are never allowed, so this
+	 * returns exactly the live-layer set the call sites built inline before.
+	 */
+	public getAddressableLayerIds(screenAuxKey: string, extras?: { background?: boolean, foreground?: boolean }): Set<string> {
+		const ids = new Set(this.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+		if (this.layerPropertyTargetAllowed('NATIVE', extras)) ids.add('NATIVE')
+		if (this.layerPropertyTargetAllowed('TOP', extras)) ids.add('TOP')
+		return ids
+	}
+
 	public getMaxConfiguredLayerCount(): number {
 		return this.getScreenAuxChoices().reduce((max, screen) => {
 			return Math.max(max, this.getLayersAsArray(screen.id, false).length)

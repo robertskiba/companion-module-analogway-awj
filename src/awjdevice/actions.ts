@@ -1719,10 +1719,10 @@ export default class Actions {
 					: [opt.screen]
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -2054,10 +2054,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -2781,10 +2781,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -2957,10 +2957,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -3238,10 +3238,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -4214,10 +4214,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -4423,10 +4423,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
@@ -4692,10 +4692,10 @@ export default class Actions {
 					: this.choices.getChosenScreenAuxes(opt.screen)
 			if (opt.layersel === 'sel') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey))
 			if (opt.layersel === 'first') return this.choices.getSelectedLayers().filter(layer => targetScreens.includes(layer.screenAuxKey)).slice(0, 1)
-			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => this.choices.getLayersAsArray(screenAuxKey, false).map(l => ({ screenAuxKey, layerKey: l.id })))
+			if (opt.layersel === 'all') return targetScreens.flatMap(screenAuxKey => [...this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })].map(layerKey => ({ screenAuxKey, layerKey })))
 			const layerKeys = this.choices.getChosenLayers(opt.layersel)
 			return targetScreens.flatMap(screenAuxKey => {
-				const realIds = new Set(this.choices.getLayersAsArray(screenAuxKey, false).map(l => l.id))
+				const realIds = this.choices.getAddressableLayerIds(screenAuxKey, { background: true, foreground: true })
 				return layerKeys.filter(k => realIds.has(k)).map(layerKey => ({ screenAuxKey, layerKey }))
 			})
 		}
