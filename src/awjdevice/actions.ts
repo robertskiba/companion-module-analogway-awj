@@ -1138,7 +1138,11 @@ export default class Actions {
 						// platformId, not the 'S1'-style id - Midra keys this list by the bare number. Identical on
 						// LivePremier, where platformId is the 'S1' form.
 						const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
-						const current = this.state.get(['DEVICE', ...groupPath, 'tbarPosition']) ?? 0
+						// Read the position from wherever this platform actually reports it - see
+						// constants.tbarPositionReadPath. groupPath already ends in control/pp, so step back up to the
+						// item before appending the read path.
+						const groupItemPath = groupPath.slice(0, -2)
+						const current = this.state.get(['DEVICE', ...groupItemPath, ...this.constants.tbarPositionReadPath]) ?? 0
 						const newValue = Math.round(Math.min(65535, Math.max(0, current + direction * delta0to100 / 100 * 65535)))
 						this.connection.sendWSmessage([...groupPath, 'tbarPosition'], newValue)
 					} else {

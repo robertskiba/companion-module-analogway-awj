@@ -505,7 +505,9 @@ export default class Subscriptions {
 		// directly built a path that simply does not exist there - SelectedScreen.tbarPosition and
 		// .TransitionTime.* stayed blank while .number/.numberOfLayers (which never touch this path) worked.
 		const groupPath = [...this.constants.screenGroupPath, 'items', this.instance.choices.getScreenInfo(screenId).platformId, 'control', 'pp']
-		const tbarRaw = this.instance.state.get(['DEVICE', ...groupPath, 'tbarPosition'])
+		// Same reason as the Encoder Adjust action: on Midra the control field keeps the last commanded
+		// value after a transition completes, so the variable would sit at 100% for ever.
+		const tbarRaw = this.instance.state.get(['DEVICE', ...groupPath.slice(0, -2), ...this.constants.tbarPositionReadPath])
 		// LivePremier splits the transition time per bank (takeUpTime/takeDownTime); Midra has a single
 		// takeTime that applies to both directions, so it stands in for both there.
 		const singleTakeTime = this.instance.state.get(['DEVICE', ...groupPath, 'takeTime'])
