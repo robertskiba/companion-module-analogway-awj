@@ -367,28 +367,38 @@ export default class SubscriptionsMidra extends Subscriptions {
 	}
 
 	/**
-	 * A Screen or Aux is switched on or off in the preconfig - on an Eikos that is the difference between
-	 * S1+A1, S1+S2 and a single S1 driving two outputs, and it can be changed at any time while Companion is
-	 * connected.
+	 * The applied preconfig changed - which Screens and Auxes exist, how many Layers each has, and which
+	 * outputs they drive. On an Eikos that is the difference between S1+A1, S1+S2 and a single S1 driving two
+	 * outputs, and it can be applied at any time while Companion is connected.
 	 *
 	 * The inherited subscription watches `.../status/pp/mode` on the screen itself, which is LivePremier's
-	 * shape; Midra has no such field and keeps the enabled state in the currently-applied preconfig tree
-	 * instead (`pp/enable` for a Screen, `pp/mode` for an Aux - live-confirmed on an Eikos 4K simulator,
-	 * where Aux 1 read ENABLE and Auxes 2-4 read DISABLE). The pattern therefore never matched here, so
-	 * nothing reacted at all: a Screen that went away kept its variables with a frozen value, and one that
-	 * appeared got none until some unrelated change happened to trigger a rebuild.
+	 * shape; Midra has no such field and keeps all of this in the currently-applied preconfig tree instead.
+	 * The pattern therefore never matched here and nothing reacted at all: a Screen that went away kept its
+	 * variables with a frozen value, a Screen that appeared got none, and every Screen/Aux/Layer dropdown in
+	 * every action and feedback stayed as it was at connect.
 	 *
-	 * Re-runs the same refreshes that own those variables rather than duplicating their logic - each already
-	 * registers what exists now and deregisters what doesn't.
+	 * Matched as the whole CURRENT subtree rather than the two or three fields an Eikos happens to use,
+	 * deliberately. The Midra models differ from each other in exactly this area - which configurations they
+	 * offer and therefore which fields carry the difference - and this one platform class serves all of them
+	 * plus Alta. Live on an Eikos 4K simulator that subtree holds `pp/templateUsed` (MIXER here), a Screen's
+	 * `pp/enable`, `pp/layerCount` and `pp/outputList`, an Aux's `pp/mode` and `pp/outputList`, each Screen's
+	 * `liveLayerList`, and an `outputList` mapping every output to the Screen/Aux it feeds. Naming the subtree
+	 * covers whatever a given model actually moves, at no cost: it only ever changes when someone applies a
+	 * preconfig.
+	 *
+	 * Returning true rebuilds the action, feedback and preset definitions, so every dropdown follows. That
+	 * rebuild is the expensive part and a preconfig apply arrives as a burst of patches, so it is debounced
+	 * into one run; the variable refreshes are cheap and idempotent and run per patch.
 	 */
 	get screenEnabled():Subscription {
 		return {
-			pat: 'DEVICE/device/preconfig/status/stateList/items/CURRENT/(?:screenList/items/(\\d{1,2})/pp/enable|auxiliaryScreenList/items/(\\d{1,2})/pp/mode)',
+			pat: 'DEVICE/device/preconfig/status/stateList/items/CURRENT/',
 			fun: (): boolean => {
 				this.screenSize.fun?.()
 				this.layerVariables.fun?.()
 				this.refreshScreenAuxLabels()
-				return true
+				this.debounce('preconfigApplied', 1000, () => void this.instance.updateInstance())
+				return false
 			},
 		}
 	}
@@ -449,11 +459,15 @@ export default class SubscriptionsMidra extends Subscriptions {
 		}
 	}
 
+	/** A subset of what screenEnabled above already matches, kept as its own named subscription. It funnels
+	 *  into the same debounced rebuild rather than triggering its own immediately, or a preconfig apply -
+	 *  which moves both - would rebuild every definition twice. */
 	get layerCountChange():Subscription {
 		return {
 			pat: 'DEVICE/device/preconfig/status/stateList/items/CURRENT/screenList/items/\\d/liveLayerList/items/\\d/pp/mode',
 			fun: (_path?: string | string[], _value?: string | string[] | number | boolean): boolean => {
-				return true
+				this.debounce('preconfigApplied', 1000, () => void this.instance.updateInstance())
+				return false
 			},
 		}
 	}

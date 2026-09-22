@@ -31,7 +31,7 @@ export default class Subscriptions {
 	 * event loop (reported: Companion's own "disable connection" command couldn't get through until the
 	 * backlog drained - not just slow variable updates, but the connection briefly impossible to switch off).
 	 */
-	private debounce(key: string, delayMs: number, fn: () => void): void {
+	protected debounce(key: string, delayMs: number, fn: () => void): void {
 		clearTimeout(this.debounceTimers[key])
 		this.debounceTimers[key] = setTimeout(fn, delayMs)
 	}
