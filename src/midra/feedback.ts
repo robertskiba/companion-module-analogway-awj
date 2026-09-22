@@ -29,7 +29,11 @@ export default class FeedbacksMidra extends Feedbacks  {
 	readonly feedbacksToUse = [		
 		'syncselection',
 		'presetToggle',
-		'globalAnchorPoint',
+		// 'globalAnchorPoint', // Midra has no global anchor point at all - its REMOTE snapshot has no
+		// live/screens/layers node, and positions are always stored relative to the centre (a fullscreen
+		// 1920x1080 layer reads 960/540). The feedback could only ever report CENTER, for a setting the
+		// device does not have. The Layer Properties actions keep their own anchor option, which is a
+		// module-side coordinate conversion and works here regardless.
 		'deviceLayerPropertyStatus',
 		'deviceLayerSourceStatus',
 		// 'deviceLayerCutFillSourceStatus', // Aquilon only for now - matches deviceLayerCutFillV3's own registration
@@ -104,13 +108,9 @@ export default class FeedbacksMidra extends Feedbacks  {
 		deviceSourceTally.callback = (feedback) => {
 			// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n) the
 			// device actually stores - anything else (NONE/COLOR/NATIVE_n, or an already-raw id typed directly
-			// via Expression Mode) passes through unchanged. NOTE: Midra's own getSourceChoices() override
-			// currently builds its Input choice ids as `INPUT_n` (src/midra/choices.ts), which this conversion
-			// does NOT recognize (only LIVE_n/STILL_n) - so on Midra this dropdown still shows raw `INPUT_n`
-			// values instead of `IN{n}`, same as every other Source field built from getSourceChoices() there
-			// (e.g. "Layer Properties - Source"). Not fixed here - needs Midra's actual wire-level Input id
-			// live-verified first (is it really `INPUT_n`, or `LIVE_n` like LivePremier4?) - see the Midra/Alta
-			// Known Gaps section in CHANGELOG.md/README.md.
+			// via Expression Mode) passes through unchanged. Midra's raw input id is `INPUT_n` - live-confirmed
+			// against an Eikos 4K simulator, where both the inputList item keys and a layer's source/pp/input
+			// read `INPUT_1` - and the conversion knows that form, so the dropdown shows `IN{n}` here too.
 			const expectedSource = this.choices.shortSourceToBackgroundContent(feedback.options.source)
 			// Screens field follows the module's usual "S1S2A1" concatenated Expression Mode convention rather
 			// than Companion's own native multi-select, per explicit user decision - 'first' isn't understood by

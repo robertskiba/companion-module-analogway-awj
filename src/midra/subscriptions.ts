@@ -22,7 +22,11 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'layerselection',
 		'selectedLayerRect',
 		'selectedLayerSelectionChange',
-		'globalAnchorPointChange',
+		// 'globalAnchorPointChange', // Midra has no global anchor point at all - its REMOTE snapshot has no
+		// live/screens/layers node, and positions are always stored relative to the centre (a fullscreen
+		// 1920x1080 layer reads 960/540). The feedback could only ever report CENTER, for a setting the
+		// device does not have. The Layer Properties actions keep their own anchor option, which is a
+		// module-side coordinate conversion and works here regardless.
 		'selectedLayerSourceChange',
 		'selectedLayerSourceSignalChange',
 		'selectedLayerOpacityChange',
