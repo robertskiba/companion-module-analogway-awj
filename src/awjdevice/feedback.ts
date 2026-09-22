@@ -277,7 +277,7 @@ export default class Feedbacks {
 						{ id: 'filterSolar', label: 'Effects - Filter Solarize' },
 						{ id: 'transformFlipH', label: 'Effects - Transform Flip Horizontal' },
 						{ id: 'transformFlipV', label: 'Effects - Transform Flip Vertical' },
-						{ id: 'strobeEnable', label: this.choices.isFirmwareAtLeast('6.0.4') ? 'Effects - Strobe Active' : `Effects - Strobe Active${this.choices.firmwareGateNote('6.0.4')}` },
+						...(this.constants.hasStrobeEffect ? [{ id: 'strobeEnable', label: this.choices.isFirmwareAtLeast('6.0.4') ? 'Effects - Strobe Active' : `Effects - Strobe Active${this.choices.firmwareGateNote('6.0.4')}` }] : []),
 						{ id: 'keyingEnable', label: this.choices.isFirmwareAtLeast('5.0.128') ? 'Keying Enabled' : `Keying Enabled${this.choices.firmwareGateNote('5.0.128')}` },
 						{ id: 'cutFillEnable', label: 'Cut&Fill - Enabled' },
 						{ id: 'maskActive', label: 'Mask Active' },

@@ -4008,7 +4008,7 @@ export default class Actions {
 		// option field) keeps the callback's flag-clearing loop below from ever touching STROBE at all - it only
 		// acts on ids actually present here, so an unsupported device's existing Strobe state is left untouched
 		// instead of being silently cleared by a hidden field defaulting to some "off"-like value.
-		const strobeSupported = this.choices.isFirmwareAtLeast('6.0.4')
+		const strobeSupported = this.constants.hasStrobeEffect && this.choices.isFirmwareAtLeast('6.0.4')
 		const flagChoices = [{ id: 'keep', label: "Don't change" }, { id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }]
 		// [optionId, AWJ flag name]
 		const flagFields: [keyof DeviceLayerEffectsV3, string][] = [
@@ -4055,8 +4055,10 @@ export default class Actions {
 				{ id: 'transformHeader', type: 'static-text', label: '', value: '---\n**Transform**', disableAutoExpression: true },
 				{ id: 'transformFlipH', type: 'dropdown', label: 'Flip Horizontal', choices: flagChoices, default: 'keep' },
 				{ id: 'transformFlipV', type: 'dropdown', label: 'Flip Vertical', choices: flagChoices, default: 'keep' },
-				{ id: 'strobeHeader', type: 'static-text', label: '', value: '---\n**Strobe**', disableAutoExpression: true },
+				// Header inside the conditional too - otherwise a platform without Strobe shows the heading over an
+				// empty section.
 				...(strobeSupported ? [
+					{ id: 'strobeHeader', type: 'static-text', label: '', value: '---\n**Strobe**', disableAutoExpression: true },
 					{ id: 'strobeEnable', type: 'dropdown', label: 'Enable', choices: flagChoices, default: 'keep' },
 					{
 						id: 'strobeFpm',

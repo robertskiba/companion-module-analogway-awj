@@ -68,6 +68,13 @@ export default class Constants {
      * platform - it simply clears whatever was there. */
     static readonly crossDepthFlags: { on: string | null, off: string | null, clear: string[], clearPrefix?: string } =
         { on: null, off: 'DEPTH_CUT_MIDDLE', clear: [], clearPrefix: 'DEPTH_CUT_' }
+    /** Whether the platform has a layer Strobe effect at all. LivePremier gained it with firmware 6.0.4;
+     * Midra/Alta has no such effect in WebRCS and no STROBE token in effects/pp/flags (live-confirmed by
+     * toggling every Effects control on an Eikos 4K and watching which flags appeared). Kept separate from
+     * the firmware gate so "too old" and "does not exist" stay distinguishable - and so that if Analog Way
+     * ever adds it to Midra, which would show up in their firmware release notes, flipping this one flag is
+     * the whole change. */
+    static readonly hasStrobeEffect: boolean = true
     /** The two `speed/pp/type` enum values, or null on a platform that has no Linear/Smooth speed switch at
      * all - Midra/Alta only offers Pt1/Pt2 and stores a plain 'SMOOTH', so there is nothing to write there. */
     static readonly layerSpeedTypes: { linear: string, smooth: string } | null = { linear: 'LINEAR_TRANSITION', smooth: 'SMOOTH_TRANSITION' }
