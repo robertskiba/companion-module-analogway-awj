@@ -1215,9 +1215,9 @@ export default class ActionsMidra extends Actions {
 				const bankValidPath = ['DEVICE', ...slotPath, 'status', 'pp', 'isValid']
 
 				if (action.options.action === 'delete') {
-					// Unlike the save, this one was not observed on the wire - the capture session produced two
-					// relabels and no delete - so it follows the Aquilon version's false-then-true pulse, which is
-					// how every other x-command in this module is sent. Worth confirming against a real delete.
+					// Not captured on the wire - that session produced two relabels and no delete - so this follows
+					// the Aquilon version's false-then-true pulse, how every other x-command here is sent.
+					// Verified working against the simulator afterwards.
 					this.connection.sendWSmessage([...bankItemPath, 'xDelete'], false, true)
 					this.instance.sendXupdate()
 					await this.waitForStateValue(bankValidPath, (v) => v === false)
