@@ -1559,79 +1559,95 @@ export default class Subscriptions {
 			seenScreenIds.add(info.id)
 			const screenListPath = info.isAux ? this.constants.auxPath : this.constants.screenPath
 			// Via choices, not a raw path: Midra has no status/pp/layerCount on the screen at all (it keeps the
-			// count under preconfig/status/stateList), so reading it directly yielded zero layers there and no
-			// Sx.layerY.* variables were ever created. getLayersAsArray() already resolves this per platform.
+			// count under preconfig/status/stateList), so reading it directly yielded zero layers there.
 			const layerCount: number = this.instance.choices.getLayersAsArray(scr.id, false).length
 			const previousLayerCount = this.lastLayerCountByScreen.get(info.id) ?? 0
-			// Keyed by info.id and reading presetUp, this resolved to nothing on Midra, so every path built from
-			// it failed and even layerbg.source stayed blank. getLivePresetKey() reads the device directly and
-			// knows both platforms' field name and value shape.
-			// '' keeps the downstream paths typed and simply reads nothing, exactly as the undefined value did
-			// before, for the brief window before the device has reported the live side.
-			const presetKey = this.instance.choices.getLivePresetKey(info.id) ?? ''
-			const presetPath = [...screenListPath, 'items', info.platformId, 'presetList', 'items', presetKey]
+			// Both banks, labelled by which one is live right now: the pair swaps with every Take, so the same
+			// physical bank is Program at one moment and Preview at the next. Undefined until the device has
+			// reported the live side, in which case there is nothing to read yet.
+			const presetKeys = this.instance.choices.getPresetKeys(info.id)
 
 			// Layers that used to exist but no longer do - deregister only their own exact variables.
 			for (let i = layerCount + 1; i <= previousLayerCount; i += 1) {
-				for (const suffix of layerVariableSuffixes) {
-					this.instance.removeVariable('layerVariables', `${info.id}.layer${i}.${suffix}`)
+				for (const side of ['pgm', 'prw']) {
+					for (const suffix of layerVariableSuffixes) {
+						this.instance.removeVariable('layerVariables', `${info.id}.${side}.layer${i}.${suffix}`)
+					}
 				}
 			}
 			if (layerCount !== previousLayerCount) this.lastLayerCountByScreen.set(info.id, layerCount)
+			if (!presetKeys) continue
 
-			for (let i = 1; i <= layerCount; i += 1) {
-				const layerPath = [...presetPath, ...this.instance.choices.getLayerPath(i)]
-				const source = this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', this.constants.layerSourceProp])
-				const sizeH = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeH'])
-				const sizeV = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeV'])
-				const posH = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'posH']) ?? 0
-				const posV = this.instance.state.get(['DEVICE', ...layerPath, 'position', 'pp', 'posV']) ?? 0
-				// Same anchor conversion as SelectedLayer.x/.y (refreshSelectedLayerRect above) - the device
-				// always stores posH/posV relative to CENTER; converting into whatever the global anchor point
-				// is currently set to matches what WebRCS's own Position & Size panel is showing right now, and
-				// what "Set Position & Size"'s own default Anchor ("sel") will interpret the same number as.
-				const anchor = this.instance.choices.getGlobalAnchorPoint()
-				const anchorPos = typeof sizeH === 'number' && typeof sizeV === 'number'
-					? (anchor === 'CENTER' ? { x: posH, y: posV } : this.instance.choices.convertAnchorPosition(posH, posV, sizeH, sizeV, 'CENTER', anchor))
-					: { x: '', y: '' }
-				// Only a genuinely NEW layer number (beyond what existed last time) needs registering - an
-				// existing layer's variables already exist and only need their values updated.
-				if (i > previousLayerCount) {
-					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layer${i}.source`, name: `Source of Layer ${i} on ${info.id}` })
-					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layer${i}.status`, name: `Signal status of Layer ${i} on ${info.id}` })
-					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layer${i}.width`, name: `Width of Layer ${i} on ${info.id}` })
-					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layer${i}.height`, name: `Height of Layer ${i} on ${info.id}` })
-					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layer${i}.x`, name: `X position of Layer ${i} on ${info.id}` })
-					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layer${i}.y`, name: `Y position of Layer ${i} on ${info.id}` })
+			for (const [side, presetKey] of [['pgm', presetKeys.pgm], ['prw', presetKeys.prw]] as const) {
+				const presetPath = [...screenListPath, 'items', info.platformId, 'presetList', 'items', presetKey]
+				const sideLabel = side === 'pgm' ? 'Program' : 'Preview'
+
+				for (let i = 1; i <= layerCount; i += 1) {
+					const layerPath = [...presetPath, ...this.instance.choices.getLayerPath(i)]
+					const source = this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', this.constants.layerSourceProp])
+					const sizeH = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeH'])
+					const sizeV = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeV'])
+					const posH = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsPositionPath, 'posH']) ?? 0
+					const posV = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsPositionPath, 'posV']) ?? 0
+					// Same anchor conversion as SelectedLayer.x/.y (refreshSelectedLayerRect above) - the device
+					// always stores posH/posV relative to CENTER; converting into whatever the global anchor point
+					// is currently set to matches what WebRCS's own Position & Size panel is showing right now.
+					const anchor = this.instance.choices.getGlobalAnchorPoint()
+					const anchorPos = typeof sizeH === 'number' && typeof sizeV === 'number'
+						? (anchor === 'CENTER' ? { x: posH, y: posV } : this.instance.choices.convertAnchorPosition(posH, posV, sizeH, sizeV, 'CENTER', anchor))
+						: { x: '', y: '' }
+					const base = `${info.id}.${side}.layer${i}`
+					// Only a genuinely NEW layer number needs registering - an existing layer's variables already
+					// exist and only need their values updated.
+					if (i > previousLayerCount) {
+						this.instance.addVariable({ id: 'layerVariables', variableId: `${base}.source`, name: `Source of Layer ${i} on ${info.id} ${sideLabel}` })
+						this.instance.addVariable({ id: 'layerVariables', variableId: `${base}.status`, name: `Signal status of Layer ${i} on ${info.id} ${sideLabel}` })
+						this.instance.addVariable({ id: 'layerVariables', variableId: `${base}.width`, name: `Width of Layer ${i} on ${info.id} ${sideLabel}` })
+						this.instance.addVariable({ id: 'layerVariables', variableId: `${base}.height`, name: `Height of Layer ${i} on ${info.id} ${sideLabel}` })
+						this.instance.addVariable({ id: 'layerVariables', variableId: `${base}.x`, name: `X position of Layer ${i} on ${info.id} ${sideLabel}` })
+						this.instance.addVariable({ id: 'layerVariables', variableId: `${base}.y`, name: `Y position of Layer ${i} on ${info.id} ${sideLabel}` })
+					}
+					this.instance.setVariableValues({
+						[`${base}.source`]: sourceValue(source),
+						[`${base}.status`]: layerSourceStatus(source),
+						[`${base}.width`]: typeof sizeH === 'number' ? sizeH : '',
+						[`${base}.height`]: typeof sizeV === 'number' ? sizeV : '',
+						[`${base}.x`]: anchorPos.x,
+						[`${base}.y`]: anchorPos.y,
+					})
 				}
-				this.instance.setVariableValues({
-					[`${info.id}.layer${i}.source`]: sourceValue(source),
-					[`${info.id}.layer${i}.status`]: layerSourceStatus(source),
-					[`${info.id}.layer${i}.width`]: typeof sizeH === 'number' ? sizeH : '',
-					[`${info.id}.layer${i}.height`]: typeof sizeV === 'number' ? sizeV : '',
-					[`${info.id}.layer${i}.x`]: anchorPos.x,
-					[`${info.id}.layer${i}.y`]: anchorPos.y,
-				})
-			}
 
-			// .layerbg.source always exists per screen - addVariable's own dedup makes calling it every time
-			// a cheap no-op once registered, no need for its own new/existing distinction.
-			const bgPath = [...presetPath, ...this.instance.choices.getLayerPath('NATIVE')]
-			const bgSource = this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', this.constants.layerSourceProp])
-			this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.layerbg.source`, name: `Source of Background Layer on ${info.id}` })
-			this.instance.setVariableValues({ [`${info.id}.layerbg.source`]: sourceValue(bgSource) })
+				// .layerbg.source always exists per screen - addVariable's own dedup makes calling it every time
+				// a cheap no-op once registered, no need for its own new/existing distinction.
+				const bgPath = [...presetPath, ...this.instance.choices.getLayerPath('NATIVE')]
+				const bgSource = this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', this.constants.layerSourceProp])
+				this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.${side}.layerbg.source`, name: `Source of Background Layer on ${info.id} ${sideLabel}` })
+				this.instance.setVariableValues({ [`${info.id}.${side}.layerbg.source`]: sourceValue(bgSource) })
+
+				// The Foreground frame exists on Midra/Alta only, and holds a Foreground Image slot (1-4) in its own
+				// `frame` property rather than a source id - reported as the bare slot number, blank when unset.
+				if (this.instance.choices.layerPropertyTargetAllowed('TOP', { foreground: true })) {
+					const fgPath = [...presetPath, ...this.instance.choices.getLayerPath('TOP')]
+					const fgFrame = this.instance.state.get(['DEVICE', ...fgPath, 'source', 'pp', 'frame'])
+					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.${side}.layerfg.source`, name: `Foreground Image slot on ${info.id} ${sideLabel}` })
+					this.instance.setVariableValues({ [`${info.id}.${side}.layerfg.source`]: (fgFrame === undefined || fgFrame === 'NONE') ? '' : String(fgFrame) })
+				}
+			}
 		}
 
 		// A screen that disappeared entirely (disabled) since last time - clean up its now-orphaned variables
 		// rather than leaving them registered with a permanently stale value.
 		for (const [screenId, previousLayerCount] of this.lastLayerCountByScreen) {
 			if (seenScreenIds.has(screenId)) continue
-			for (let i = 1; i <= previousLayerCount; i += 1) {
-				for (const suffix of layerVariableSuffixes) {
-					this.instance.removeVariable('layerVariables', `${screenId}.layer${i}.${suffix}`)
+			for (const side of ['pgm', 'prw']) {
+				for (let i = 1; i <= previousLayerCount; i += 1) {
+					for (const suffix of layerVariableSuffixes) {
+						this.instance.removeVariable('layerVariables', `${screenId}.${side}.layer${i}.${suffix}`)
+					}
 				}
+				this.instance.removeVariable('layerVariables', `${screenId}.${side}.layerbg.source`)
+				this.instance.removeVariable('layerVariables', `${screenId}.${side}.layerfg.source`)
 			}
-			this.instance.removeVariable('layerVariables', `${screenId}.layerbg.source`)
 			this.lastLayerCountByScreen.delete(screenId)
 		}
 

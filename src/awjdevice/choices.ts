@@ -1041,6 +1041,18 @@ export default class Choices {
 		return this.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', info.platformId, ...this.constants.presetSideIndicator])
 	}
 
+	/**
+	 * Both preset keys for a Screen/Aux, labelled by which bank they are currently on. A device has exactly
+	 * two, and which one is Program swaps with every Take - so Preview is simply "the other one".
+	 * LivePremier's pair is A/B; Midra/Alta overrides this with its own UP/DOWN.
+	 * Returns undefined while the device has not reported the live side yet.
+	 */
+	public getPresetKeys(screenAuxKey: string): { pgm: string, prw: string } | undefined {
+		const pgm = this.getLivePresetKey(screenAuxKey)
+		if (!pgm) return undefined
+		return { pgm, prw: pgm === 'A' ? 'B' : 'A' }
+	}
+
 	public getMaxConfiguredLayerCount(): number {
 		return this.getScreenAuxChoices().reduce((max, screen) => {
 			return Math.max(max, this.getLayersAsArray(screen.id, false).length)

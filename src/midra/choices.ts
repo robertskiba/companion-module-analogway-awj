@@ -565,6 +565,13 @@ export default class ChoicesMidra extends Choices {
 		return typeof raw === 'string' ? raw.replace(/^AT_/, '') : undefined
 	}
 
+	/** Midra's preset pair is UP/DOWN rather than LivePremier's A/B. */
+	public override getPresetKeys(screenAuxKey: string): { pgm: string, prw: string } | undefined {
+		const pgm = this.getLivePresetKey(screenAuxKey)
+		if (!pgm) return undefined
+		return { pgm, prw: pgm === 'UP' ? 'DOWN' : 'UP' }
+	}
+
 	public override getAspectOverrideChoices(): Dropdown<string>[] {
 		return [
 			{ id: 'GLOBAL_SETTING', label: 'Global Settings' },

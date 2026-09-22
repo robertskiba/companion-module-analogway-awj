@@ -16,6 +16,7 @@ This is a fork of the original companion-module-analogway-awj repository. It is 
 
 ## New Variables
 
+- **The per-Layer variables now exist for both banks and say which they describe.** They were `S{n}.layer{x}.*` and always reported Program, which the name did not say - unlike `S{n}.pgm.memory.active` or `S{n}.pgm.time`, which have carried the bank all along. They are now `S{n}.pgm.layer{x}.*`, with a matching `.prw.` set giving what is lined up on Preview - useful for checking a layer before taking it to air. Same for the background layer (`S{n}.pgm.layerbg.source`), and on Alta 4K / Midra 4K a new `S{n}.pgm.layerfg.source` reports the Foreground Image slot. Renamed rather than aliased because this whole variable family is new in V3 and has never shipped outside the release candidates; buttons built on the old names during RC need updating.
 - **`Device.GlobalAnchorPoint`** - the globally selected Anchor Point (`CENTER`, `TOP_LEFT`, ...), the reference point a Layer's X/Y position is measured from. V3 already offered this as an action and a feedback, but there was no way to simply display the current value on a button. Being a WebRCS-wide shared setting, it also follows changes made there or by another client. LivePremier only - Alta 4K and Midra 4K have no such setting, and correspondingly do not get the variable.
 
 ## Fixed
@@ -154,8 +155,8 @@ This release completes the "Layer Properties" action family (now covering nearly
 
 - **`SelectedLayer.opacity`**, **`.Crop.Top/.Bottom/.Left/.Right`**, **`.Mask.Top/.Bottom/.Left/.Right`** – live values in the same units as their matching Layer Properties actions.
 - **`SelectedScreen.tbarPosition`** (0-100) and **`SelectedScreen.TransitionTime.Pgm`/`.Pvw`** (seconds) – scaled to match "Set T-Bar Position"/"Set Transition Time"'s own fields, so they can be read straight back into those actions.
-- **`S{n}`/`A{n}.layer{x}.status/.source/.width/.height/.x/.y`** – live per-layer variables for every currently-configured layer on every screen/aux (`.status`: VALID/INVALID; `.source`: a short id like `IN2`/`IMG4`/`BS1`/`SCR1`; `.x`/`.y` follow the currently selected global Anchor Point, same as `SelectedLayer.x/.y`). Only real, existing layers get variables – no fixed theoretical-maximum range.
-- **`S{n}`/`A{n}.layerbg.source`** – the background/NATIVE layer's source.
+- **`S{n}`/`A{n}.pgm.layer{x}.status/.source/.width/.height/.x/.y`** (and the matching `.prw.` set) – live per-layer variables for every currently-configured layer on every screen/aux (`.status`: VALID/INVALID; `.source`: a short id like `IN2`/`IMG4`/`BS1`/`SCR1`; `.x`/`.y` follow the currently selected global Anchor Point, same as `SelectedLayer.x/.y`). Only real, existing layers get variables – no fixed theoretical-maximum range.
+- **`S{n}`/`A{n}.pgm.layerbg.source` (and `.prw.`)** – the background/NATIVE layer's source.
 - **`IN{n}.status`** – a real per-input availability signal (VALID/INVALID), unlike the existing enabled-flag which stays true even for inputs that don't physically exist.
 - **`OUT{n}.usedin`** – which Screen/Aux a physical output currently feeds (blank if unused).
 - **`S{n}`/`A{n}.aspectratio`**, **`OUT{n}.aspectratio`**, **`MVW{n}.aspectratio`** – real computed aspect ratios (previously `$NA` or a non-numeric mode string on some outputs).
