@@ -2782,8 +2782,8 @@ export default class Actions {
 								}
 							}
 
-							if (settingA) this.connection.sendWSmessage([...path, 'cut', 'cropping', 'pp', propA], Math.round(finalA / 100 * 65536))
-							if (settingB) this.connection.sendWSmessage([...path, 'cut', 'cropping', 'pp', propB], Math.round(finalB / 100 * 65536))
+							if (settingA) this.connection.sendWSmessage([...path, 'cut', 'cropping', 'pp', propA], clampRound(finalA / 100 * 65536, 0, 65535))
+							if (settingB) this.connection.sendWSmessage([...path, 'cut', 'cropping', 'pp', propB], clampRound(finalB / 100 * 65536, 0, 65535))
 						}
 					}
 				}
@@ -3230,7 +3230,7 @@ export default class Actions {
 								if (pct >= 0) fraction = pct / 100 // -1 (the field's default) is the "don't change" sentinel, so 0% stays usable as a real value
 							}
 							if (fraction !== undefined) {
-								this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, prop], Math.round(fraction * 65536))
+								this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, prop], clampRound(fraction * 65536, 0, 65535))
 							}
 						}
 					}
@@ -3501,7 +3501,7 @@ export default class Actions {
 								if (pct >= 0) fraction = pct / 100
 							}
 							if (fraction !== undefined) {
-								this.connection.sendWSmessage([...path, ...this.constants.propsMaskPath, prop], Math.round(fraction * 65536))
+								this.connection.sendWSmessage([...path, ...this.constants.propsMaskPath, prop], clampRound(fraction * 65536, 0, 65535))
 							}
 						}
 					}
@@ -4619,6 +4619,13 @@ export default class Actions {
 						// Crop/Mask Top/Bottom/Left/Right all share the same 16-bit-fraction-of-a-dimension shape
 						// (see "Aspect & Crop"/"Mask" for the confirmed-live encoding and why Crop and Mask normalize
 						// against different dimensions) - one helper covers all 8.
+						//
+						// The divisor is 65536 but the highest storable value is 65535: the device quantizes 0..1 into
+						// 65536 steps numbered 0..65535, so a full 100% is 65535, not 65536. Sending 65536 does not
+						// saturate, it does nothing at all - which is how this surfaced, as a crop sitting at 90.01%
+						// refusing to take a 10% step. Live evidence for the ceiling: across a full ~1.8MB device
+						// state dump, 65535 appears 163 times and 65536 never once. The divisor itself stays 65536,
+						// which the existing mid-range data points confirm (150px of 1080 stores as 9102).
 						const applyFraction = (propPath: string[], dimension: number | '') => {
 							const current = this.state.get(['DEVICE', ...path, ...propPath]) ?? 0
 							let delta: number | undefined
@@ -4626,7 +4633,7 @@ export default class Actions {
 							else if (hasPct) delta = Number(pctStr) / 100 * 65536
 							else if (hasPx && dimension !== '') delta = Number(pxStr) / dimension * 65536
 							if (delta === undefined) return
-							const newValue = clampRound(current + direction * delta, 0, 65536)
+							const newValue = clampRound(current + direction * delta, 0, 65535)
 							this.connection.sendWSmessage([...path, ...propPath], newValue)
 						}
 
