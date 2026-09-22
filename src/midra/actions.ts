@@ -1373,7 +1373,12 @@ export default class ActionsMidra extends Actions {
 						'slotList', 'items', String(slot),
 						'pp', 'xRequest',
 					],
-					true
+					// false first, then true: this is an edge-triggered command, and the node keeps whatever it was
+					// last set to. Sending a bare `true` works exactly once - the second save into the same slot
+					// and preset writes true over true, the device sees no edge, and nothing happens at all. The
+					// capture shows WebRCS doing the same: its first save was a plain true, every one after it
+					// false then true.
+					false, true
 				)
 
 				// A typed label always applies. Midra does not invent one of its own when saving into an empty
