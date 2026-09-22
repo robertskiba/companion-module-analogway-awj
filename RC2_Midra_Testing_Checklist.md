@@ -117,6 +117,19 @@ For every item below: single Layer, "All Selected Layers"/"First/Only Selected L
 - [ ] Connection Status feedback - Main Device states; Hot Backup Device state once configured.
 - [ ] Custom Commands (raw get/replace).
 
+## 9b. Aux screens
+
+Found and fixed 2026-09-22 after the user noticed that Aux screens delivered no usable variables. An Aux on Midra turned out to be a very different object from a Screen, and several pieces of shared code were reading Screen-shaped paths for both. All of it is confirmed against an Eikos 4K simulator; **none of it is confirmed on Alta**, which runs through the same `midra` platform class - re-check each line in the RC3 Alta pass.
+
+- [x] Transition state comes from the Aux's own node. Midra splits `device/transition/screenList` and `device/transition/auxiliaryScreenList`, and the two genuinely disagree (Aux 1 at AT_DOWN while Screen 1 sat at AT_UP), so every Aux variable had been reporting the same-numbered Screen's bank. LivePremier keeps both in one list, so its two constants are the identical array and nothing there changes.
+- [x] Background source reads the right property. Midra has three names for it - `source/pp/input` on a numbered layer, `source/pp/set` (a Background Set's bare number) on a Screen background, `source/pp/content` on an Aux background - and the shared reader used one for all three, so both kinds of background reported a permanent "NONE".
+- [x] An Aux no longer claims a numbered layer, a Foreground or a memory. Its preset carries `background` and nothing else - no `liveLayerList`, no `top`.
+- [x] `A{n}.width`/`.height`/`.aspectratio` come from the output the Aux feeds (no canvas node of its own).
+- [x] Screen/Aux labels fall back to "Screen 1"/"Aux 1" - the protocol has the field but WebRCS cannot set it, so it is empty on all eight here.
+- [x] Enabling/disabling a Screen or Aux in the preconfig updates the variables live (S1+A1 / S1+S2 / S1 with two outputs on an Eikos). The inherited subscription watched `status/pp/mode` on the screen, which Midra does not have, so nothing reacted at all.
+- [x] Aux background accepts a Screen's Program (`PROGRAM_{n}`, listed as `S1 PGM`) and a colour.
+- [ ] **Open:** whether the Aux Memory *actions* and feedbacks should stay. The device has a real `device/preset/auxBank` with 200 slots and this module already reads labels from it, but the Aux reports no active memory, so only the read-back variables were removed. Confirm against WebRCS whether an Aux can be stored/recalled at all there.
+
 ## 10. Cross-cutting regression checks
 
 Things this session touched broadly that are worth spot-checking specifically on Midra, since most live verification so far was done against Aquilon:

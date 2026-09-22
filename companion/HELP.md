@@ -250,8 +250,8 @@ Additionally, you can choose to select the chosen auxscreens, if you tick that b
 
 **Variables:**
 - `AMx.label` - the label of the Aux Memory (example: `AM5.label` shows the label of Aux Memory 5).
-- `Ax.pgm.memory.active` / `.prw.memory.active` - the memory currently loaded in aux program/preview (example: `A3.pgm.memory.active` shows which memory is currently active in Aux 3's program).
-- `Ax.pgm.memory.label` / `.prw.memory.label` - the label of the memory in program/preview (example: `A3.prw.memory.label` shows the label of the memory loaded in Aux 3's preview).
+
+On Alta 4K and Midra 4K an Aux does not report which memory is loaded in it, so the `Ax.pgm.memory.active` / `.modified` / `.label` variables (and their `.prw` counterparts) do not exist there. Recalling an Aux Memory works as described above; only the read-back is missing.
 
 ### Recall Layer Memory
 
@@ -514,8 +514,8 @@ Swaps the "Hot Backup Device Address" with the current "Device Network Address" 
 - `Device.Status.Temperature` / `Device.Status.Fans` - aggregated temperature/fan alarm status.
 - `Device.Connected.Maindevice` - this connection's own connection status.
 - `Device.Connected.Hotbackupdevice` / `Device.IP.Hotbackup` - Hot Backup Device connection status/address (LivePremier only, "not_configured" while disabled).
-- `Sx.label` / `Ax.label` - the label of the screen/aux screen (example: `S1.label` shows the label of Screen 1).
-- `Sx.width` / `.height` / `.aspectratio` - a Screen's/Aux's own canvas resolution, for currently-enabled screens/auxes only (example: `S1.width` shows Screen 1's canvas width).
+- `Sx.label` / `Ax.label` - the label of the screen/aux screen (example: `S1.label` shows the label of Screen 1). On Alta 4K and Midra 4K the device has no naming feature, so these are generated as "Screen 1", "Aux 1" and so on rather than read from the device.
+- `Sx.width` / `.height` / `.aspectratio` - a Screen's/Aux's own canvas resolution, for currently-enabled screens/auxes only (example: `S1.width` shows Screen 1's canvas width). On Alta 4K and Midra 4K an Aux has no canvas of its own - it is always full screen on the output it feeds, so `Ax.*` reports that output's resolution.
 - `OUTx.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a physical output's current signal and label (example: `OUT1.format` shows Output 1's current format).
 - `OUTx.hdcp` / `.colorspace` / `.sinkdetected` / `.sinkname` - a physical output's connected-sink status (example: `OUT1.sinkdetected` shows whether Output 1 has a connected sink).
 - `OUTx.usedin` - which Screen/Aux a physical output is currently feeding, blank if unused (example: `OUT1.usedin` shows which Screen/Aux Output 1 currently feeds).
