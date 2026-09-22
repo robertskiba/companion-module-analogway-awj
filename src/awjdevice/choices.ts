@@ -2,7 +2,7 @@ import { AWJinstance } from '../index.js'
 import { State } from '../../types/State.js'
 import Constants from './constants.js'
 import { formatAquilonModel, compareFirmwareVersions } from '../util.js'
-import { RECOMMENDED_FIRMWARE } from '../config.js'
+import { RECOMMENDED_FIRMWARE, MIDRA_RECOMMENDED_FIRMWARE } from '../config.js'
 
 type Dropdown<t> = {id: t, label: string}
 
@@ -451,6 +451,26 @@ export default class Choices {
 	 * numbering series entirely), where the real reason is that the feature hasn't been verified on that
 	 * hardware yet - so the two get different wording rather than one misleading message.
 	 */
+	/**
+	 * Firmware comparison for a gate whose minimum version is expressed in **this platform's own** numbering,
+	 * unlike isFirmwareAtLeast(), which only ever speaks Aquilon's and deliberately answers false on Midra.
+	 *
+	 * Needed because some features exist on both series but arrived at unrelated version numbers - input-level
+	 * Cut&Fill is Aquilon 4.0.254 and Midra 3.2.29 (Analog Way's Midra 4K release note, 17 July 2024: "The
+	 * Cut & Fill function is now available at the input level"). Comparing a Midra against 4.0.254 is
+	 * meaningless; comparing it against 3.2.29 is exactly right.
+	 *
+	 * Offline it assumes the newest firmware this module knows about for the platform in question, the same
+	 * optimistic default and for the same reason as isFirmwareAtLeast(): a show gets pre-programmed before the
+	 * device is ever reachable.
+	 */
+	public isPlatformFirmwareAtLeast(minVersion: string): boolean {
+		const recommended = this.state.platform === 'midra' ? MIDRA_RECOMMENDED_FIRMWARE : RECOMMENDED_FIRMWARE
+		const fwVersion: string = this.instance.state.get('LOCAL/deviceFirmwareVersion') ?? ''
+		if (!fwVersion) return compareFirmwareVersions(recommended, minVersion) >= 0
+		return compareFirmwareVersions(fwVersion, minVersion) >= 0
+	}
+
 	public firmwareGateNote(minVersion: string): string {
 		if (this.state.platform === 'midra') return ' (not verified on Midra/Alta yet)'
 		return ` (requires at least firmware ${minVersion})`

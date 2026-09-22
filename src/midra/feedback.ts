@@ -316,7 +316,17 @@ export default class FeedbacksMidra extends Feedbacks  {
 				{ id: 'DISABLE', label: 'Keying Disabled' },
 				{ id: 'CHROMA', label: 'Chroma Key' },
 				{ id: 'LUMA', label: 'Luma Key' },
-				{ id: 'CUT_AND_FILL', label: 'Cut&Fill (odd-numbered Inputs only)' },
+				{
+					id: 'CUT_AND_FILL',
+					// Midra's own version, not Aquilon's 4.0.254 - Analog Way's Midra 4K release note lists it under
+					// firmware 3.2.29 (17 July 2024), wording the pairing exactly as the device behaves: "The odd
+					// inputs are related to the content and the Cut source is the following inputs (even)". The note
+					// is on the label only; what actually blocks the write is the device's own per-input capability
+					// flag, which is live and knows which inputs can do it.
+					label: this.choices.isPlatformFirmwareAtLeast('3.2.29')
+						? 'Cut&Fill (odd-numbered Inputs only)'
+						: 'Cut&Fill (odd-numbered Inputs only, requires at least firmware 3.2.29)',
+				},
 			]
 		}
 
