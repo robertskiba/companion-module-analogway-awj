@@ -88,6 +88,45 @@ export default class ChoicesMidra extends Choices {
         return ret
 	}
 
+	/**
+	 * A Screen's or Aux's name, falling back to "Screen 1"/"Aux 1" when the device reports none.
+	 *
+	 * Midra's protocol has the `control/pp/label` field, but WebRCS offers no way to set it, so in practice it
+	 * is always empty - confirmed across all four Screens and all four Auxes on an Eikos 4K simulator. That is
+	 * not "the operator left the name blank" (where blank is the honest answer, see GUIDELINES.md), it is a
+	 * platform with no naming feature at all, and leaving it empty made every dropdown entry and every
+	 * `S{n}.label`/`A{n}.label` variable read as nothing. A LivePremier user switching to a Midra gets the
+	 * same shape of value either way.
+	 */
+	/**
+	 * Midra names the source property differently for each of its three layer kinds - live-confirmed on an
+	 * Eikos 4K simulator by reading all three off the same device at once:
+	 *
+	 * - a numbered layer: `source/pp/input`, holding an AWJ id ('INPUT_1', 'COLOR', 'NONE')
+	 * - a Screen's background: `source/pp/set`, holding a Background Set's bare number ('3') or 'NONE'
+	 * - an Aux's background: `source/pp/content`, holding 'INPUT_1', 'PROGRAM_2' (a Screen's own Program
+	 *   re-inserted) or 'NONE'
+	 *
+	 * The shared reader used one name for all three, so both kinds of background answered undefined and every
+	 * `S{n}.*.layerbg.source` / `A{n}.*.layerbg.source` variable reported a permanent "NONE" - on an Aux even
+	 * while a real input was visibly on air. The bare Background Set number is expanded to the 'NATIVE_{n}'
+	 * id the rest of the module speaks, so it formats as BS{n} like everywhere else.
+	 */
+	public override getLayerSourceId(layerPath: string[], layerKey: string, isAux: boolean): string | undefined {
+		if (isAux) return this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'content'])
+		if (/^(bg|bkg|background|native)$/i.test(layerKey)) {
+			const set = this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'set'])
+			if (set === undefined) return undefined
+			return /^\d+$/.test(String(set)) ? `NATIVE_${set}` : String(set)
+		}
+		return this.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'input'])
+	}
+
+	public override defaultScreenLabel(label: unknown, isAux: boolean, index: string | number): string {
+		if (typeof label === 'string' && label !== '') return label
+		return `${isAux ? 'Aux' : 'Screen'} ${index}`
+	}
+
 	/** returns array of the currently available and active screens only (no auxes)*/
 	public getScreensArray(getAlsoDisabled = false): Choicemeta[] {
 		const ret: Choicemeta[] = []
@@ -98,7 +137,7 @@ export default class ChoicesMidra extends Choices {
 				if (getAlsoDisabled || this.state.get('DEVICE/device/preconfig/status/stateList/items/CURRENT/screenList/items/' + screen + '/pp/enable') === true) {
 					ret.push({
 						id: 'S' + screen,
-						label: this.state.get('DEVICE/device/screenList/items/' + screen + '/control/pp/label'),
+						label: this.defaultScreenLabel(this.state.get('DEVICE/device/screenList/items/' + screen + '/control/pp/label'), false, screen),
 						index: screen
 					})
 				}
@@ -120,7 +159,7 @@ export default class ChoicesMidra extends Choices {
 				if (getAlsoDisabled || this.state.get('DEVICE/device/preconfig/status/stateList/items/CURRENT/auxiliaryScreenList/items/' + screen + '/pp/mode') != 'DISABLE') {
 					ret.push({
 						id: 'A' + screen,
-						label: this.state.get('DEVICE/device/auxiliaryScreenList/items/' + screen + '/control/pp/label'),
+						label: this.defaultScreenLabel(this.state.get('DEVICE/device/auxiliaryScreenList/items/' + screen + '/control/pp/label'), true, screen.replace(/\D/g, '')),
 						index: screen.replace(/\D/g, '')
 					})
 				}
@@ -354,7 +393,12 @@ export default class ChoicesMidra extends Choices {
 			return ret
 		} else if (typeof param === 'string') {
 			if (param.startsWith('A')) {
-				ret.push({ id: 'BG', label: 'Background Layer', longname: 'BKG' })
+				// A Midra Aux has no layers at all - its preset carries a `background` node and nothing else, no
+				// liveLayerList and no `top`. So it contributes the background when one is asked for and an empty
+				// list otherwise; it must NOT ignore `bkg` and hand the background back anyway, which is what
+				// made callers asking for "the numbered layers" count it as Layer 1 and register A{n}.layer1.*
+				// variables for a layer that does not exist.
+				if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background Layer', longname: 'BKG' })
 			}
 			if (param.startsWith('S')) {
 				const layercount = this.state.get(`DEVICE/device/preconfig/status/stateList/items/CURRENT/screenList/items/${param.replace(/\D/g, '')}/pp/layerCount`) ?? 1

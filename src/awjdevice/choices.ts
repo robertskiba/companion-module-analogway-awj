@@ -1060,6 +1060,40 @@ export default class Choices {
 	}
 
 	/**
+	 * The source id a layer is currently showing, read from wherever that platform keeps it and returned in
+	 * the AWJ id form the rest of the module speaks ('NONE', 'LIVE_3'/'INPUT_3', 'NATIVE_2', 'PROGRAM_1').
+	 *
+	 * LivePremier keeps one property for every layer kind, so this is a plain read of `source/pp/inputNum`.
+	 * Midra uses three differently named ones - see its override - and reading the wrong one does not fail,
+	 * it just answers undefined, which is why every background variable there read a permanent "NONE".
+	 */
+	public getLayerSourceId(layerPath: string[], _layerKey: string, _isAux: boolean): string | undefined {
+		return this.state.get(['DEVICE', ...layerPath, 'source', 'pp', this.constants.layerSourceProp])
+	}
+
+	/**
+	 * A Screen's or Aux's display name. LivePremier lets the operator name them in WebRCS, so whatever the
+	 * device reports stands as-is - an empty one there honestly means "not named", and inventing a name would
+	 * hide that. Midra, which has no naming feature at all, overrides this with a generated default.
+	 */
+	public defaultScreenLabel(label: unknown, _isAux: boolean, _index: string | number): string {
+		return typeof label === 'string' ? label : ''
+	}
+
+	/**
+	 * Where the transition state (live side, T-Bar, take time) of one Screen or Aux lives.
+	 *
+	 * LivePremier keeps both in the same `device/screenAuxGroupList`, so the two constants are the identical
+	 * array there and this is a pure pass-through. Midra splits them into `device/transition/screenList` and
+	 * `device/transition/auxiliaryScreenList`, and the two genuinely disagree - live-confirmed on an Eikos 4K
+	 * simulator, where Aux 1 sat at AT_DOWN while Screen 1 sat at AT_UP. Reading an Aux out of the Screen list
+	 * therefore does not fail loudly; it quietly answers with the same-numbered Screen instead.
+	 */
+	public getScreenGroupPath(screenAuxKey: string): string[] {
+		return this.getScreenInfo(screenAuxKey).isAux ? this.constants.auxGroupPath : this.constants.screenGroupPath
+	}
+
+	/**
 	 * The preset key (`presetList/items/...`) currently live on Program for a Screen/Aux, read straight off
 	 * the device rather than through getPreset() - that one goes via LOCAL, which is only written by the
 	 * transition handler and never seeded at connect, so it stays stale until the first Take.
@@ -1070,7 +1104,7 @@ export default class Choices {
 	 */
 	public getLivePresetKey(screenAuxKey: string): string | undefined {
 		const info = this.getScreenInfo(screenAuxKey)
-		return this.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', info.platformId, ...this.constants.presetSideIndicator])
+		return this.state.get(['DEVICE', ...this.getScreenGroupPath(screenAuxKey), 'items', info.platformId, ...this.constants.presetSideIndicator])
 	}
 
 	/**

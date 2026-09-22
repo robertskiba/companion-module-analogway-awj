@@ -304,7 +304,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				const label = this.instance.state.get(path)
+				// Midra reports no Screen/Aux name at all - see choices.defaultScreenLabel() for why this falls back
+				// to "Screen {n}"/"Aux {n}" rather than staying blank.
+				const label = this.instance.choices.defaultScreenLabel(this.instance.state.get(path), false, input)
 				const exists = this.instance.choices.getScreensArray().some(scr => scr.id === 'S' + input)
 				if (this.instance.config.useOldVariableNames) {
 					if (exists) {
@@ -331,7 +333,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 			fun: (path, _value) => {
 				if (!path) return false
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
-				const label = this.instance.state.get(path)
+				const label = this.instance.choices.defaultScreenLabel(this.instance.state.get(path), true, input)
 				const exists = this.instance.choices.getAuxArray().some(scr => scr.id === 'A' + input)
 				if (this.instance.config.useOldVariableNames) {
 					if (exists) {
@@ -348,6 +350,59 @@ export default class SubscriptionsMidra extends Subscriptions {
 				}
 				return true
 			},
+		}
+	}
+
+	/**
+	 * A Screen or Aux is switched on or off in the preconfig - on an Eikos that is the difference between
+	 * S1+A1, S1+S2 and a single S1 driving two outputs, and it can be changed at any time while Companion is
+	 * connected.
+	 *
+	 * The inherited subscription watches `.../status/pp/mode` on the screen itself, which is LivePremier's
+	 * shape; Midra has no such field and keeps the enabled state in the currently-applied preconfig tree
+	 * instead (`pp/enable` for a Screen, `pp/mode` for an Aux - live-confirmed on an Eikos 4K simulator,
+	 * where Aux 1 read ENABLE and Auxes 2-4 read DISABLE). The pattern therefore never matched here, so
+	 * nothing reacted at all: a Screen that went away kept its variables with a frozen value, and one that
+	 * appeared got none until some unrelated change happened to trigger a rebuild.
+	 *
+	 * Re-runs the same refreshes that own those variables rather than duplicating their logic - each already
+	 * registers what exists now and deregisters what doesn't.
+	 */
+	get screenEnabled():Subscription {
+		return {
+			pat: 'DEVICE/device/preconfig/status/stateList/items/CURRENT/(?:screenList/items/(\\d{1,2})/pp/enable|auxiliaryScreenList/items/(\\d{1,2})/pp/mode)',
+			fun: (): boolean => {
+				this.screenSize.fun?.()
+				this.layerVariables.fun?.()
+				this.refreshScreenAuxLabels()
+				return true
+			},
+		}
+	}
+
+	/**
+	 * Adds or removes the S{n}.label/A{n}.label variables so they follow the preconfig, the same way
+	 * refreshScreenSize does for the size variables. The label subscriptions themselves only ever fire when
+	 * the device reports a new label, which never happens when a Screen is simply switched off.
+	 */
+	private refreshScreenAuxLabels(): void {
+		if (this.instance.config.useOldVariableNames) return
+		const live = new Set([
+			...this.instance.choices.getScreensArray().map((scr) => scr.id),
+			...this.instance.choices.getAuxArray().map((scr) => scr.id),
+		])
+		const all = [
+			...Array.from({ length: this.constants.maxScreens }, (_, i) => ({ id: `S${i + 1}`, kind: 'Screen', group: 'screenLabel', isAux: false, index: i + 1 })),
+			...Array.from({ length: this.constants.maxAuxScreens }, (_, i) => ({ id: `A${i + 1}`, kind: 'Auxscreen', group: 'auxscreenLabel', isAux: true, index: i + 1 })),
+		]
+		for (const entry of all) {
+			if (live.has(entry.id)) {
+				this.instance.addVariable({ id: entry.group, variableId: `${entry.id}.label`, name: `Label of ${entry.kind} ${entry.id}` })
+				const raw = this.instance.state.get(`DEVICE/device/${entry.isAux ? 'auxiliaryScreenList' : 'screenList'}/items/${entry.index}/control/pp/label`)
+				this.instance.setVariableValues({ [`${entry.id}.label`]: this.instance.choices.defaultScreenLabel(raw, entry.isAux, entry.index) })
+			} else {
+				this.instance.removeVariable(entry.group, `${entry.id}.label`)
+			}
 		}
 	}
 

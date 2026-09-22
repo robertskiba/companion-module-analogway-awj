@@ -951,7 +951,7 @@ export default class Actions {
 						? this.choices.getSelectedScreens().slice(0, 1)
 						: this.choices.getChosenScreenAuxes(action.options.screens)
 					for (const screen of targetScreens) {
-						this.connection.sendWSmessage([...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'tbarPosition'], tbarint)
+						this.connection.sendWSmessage([...this.choices.getScreenGroupPath(screen), 'items', screen, 'control', 'pp', 'tbarPosition'], tbarint)
 					}
 					this.instance.sendXupdate()
 				}
@@ -1022,7 +1022,7 @@ export default class Actions {
 						(preset === 'pgm' && presetPgm === 'B') ||
 						(preset === 'pvw' && presetPgm === 'A')
 					) {
-						const path = [...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'takeDownTime']
+						const path = [...this.choices.getScreenGroupPath(screen), 'items', screen, 'control', 'pp', 'takeDownTime']
 						this.connection.sendWSmessage(path, time)
 						waitPromises.push(this.waitForStateValue(['DEVICE', ...path], (v) => v === time))
 					}
@@ -1031,7 +1031,7 @@ export default class Actions {
 						(preset === 'pvw' && presetPgm === 'B') ||
 						(preset === 'pgm' && presetPgm === 'A')
 					) {
-						const path = [...this.constants.screenGroupPath, 'items', screen, 'control', 'pp', 'takeUpTime']
+						const path = [...this.choices.getScreenGroupPath(screen), 'items', screen, 'control', 'pp', 'takeUpTime']
 						this.connection.sendWSmessage(path, time)
 						waitPromises.push(this.waitForStateValue(['DEVICE', ...path], (v) => v === time))
 					}
@@ -1137,7 +1137,7 @@ export default class Actions {
 						const delta0to100 = hasRaw ? Number(rawStr) : Number(pctStr)
 						// platformId, not the 'S1'-style id - Midra keys this list by the bare number. Identical on
 						// LivePremier, where platformId is the 'S1' form.
-						const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
+						const groupPath = [...this.choices.getScreenGroupPath(screen), 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
 						// The control field is a command, not a readback: after a completed transition it keeps the
 						// last value it was sent. Harmless here, because the advance direction below is derived from
 						// which end the bar is parked at - so stepping away from a stuck maximum moves correctly.
@@ -1162,7 +1162,7 @@ export default class Actions {
 						this.connection.sendWSmessage([...groupPath, 'tbarPosition'], newValue)
 					} else {
 						const deltaDeciseconds = hasRaw ? Number(rawStr) : Number(pctStr) / 100 * 3000
-						const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
+						const groupPath = [...this.choices.getScreenGroupPath(screen), 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
 						const presetPgm = this.choices.getPreset(screen, 'PGM')
 						const adjust = (prop: 'takeUpTime' | 'takeDownTime' | 'takeTime') => {
 							const current = this.state.get(['DEVICE', ...groupPath, prop]) ?? 0
@@ -4742,7 +4742,7 @@ export default class Actions {
 			// platformId, not the 'S1'-style id: Midra keys this list by the bare number, so the old path
 			// resolved to nothing there and every Timing write was silently skipped. Same on LivePremier,
 			// where platformId *is* the 'S1' form.
-			const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screenAuxKey).platformId, 'control', 'pp']
+			const groupPath = [...this.choices.getScreenGroupPath(screenAuxKey), 'items', this.choices.getScreenInfo(screenAuxKey).platformId, 'control', 'pp']
 			const presetUp = this.state.get(['DEVICE', ...groupPath, 'presetUp'])
 			const presetDown = this.state.get(['DEVICE', ...groupPath, 'presetDown'])
 			const deciseconds = presetKey === presetUp

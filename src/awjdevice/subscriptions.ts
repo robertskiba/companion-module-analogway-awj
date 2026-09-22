@@ -504,7 +504,7 @@ export default class Subscriptions {
 		// platformId, not the 'S1'-style id: Midra keys this list by the bare number ('1'), so using screenId
 		// directly built a path that simply does not exist there - SelectedScreen.tbarPosition and
 		// .TransitionTime.* stayed blank while .number/.numberOfLayers (which never touch this path) worked.
-		const groupPath = [...this.constants.screenGroupPath, 'items', this.instance.choices.getScreenInfo(screenId).platformId, 'control', 'pp']
+		const groupPath = [...this.instance.choices.getScreenGroupPath(screenId), 'items', this.instance.choices.getScreenInfo(screenId).platformId, 'control', 'pp']
 		// The absolute position of the bar, not the progress of a transition: 0 is down, 100 is up, and it stays
 		// where it was left. Taking does not move the bar back - neither on the device nor in WebRCS - so the
 		// value standing at 100 after a transition is correct rather than stale, and it matches what someone
@@ -563,13 +563,25 @@ export default class Subscriptions {
 		}
 	}
 
+	/**
+	 * Matches either transition-state list, for patterns that have to fire for a Screen and for an Aux alike.
+	 * LivePremier keeps both in one list, so the two constants are the identical array there and the
+	 * alternation collapses back to the single path - byte-for-byte the pattern it always had. Midra splits
+	 * them, and a pattern naming only the Screen list never fires for an Aux at all.
+	 */
+	private get screenGroupPat(): string {
+		const screen = this.constants.screenGroupPath.join('/')
+		const aux = this.constants.auxGroupPath.join('/')
+		return screen === aux ? screen : `(?:${screen}|${aux})`
+	}
+
 	/** The selected screen's T-Bar position changes - refreshes SelectedScreen.tbarPosition, see refreshSelectedScreen.
 	 * Built from this.constants.screenGroupPath rather than a hardcoded path since it differs per platform
 	 * (confirmed: screenAuxGroupList on LivePremier4, screenGroupList on LivePremier, transition/screenList on
 	 * Midra) - avoids needing a separate override of this subscription in each platform's own file. */
 	get selectedScreenTbarChange():Subscription {
 		return {
-			pat: this.constants.screenGroupPath.join('/') + '/items/(S|A)?(\\d{1,3})/control/pp/tbarPosition',
+			pat: this.screenGroupPat + '/items/(S|A)?(\\d{1,3})/control/pp/tbarPosition',
 			fun: this.refreshSelectedScreen,
 		}
 	}
@@ -579,7 +591,7 @@ export default class Subscriptions {
 	get selectedScreenTransitionTimeChange():Subscription {
 		return {
 			// takeUpTime/takeDownTime on LivePremier, a single takeTime on Midra - both spellings covered.
-			pat: this.constants.screenGroupPath.join('/') + '/items/(S|A)?(\\d{1,3})/control/pp/take(?:Up|Down)?Time',
+			pat: this.screenGroupPat + '/items/(S|A)?(\\d{1,3})/control/pp/take(?:Up|Down)?Time',
 			fun: this.refreshSelectedScreen,
 		}
 	}
@@ -612,9 +624,11 @@ export default class Subscriptions {
 	private formatSourceShort(id: string | undefined): string {
 		if (!id || id === 'NONE') return 'NONE'
 		if (id === 'COLOR') return 'COLOR'
-		const match = id.match(/^(LIVE|IN|STILL|NATIVE|SCREEN|TIMER)_(\d+)$/)
+		// INPUT_n is Midra's own spelling of a live input, PROGRAM_n is the Screen re-insertion an Aux
+		// background can take there. Neither id exists on LivePremier, so both entries are inert on it.
+		const match = id.match(/^(LIVE|INPUT|IN|STILL|NATIVE|SCREEN|PROGRAM|TIMER)_(\d+)$/)
 		if (!match) return id
-		const prefixByKind: Record<string, string> = { LIVE: 'IN', IN: 'IN', STILL: 'IMG', NATIVE: 'BS', SCREEN: 'SCR', TIMER: 'TIMER' }
+		const prefixByKind: Record<string, string> = { LIVE: 'IN', INPUT: 'IN', IN: 'IN', STILL: 'IMG', NATIVE: 'BS', SCREEN: 'SCR', PROGRAM: 'SCR', TIMER: 'TIMER' }
 		return `${prefixByKind[match[1]]}${match[2]}`
 	}
 
@@ -1581,7 +1595,11 @@ export default class Subscriptions {
 					}
 				}
 			}
-			if (layerCount !== previousLayerCount) this.lastLayerCountByScreen.set(info.id, layerCount)
+			// Recorded on every pass, not only when the count changed: the map doubles as "screens seen last
+			// time", and the cleanup below walks it to deregister a screen that has since disappeared. A screen
+			// whose count stayed the same - notably a Midra Aux, which has no layers at all and so sits at a
+			// permanent 0 - otherwise never entered the map and kept its layerbg variable forever.
+			this.lastLayerCountByScreen.set(info.id, layerCount)
 			if (!presetKeys) continue
 
 			for (const [side, presetKey] of [['pgm', presetKeys.pgm], ['prw', presetKeys.prw]] as const) {
@@ -1590,7 +1608,7 @@ export default class Subscriptions {
 
 				for (let i = 1; i <= layerCount; i += 1) {
 					const layerPath = [...presetPath, ...this.instance.choices.getLayerPath(i)]
-					const source = this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', this.constants.layerSourceProp])
+					const source = this.instance.choices.getLayerSourceId(layerPath, String(i), info.isAux)
 					const sizeH = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeH'])
 					const sizeV = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeV'])
 					const posH = this.instance.state.get(['DEVICE', ...layerPath, ...this.constants.propsPositionPath, 'posH']) ?? 0
@@ -1626,13 +1644,15 @@ export default class Subscriptions {
 				// .layerbg.source always exists per screen - addVariable's own dedup makes calling it every time
 				// a cheap no-op once registered, no need for its own new/existing distinction.
 				const bgPath = [...presetPath, ...this.instance.choices.getLayerPath('NATIVE')]
-				const bgSource = this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', this.constants.layerSourceProp])
+				const bgSource = this.instance.choices.getLayerSourceId(bgPath, 'NATIVE', info.isAux)
 				this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.${side}.layerbg.source`, name: `Source of Background Layer on ${info.id} ${sideLabel}` })
 				this.instance.setVariableValues({ [`${info.id}.${side}.layerbg.source`]: sourceValue(bgSource) })
 
 				// The Foreground frame exists on Midra/Alta only, and holds a Foreground Image slot (1-4) in its own
 				// `frame` property rather than a source id - reported as the bare slot number, blank when unset.
-				if (this.instance.choices.layerPropertyTargetAllowed('TOP', { foreground: true })) {
+				// Not on an Aux: a Midra Aux preset has a `background` node and nothing else, so it has neither a
+				// foreground frame nor any numbered layer.
+				if (!info.isAux && this.instance.choices.layerPropertyTargetAllowed('TOP', { foreground: true })) {
 					const fgPath = [...presetPath, ...this.instance.choices.getLayerPath('TOP')]
 					const fgFrame = this.instance.state.get(['DEVICE', ...fgPath, 'source', 'pp', 'frame'])
 					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.${side}.layerfg.source`, name: `Foreground Image slot on ${info.id} ${sideLabel}` })
@@ -1692,12 +1712,16 @@ export default class Subscriptions {
 		const screenOrAux = `(?:${this.constants.screenPath.join('/')}|${this.constants.auxPath.join('/')})/items/\\w+`
 		const numberedLayerSegment = this.instance.choices.getLayerPath('1')[0]
 		const bgSegments = this.instance.choices.getLayerPath('NATIVE').join('/')
-		const presetUpPat = `${this.constants.screenGroupPath.join('/')}/items/\\w+/${this.constants.presetSideIndicator.join('/')}`
+		const presetUpPat = `${this.screenGroupPat}/items/\\w+/${this.constants.presetSideIndicator.join('/')}`
 		const inputSignalPat = `device/inputList/items/${this.constants.inputKeyPrefix}\\d+/plugList/items/\\w+/status/signal/pp/isValid`
 		const anchorPat = 'live/screens/layers/anchorPoint'
 
 		return {
-			pat: `(?:${screenOrAux}/(?:status/pp/(?:layerCount|mode)|presetList/items/\\w+/(?:${numberedLayerSegment}/items/\\d+/(?:source/pp/(?:inputNum|input)|${this.constants.propsPositionPath.join('/')}/(?:posH|posV)|${this.constants.propsSizePath.join('/')}/(?:sizeH|sizeV))|${bgSegments}/source/pp/(?:inputNum|input)))|${presetUpPat}|${inputSignalPat}|${anchorPat})`,
+			// The background's source property is named differently per platform AND per layer kind on Midra
+			// (inputNum on LivePremier, `set` for a Screen background, `content` for an Aux background - see
+			// choices.getLayerSourceId()), so all four spellings are matched. A name that does not exist on a
+			// platform simply never appears in a patch there, so listing it costs nothing.
+			pat: `(?:${screenOrAux}/(?:status/pp/(?:layerCount|mode)|presetList/items/\\w+/(?:${numberedLayerSegment}/items/\\d+/(?:source/pp/(?:inputNum|input)|${this.constants.propsPositionPath.join('/')}/(?:posH|posV)|${this.constants.propsSizePath.join('/')}/(?:sizeH|sizeV))|${bgSegments}/source/pp/(?:inputNum|input|set|content)))|${presetUpPat}|${inputSignalPat}|${anchorPat})`,
 			ini: () => {
 				this.refreshLayerVariables()
 				return []
