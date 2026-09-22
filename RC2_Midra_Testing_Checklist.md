@@ -73,7 +73,7 @@ For every item below: single Layer, "All Selected Layers"/"First/Only Selected L
 - [x] Layer Source feedback - verified 2026-09-22, including with a local variable in the Source field. Needed a fix first: three subscription patterns ended in source/pp/inputNum (LivePremier's field name) and so never fired on Midra, where it is source/pp/input. The feedback was therefore only ever evaluated once, at connect - whichever input was set then stayed true and every other stayed false, which looked like a comparison bug. The same patterns feed SelectedLayer.Input.* and Sx.layerY.source, both confirmed live-updating again.
 - [x] ~~Global Anchor Point feedback~~ - removed for Midra (2026-09-22): confirmed in the protocol that its REMOTE snapshot has no live/screens/layers node and no anchorPoint anywhere, so the feedback could only ever report CENTER for a setting the device does not have. Nothing to test.
 - [ ] ~~Cut&Fill action/feedback~~ - see Known Gaps above, not yet registered.
-- [ ] ~~Keying~~ - confirmed not applicable to Midra, nothing to test.
+- [x] ~~Keying (per Layer)~~ - confirmed not applicable to Midra (2026-09-22): a layer node carries `source, position, size, opacity, effects, color, crop, mask, border, transition, flying, timing, speed, status` and no `keying` at all. **This is only the per-Layer property.** Keying at the *input* does exist on Midra and is a different feature - `inputList/items/{n}/plugList/items/{p}/settings/keying/` with its own `control/pp/mode` plus chroma, luma, cutNFill and assistant branches - covered by "Preconfig - Inputs - Set Input Keying" in section 8, which stays open.
 
 ## 5. Multiviewer
 
