@@ -387,6 +387,9 @@ Multiviewer Memory recall, Widget Selection, and Select Source in Multiviewer Wi
 ### Set Input Plug
 
 Available at: Alta 4K, Midra 4K  
+Assigns which physical connector an Input listens on.
+
+**Variable:** `INx.activeplug` - the connector the Input is currently using, spelled the way the action's own Plug list spells it (`HDMI`, `SDI`, `DisplayPort`, ...). It only exists for an Input that actually has more than one plug to choose from - on an Eikos 4K that is Inputs 1 and 2, which carry both an HDMI and an SDI connector, while the rest have a single SDI and could only ever report that one value (example: `IN1.activeplug` shows whether Input 1 is on HDMI or SDI).
 
 ### Preconfig - Inputs - Set Input Keying
 

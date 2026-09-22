@@ -96,6 +96,7 @@ For every item below: single Layer, "All Selected Layers"/"First/Only Selected L
 
 ## 8. Preconfig
 
+- [x] Set Input Plug + its feedback - verified 2026-09-22 on an Eikos 4K simulator. Gained an `IN{n}.activeplug` variable in the same pass, reporting the connector by the name the action's own Plug list uses; registered only for an Input with more than one available plug, which here is Inputs 1 and 2 (HDMI + SDI) while the rest carry a single SDI.
 - [ ] Inputs - Set Input Keying - confirm whether CremaTTe3D and Cut&Fill actually exist/work on Midra's `mode` field at all - both are only live-confirmed on a real Aquilon so far, and Midra's own callback override doesn't carry over the base's `isFirmwareAtLeast('4.0.254')` guard on Cut&Fill (it just sends it unconditionally). If either mode doesn't exist on Midra, remove it from the choices there rather than adding a Midra-specific firmware gate. Input field short-id/bare-number/raw-id resolution.
 - [ ] Inputs - Input Keying Status feedback - same mode coverage.
 - [ ] Set Input Plug **(Midra/Alta)** + Input Plug Status feedback **(Midra/Alta)**.

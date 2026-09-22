@@ -373,8 +373,14 @@ export default class Choices {
 		return ret
 	}
 
-	public getPlugChoices(input: string): Dropdown<string>[] {
-		const plugtype = {
+	/**
+	 * The connector name of one of an Input's plugs ('HDMI', 'SDI', 'DisplayPort', ...), as the Plug Select
+	 * action's own dropdown spells it - so the IN{n}.activeplug variable reads the same as what the user
+	 * picked there. An unknown or unreported type gives an empty string rather than 'undefined'.
+	 */
+	public getPlugTypeLabel(input: string, plug: string | undefined): string {
+		if (plug === undefined) return ''
+		const plugtype: Record<string, string> = {
 			HDMI: 'HDMI',
 			SDI: 'SDI',
 			DISPLAY_PORT: 'DisplayPort',
@@ -385,16 +391,20 @@ export default class Choices {
 			QUAD_SDI: 'Quad SDI',
 			NDI: 'NDI'
 		}
+		const type = this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', plug, 'status', 'pp', 'type'])
+		return plugtype[type] ?? ''
+	}
+
+	public getPlugChoices(input: string): Dropdown<string>[] {
 		return this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'itemKeys'])?.filter(
 			(plug: string) => {
 				return this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', plug, 'status', 'pp', 'isAvailable'])
 			}
 		).map(
 			(plug: string) => {
-				const type: keyof typeof plugtype = this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', plug, 'status', 'pp', 'type'])
 				return {
 					id: plug,
-					label: 'Plug ' + plug + ' - ' + plugtype[type]
+					label: 'Plug ' + plug + ' - ' + this.getPlugTypeLabel(input, plug)
 				}
 			}
 		) ?? []

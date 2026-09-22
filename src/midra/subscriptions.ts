@@ -741,6 +741,19 @@ export default class SubscriptionsMidra extends Subscriptions {
 						'control', 'pp', 'label'
 					])
 				});
+
+				// Which connector the Input is currently listening on, named the way the Plug Select action's own
+				// dropdown names it ('HDMI', 'SDI', ...). Only for an Input that actually has a choice: on an
+				// Eikos 4K that is Inputs 1 and 2, which carry an HDMI and an SDI plug, while every other Input
+				// has a single SDI and could only ever report that one value. The variable's own existence
+				// therefore says "this Input can be switched", the same rule the layer and output variables use.
+				const activeVarId = `IN${num}.activeplug`
+				if (this.instance.choices.getPlugChoices(input).length > 1) {
+					this.instance.addVariable({ id: 'plugChange', variableId: activeVarId, name: `Active plug of Input ${num}` })
+					this.instance.setVariableValues({ [activeVarId]: this.instance.choices.getPlugTypeLabel(input, this.instance.state.get(path)) })
+				} else {
+					this.instance.removeVariable('plugChange', activeVarId)
+				}
 				return true;
 			}
 		}
