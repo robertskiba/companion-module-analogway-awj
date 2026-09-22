@@ -698,7 +698,13 @@ export default class ChoicesMidra extends Choices {
 					}
 				})
 		}
-		return this.state.get('LOCAL/layerIds')
+		// `?? []` for the same reason as the sync path above and as getSelectedScreens() below: LOCAL/layerIds
+		// does not exist until a layer has been selected at least once, and every caller treats the result as
+		// an array (.filter/.slice/.length). Without it the very first "All Selected Layers"/"First Selected
+		// Layer" run on a fresh connection throws instead of resolving to nothing, which looks like the action
+		// being broken rather than like an empty selection. The base class has always had this guard; this
+		// override dropped it.
+		return this.state.get('LOCAL/layerIds') ?? []
 	}
 
 	/** Returns selected screens in LP format */
