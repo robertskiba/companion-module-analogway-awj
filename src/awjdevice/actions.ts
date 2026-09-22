@@ -1684,7 +1684,11 @@ export default class Actions {
 				...this.choices.getLayerPath(layerId)
 			]
 
-			if (this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath]) === undefined) return undefined // this layer does not allow for sizing
+			// Bails on a layer with no position at all (Midra's background). Checks position rather than size
+			// on purpose: LivePremier keeps both in the same node, so this is literally the same test it always
+			// was, while on Midra the foreground frame has a position but no size and should still be movable -
+			// only its size writes are skipped, further below.
+			if (this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath]) === undefined) return undefined
 
 			return {
 				path,
@@ -1868,7 +1872,7 @@ export default class Actions {
 				return newoptions
 			},
 			callback: async (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { foreground: true }))
 				if (layers.length === 0) return
 
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
@@ -1965,14 +1969,16 @@ export default class Actions {
 							this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
 							this.connection.sendWSmessage([...laydata.path, ...this.constants.propsPositionPath, 'posV'], newPosV)
 						}
-						if (sizeChanges) {
+						// Midra's foreground frame has a position but no size node - skip the size writes there
+						// rather than sending into nothing. Always true on LivePremier, where every layer has a size.
+						if (sizeChanges && this.choices.layerSupports(layer.layerKey, 'size')) {
 							const sizeH = targetSizeH
 							if (sizeH !== laydata.sizeH) {
 								this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
 								this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
 							}
 						}
-						if (sizeVChanges) {
+						if (sizeVChanges && this.choices.layerSupports(layer.layerKey, 'size')) {
 							const sizeV = targetSizeV
 							if (sizeV !== laydata.sizeV) {
 								this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
@@ -2169,7 +2175,7 @@ export default class Actions {
 			// "Get current values" (Companion's standard blue "Learn" button) - reads the first resolved layer's
 			// current transition/flying settings and pins screen/preset/layer to the concrete values it read from.
 			learn: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				if (layers.length === 0) return undefined
 
 				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
@@ -2210,7 +2216,7 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // transitions/flying only apply to numbered content layers
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true })) // transitions/flying only apply to numbered content layers
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -2235,13 +2241,18 @@ export default class Actions {
 							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
 							...this.choices.getLayerPath(layer.layerKey),
 						]
-						if (action.options.openingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'type'], action.options.openingType)
-						if (action.options.openingWay !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'way'], action.options.openingWay)
-						if (action.options.closingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'type'], action.options.closingType)
-						if (action.options.closingWay !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
+						// Midra's background transition understands only FADE and CUT and has no `way`; anything else
+						// picked from the shared list collapses to CUT instead of being sent as-is. Inert on
+						// LivePremier, where every layer supports the full set.
+						const fullTransitions = this.choices.layerSupports(layer.layerKey, 'transitionWay')
+						const transitionType = (chosen: string): string => fullTransitions ? chosen : (chosen === 'FADE' ? 'FADE' : 'CUT')
+						if (action.options.openingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'type'], transitionType(action.options.openingType))
+						if (action.options.openingWay !== 'keep' && fullTransitions) this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'way'], action.options.openingWay)
+						if (action.options.closingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'type'], transitionType(action.options.closingType))
+						if (action.options.closingWay !== 'keep' && fullTransitions) this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
 						// only touches the flags array at all if at least one of Allow Cross Effect/Depth actually
 						// changed - the untouched half is preserved from the layer's current live flags
-						if (action.options.allowCrossEffect !== 'keep' || action.options.allowCrossDepth !== 'keep') {
+						if ((action.options.allowCrossEffect !== 'keep' || action.options.allowCrossDepth !== 'keep') && this.choices.layerSupports(layer.layerKey, 'transitionFlags')) {
 							let flags: string[] = this.state.get(['DEVICE', ...path, 'transition', 'pp', 'flags']) ?? []
 							if (action.options.allowCrossEffect !== 'keep') {
 								const turnOn = action.options.allowCrossEffect === 'toggle' ? !flags.includes('FORCE_CROSS') : action.options.allowCrossEffect === 'on'
@@ -2255,7 +2266,7 @@ export default class Actions {
 							}
 							this.connection.sendWSmessage([...path, 'transition', 'pp', 'flags'], flags)
 						}
-						if (action.options.flyingCurve !== 'keep') this.connection.sendWSmessage([...path, 'flying', 'pp', 'type'], action.options.flyingCurve)
+						if (action.options.flyingCurve !== 'keep' && this.choices.layerSupports(layer.layerKey, 'flying')) this.connection.sendWSmessage([...path, 'flying', 'pp', 'type'], action.options.flyingCurve)
 					}
 				}
 
@@ -3093,7 +3104,7 @@ export default class Actions {
 			// for the custom command actions) - reads the first resolved layer's current crop and fills every
 			// field with it, pinning screen/preset/layer to the concrete values it read from.
 			learn: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { foreground: true }))
 				if (layers.length === 0) return undefined
 
 				// getPresetSelection() returns the AWJ-internal 'pvw' - but the "Preset" dropdown's own choices
@@ -3131,7 +3142,7 @@ export default class Actions {
 				return newoptions
 			},
 			callback: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/)) // aspect/crop only applies to numbered content layers, not background
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { foreground: true })) // aspect/crop only applies to numbered content layers, not background
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -3167,7 +3178,9 @@ export default class Actions {
 							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
 							...this.choices.getLayerPath(layer.layerKey),
 						]
-						if (action.options.aspectOverride !== 'keep') this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, 'aspectOverride'], action.options.aspectOverride)
+						// Midra's foreground frame has crop but no aspectOverride field - skip it there rather than
+						// writing into nothing. Always true on LivePremier.
+						if (action.options.aspectOverride !== 'keep' && this.choices.layerSupports(layer.layerKey, 'aspectOverride')) this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, 'aspectOverride'], action.options.aspectOverride)
 
 						let source: {width: number | '', height: number | ''} | undefined
 						for (const [pxId, pctId, prop, axis] of cropFields) {
@@ -4523,7 +4536,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/))
+				const layers = resolveLayers(action.options).filter(layer => layer.layerKey.match(/^\d+$/) || this.choices.layerPropertyTargetAllowed(layer.layerKey, { background: true, foreground: true }))
 				const presetsToApply = action.options.preset === 'all' ? ['pgm', 'prw'] : [action.options.preset === 'sel' ? this.choices.getPresetSelection('sel') : action.options.preset]
 				const unlockedTargets = new Set<string>()
 
@@ -4584,6 +4597,14 @@ export default class Actions {
 							this.connection.sendWSmessage([...path, ...propPath], Math.round(current + direction * delta))
 						}
 
+						// Each mode targets a different property, and Midra's Background/Foreground layers only have some of
+						// them - skip instead of writing into a node the device does not have. Opacity and Mask exist on every
+						// layer kind, so they need no check. Inert on LivePremier, where layerSupports() answers yes to all.
+						const encoderProperty = (action.options.value === 'posX' || action.options.value === 'posY') ? 'position'
+							: (action.options.value === 'sizeW' || action.options.value === 'sizeH') ? 'size'
+							: action.options.value.startsWith('crop') ? 'crop'
+							: undefined
+						if (encoderProperty !== undefined && !this.choices.layerSupports(layer.layerKey, encoderProperty)) continue
 						switch (action.options.value) {
 							case 'opacity': {
 								const current = this.state.get(['DEVICE', ...path, 'opacity', 'pp', 'opacity']) ?? 0

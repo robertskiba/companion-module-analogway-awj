@@ -1023,6 +1023,18 @@ export default class ActionsMidra extends Actions {
 	get devicePositionSizeV3() {
 		const devicePositionSizeV3 = super.devicePositionSizeV3
 
+		// The Foreground frame can be moved but not resized - it has a position node and no size node at all
+		// (live-confirmed on an Eikos 4K simulator). The size fields stay visible because Companion cannot
+		// hide them based on another field's value, so the note explains why they do nothing there; the
+		// callback skips those writes via choices.layerSupports(..., 'size').
+		devicePositionSizeV3.options.push({
+			id: 'foregroundSizeNote',
+			type: 'static-text',
+			label: '',
+			value: '---\nNote: the **Foreground** layer can be positioned, but not resized - the size fields above are ignored for it.',
+			disableAutoExpression: true,
+		} as any)
+
 		devicePositionSizeV3.options[0] = {
 			id: 'screen',
 			type: 'dropdown',
