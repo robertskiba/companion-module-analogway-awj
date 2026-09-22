@@ -43,11 +43,7 @@ export default class ActionsMidra extends Actions {
 
 	readonly actionsToUse = [
 		'deviceScreenMemory',
-		// 'deviceUpdatePreset' - LivePremier/LivePremier4-specific "Save/Revert Screen Memory Changes" action, only
-		// live-confirmed against a real Aquilon (LivePremier4) so far. Midra addresses its screen-memory-load
-		// path differently (device/preset/bank/..., see deviceScreenMemory above) - needs its own live
-		// verification before enabling: what it does is revert a *loaded* memory to its saved state, which is a
-		// different command from the plain save below and has not been observed on the wire here.
+		'deviceUpdatePreset',
 		'deviceSaveScreenMemory',
 		'deviceAuxMemory',
 		'deviceMasterMemory',
@@ -1164,6 +1160,91 @@ export default class ActionsMidra extends Actions {
 	}
 
 	/**
+	 * MARK: Save/Revert Screen Memory Changes - Midra
+	 *
+	 * The WebRCS function behind the SM number in the editor's corner: a Screen Memory is loaded into a
+	 * preset, something gets changed, and the change is either written back into that memory or thrown away.
+	 *
+	 * Read off the wire on an Eikos 4K simulator (2026-09-22). Saving turned out to be **the same command**
+	 * as "Save Screen Memory to Slot" - there is no separate update command - just aimed at whichever slot is
+	 * currently loaded:
+	 *   device/preset/bank/control/save/screenList/items/{screen}/presetList/items/{PROGRAM|PREVIEW}
+	 *     /slotList/items/{slot}/pp/xRequest
+	 *
+	 * Reverting was not captured, so it is done by reloading the same memory, which is what restoring the
+	 * saved state means and produces the identical result whatever WebRCS does internally. That load command
+	 * came from the same capture, and note it nests the other way round - slot first, then screen, then
+	 * preset:
+	 *   device/preset/bank/control/load/slotList/items/{slot}/screenList/items/{screen}
+	 *     /presetList/items/{PROGRAM|PREVIEW}/pp/xRequest
+	 *
+	 * Both forms of the preset key are needed and they are not interchangeable: the command paths take the
+	 * logical PROGRAM/PREVIEW, while the loaded slot number is read from the screen's own physical UP/DOWN
+	 * bank. Screens only - Aux memories live in a separate bank.
+	 */
+	get deviceUpdatePreset() {
+		const deviceUpdatePreset = super.deviceUpdatePreset
+
+		deviceUpdatePreset.options[0]['choices'] = [
+			{ id: 'first', label: 'First/Only Selected Screen' },
+			{ id: 'sel', label: 'All Selected Screens' },
+			...this.choices.getScreenChoices(),
+		]
+
+		deviceUpdatePreset.callback = (action) => {
+			const screens = (action.options.screens === 'first'
+				? this.choices.getSelectedScreens().slice(0, 1)
+				: action.options.screens === 'sel'
+					? this.choices.getSelectedScreens()
+					: this.choices.getChosenScreenAuxes(action.options.screens)
+			).filter((screen) => screen.startsWith('S'))
+
+			return this.instance.serialize(screens, async () => {
+				const preset = this.choices.getPresetSelection(action.options.preset, true)
+				const unlockedScreens = new Set<string>()
+				const waitPromises: Promise<boolean>[] = []
+
+				for (const screen of screens) {
+					const platformId = this.choices.getScreenInfo(screen).platformId
+					// The physical bank key, not the logical one the commands use - this is where the device
+					// reports which memory is loaded and whether it has unsaved changes.
+					const bankKey = this.choices.getPreset(screen, action.options.preset)
+					const statusPath = ['DEVICE', 'device', 'screenList', 'items', platformId, 'presetList', 'items', bankKey, 'status', 'pp']
+					const slot = this.state.get([...statusPath, 'memoryId'])
+					// 0 means no memory is loaded into this preset, so there is nothing to save or revert.
+					if (!slot) continue
+
+					if (this.choices.isLocked(screen, preset)) {
+						if (!parseBoolean(action.options.unlockIfLocked)) continue
+						if (!unlockedScreens.has(screen)) {
+							this.choices.setScreenLock(screen, preset, false)
+							unlockedScreens.add(screen)
+						}
+					}
+
+					const path = action.options.mode === 'revert'
+						? ['device', 'preset', 'bank', 'control', 'load', 'slotList', 'items', String(slot), 'screenList', 'items', platformId, 'presetList', 'items', preset, 'pp', 'xRequest']
+						: ['device', 'preset', 'bank', 'control', 'save', 'screenList', 'items', platformId, 'presetList', 'items', preset, 'slotList', 'items', String(slot), 'pp', 'xRequest']
+					this.connection.sendWSmessage(path, false, true)
+					// Both operations end with the preset no longer carrying unsaved changes, which is the thing
+					// the user is actually waiting for - and the one signal that reads the same either way.
+					waitPromises.push(this.waitForStateValue([...statusPath, 'isModified'], (v) => v === false))
+					this.instance.sendXupdate()
+				}
+
+				await Promise.all(waitPromises)
+				if (parseBoolean(action.options.relockAfterChange)) {
+					for (const screen of unlockedScreens) {
+						this.choices.setScreenLock(screen, preset, true)
+					}
+				}
+			})
+		}
+
+		return deviceUpdatePreset
+	}
+
+	/**
 	 * MARK: Save Screen Memory to Slot - Midra
 	 *
 	 * Read off the wire on an Eikos 4K simulator (2026-09-22) by watching the websocket while a Screen Memory
@@ -1185,7 +1266,6 @@ export default class ActionsMidra extends Actions {
 	get deviceSaveScreenMemory() {
 		const deviceSaveScreenMemory = super.deviceSaveScreenMemory
 
-		deviceSaveScreenMemory.name = 'LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory)'
 		deviceSaveScreenMemory.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, ...this.choices.getScreenChoices()]
 		deviceSaveScreenMemory.options[0]['tooltip'] = 'A Screen Memory always holds exactly one Screen\'s state, so there is no multi-selection here, unlike Recall - an expression resolving to several Screens uses the first one. Auxes are not offered: they have their own separate Aux Memory bank on this platform.'
 

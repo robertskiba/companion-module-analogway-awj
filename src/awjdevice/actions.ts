@@ -216,7 +216,7 @@ export default class Actions {
 	 */
 	get deviceUpdatePreset() {
 		const returnAction: AWJaction<{ screens: string, preset: string, mode: string, unlockIfLocked: boolean, relockAfterChange: boolean }> = {
-			name: 'LIVE - Save/Revert Screen Memory Changes (Aquilon)',
+			name: 'LIVE - Save/Revert Screen Memory Changes',
 			sortName: '01 LIVE - 17 Save/Revert Screen Memory Changes',
 			description: 'Mirrors the Save/Revert function in the top-right corner of the WebRCS editor, where you click the SM number to either save your current changes or restore the Screen Memory to its previously saved state. Does nothing on a Screen/Preset where no Screen Memory is currently loaded. Waits for the device to confirm before returning - only actually delays a following action when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
@@ -276,7 +276,7 @@ export default class Actions {
 	 */
 	get deviceSaveScreenMemory() {
 		const returnAction: AWJaction<{ screens: string, preset: string, memory: string, label: string, action: string, allowExisting: boolean }> = {
-			name: 'LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory) (Aquilon)',
+			name: 'LIVE - Save Screen Memory to Slot (+ edit label/delete Screen Memory)',
 			sortName: '01 LIVE - 18 Save Screen Memory to Slot',
 			description: 'Saves the current live Layer configuration of a Screen/Aux\'s Program or Preview preset into a chosen Screen Memory slot (either an explicitly picked one, overwriting whatever is saved there, or the next currently-empty slot) - or, instead, just renames or deletes an existing Screen Memory slot without touching any live Screen. Unlike "Save/Revert Screen Memory Changes", saving here does not require the slot to already be loaded - it can save into any slot, used or empty. Waits for the device to confirm before returning - only actually delays a following action (e.g. another "Save to Slot" targeting "Next Available") when both are inside a Sequential Action Group (a plain action list runs everything at once regardless).',
 			options: [
