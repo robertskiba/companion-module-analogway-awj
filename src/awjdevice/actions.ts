@@ -1135,15 +1135,17 @@ export default class Actions {
 				for (const screen of targetScreens) {
 					if (action.options.value === 'tbar') {
 						const delta0to100 = hasRaw ? Number(rawStr) : Number(pctStr)
-						const groupPath = [...this.constants.screenGroupPath, 'items', screen, 'control', 'pp']
+						// platformId, not the 'S1'-style id - Midra keys this list by the bare number. Identical on
+						// LivePremier, where platformId is the 'S1' form.
+						const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
 						const current = this.state.get(['DEVICE', ...groupPath, 'tbarPosition']) ?? 0
 						const newValue = Math.round(Math.min(65535, Math.max(0, current + direction * delta0to100 / 100 * 65535)))
 						this.connection.sendWSmessage([...groupPath, 'tbarPosition'], newValue)
 					} else {
 						const deltaDeciseconds = hasRaw ? Number(rawStr) : Number(pctStr) / 100 * 3000
-						const groupPath = [...this.constants.screenGroupPath, 'items', screen, 'control', 'pp']
+						const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screen).platformId, 'control', 'pp']
 						const presetPgm = this.choices.getPreset(screen, 'PGM')
-						const adjust = (prop: 'takeUpTime' | 'takeDownTime') => {
+						const adjust = (prop: 'takeUpTime' | 'takeDownTime' | 'takeTime') => {
 							const current = this.state.get(['DEVICE', ...groupPath, prop]) ?? 0
 							const newValue = Math.round(Math.min(3000, Math.max(0, current + direction * deltaDeciseconds)))
 							this.connection.sendWSmessage([...groupPath, prop], newValue)
@@ -1152,11 +1154,18 @@ export default class Actions {
 						// A, takeUpTime is "pgm" and takeDownTime is "pvw" - and vice versa when PGM is B
 						// 'prw' (current) and 'pvw' (kept for backward compatibility, see choicesPreset) mean the same thing
 						const preset = ['prw', 'prv'].includes(action.options.preset?.toLowerCase()) ? 'pvw' : action.options.preset
-						if (preset === 'all' || (preset === 'pgm' && presetPgm === 'B') || (preset === 'pvw' && presetPgm === 'A')) {
-							adjust('takeDownTime')
-						}
-						if (preset === 'all' || (preset === 'pvw' && presetPgm === 'B') || (preset === 'pgm' && presetPgm === 'A')) {
-							adjust('takeUpTime')
+						// Midra has one takeTime covering both directions rather than LivePremier's
+						// takeUpTime/takeDownTime pair, so the Preset choice has nothing to select between there.
+						// Keyed off the field actually existing, which keeps LivePremier on its two-field path.
+						if (this.state.get(['DEVICE', ...groupPath, 'takeUpTime']) === undefined) {
+							adjust('takeTime')
+						} else {
+							if (preset === 'all' || (preset === 'pgm' && presetPgm === 'B') || (preset === 'pvw' && presetPgm === 'A')) {
+								adjust('takeDownTime')
+							}
+							if (preset === 'all' || (preset === 'pvw' && presetPgm === 'B') || (preset === 'pgm' && presetPgm === 'A')) {
+								adjust('takeUpTime')
+							}
 						}
 					}
 				}
@@ -4704,14 +4713,20 @@ export default class Actions {
 		// preset (A/B) side of this screen into program, and returns it in milliseconds - or undefined if the
 		// screen's presetUp/presetDown assignment can't be read.
 		const getRelevantTransitionMs = (screenAuxKey: string, presetKey: string): number | undefined => {
-			const groupPath = [...this.constants.screenGroupPath, 'items', screenAuxKey, 'control', 'pp']
+			// platformId, not the 'S1'-style id: Midra keys this list by the bare number, so the old path
+			// resolved to nothing there and every Timing write was silently skipped. Same on LivePremier,
+			// where platformId *is* the 'S1' form.
+			const groupPath = [...this.constants.screenGroupPath, 'items', this.choices.getScreenInfo(screenAuxKey).platformId, 'control', 'pp']
 			const presetUp = this.state.get(['DEVICE', ...groupPath, 'presetUp'])
 			const presetDown = this.state.get(['DEVICE', ...groupPath, 'presetDown'])
 			const deciseconds = presetKey === presetUp
 				? this.state.get(['DEVICE', ...groupPath, 'takeUpTime'])
 				: presetKey === presetDown
 					? this.state.get(['DEVICE', ...groupPath, 'takeDownTime'])
-					: undefined
+					// Midra has neither presetUp/presetDown nor a per-bank take time - a single takeTime covers
+					// both directions. Absent on LivePremier, so this still yields undefined there, exactly as
+					// the previous explicit `undefined` did.
+					: this.state.get(['DEVICE', ...groupPath, 'takeTime'])
 			return typeof deciseconds === 'number' ? deciseconds * 100 : undefined
 		}
 
