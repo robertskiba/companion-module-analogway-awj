@@ -16,8 +16,8 @@ These are called out in `CHANGELOG.md`'s "Midra / Alta - Known Gaps" section. Ea
 - [ ] **"Layer Properties - Cut&Fill" action** - not registered for Midra. Check whether the simulator's layer object has a `cutNFill` property at all; if yes, register `deviceLayerCutFillV3` and test against it; if no, confirm Cut&Fill genuinely doesn't exist on Midra (same way Keying was confirmed absent).
 - [ ] **"Layer Properties - Cut&Fill Source" feedback** - same as above, tied to the same registration.
 - [ ] **`canUseMask` capability guard** - only registered for LivePremier4. Check whether Midra layers expose an equivalent `status.pp.canUseMask` (or similarly-named) flag; if Cut&Fill turns out not to exist on Midra at all, this becomes moot.
-- [ ] **Midra's `INPUT_n` vs. this module's `IN{n}` id convention** - confirm live whether `INPUT_n` is really what the device expects on the wire, or just an artifact of `getLiveInputArray()`'s id reconstruction. This affects every Source dropdown built from `getSourceChoices()` (Layer Properties - Source, Cut&Fill, Source Tally, ...) - if it's a real wire-level id, this module's short-id conversion needs to learn to recognize it too.
-- [ ] **Duplicate `sourceFront`/`sourceBack` option fields** in Midra's `deviceSelectSourceV3` override (`src/midra/actions.ts`) - defined twice with conflicting shapes (textinput vs. dropdown). Clean up as its own small fix; retest "Layer Properties - Source" afterward to make sure nothing regresses.
+- [x] **Midra's `INPUT_n` vs. this module's `IN{n}` id convention** - resolved (2026-09-22, Eikos 4K simulator): `INPUT_n` is the device's real wire-level id, not an artifact - both `device/inputList`'s item keys and a layer's `source/pp/input` read `INPUT_1`, the same namespace on both sides. The short-id conversion now recognises it and converts back per platform, so every Source dropdown shows `IN{n}`. Round-trip verified live (picked `IN2`, device received `INPUT_2`, Learn returned `IN2`).
+- [x] **Duplicate `sourceFront`/`sourceBack` option fields** in Midra's `deviceSelectSourceV3` override - resolved. Worse than a cosmetic duplicate: the two definitions used different "don't change" sentinels (`''` vs `'keep'`) against a callback checking `!== ''`, so whichever won, one path was wrong. Both fields are gone entirely - the Aux background and the foreground frame are now driven by the single shared "Source" field, with per-target validation. Companion no longer logs the duplicate-id warning. Retested live: Aux background, Foreground image, Background Set and Color all apply correctly.
 
 ---
 
@@ -27,6 +27,7 @@ Live-confirmed missing in earlier sessions. Just needs a quick sanity check that
 
 - [ ] **Backup** (Input Backup + Background Set Backup) - actions/feedbacks/variables should not appear at all for a Midra connection.
 - [ ] **Layer Properties - Keying** - action should not appear at all for a Midra connection.
+- [x] **Layer Memories** - confirmed genuinely absent (2026-09-22, Eikos 4K simulator state): `device/preset` holds only `bank` (200 Screen Memory slots), `auxBank` (200) and `masterBank` (50), with no layer bank of any kind. The commented-out `deviceLayerMemory` action and the missing `layerMemoryLabel`/`layerMemoriesChange` subscriptions are correct, not an oversight, so there is no `LM{n}.label` on Midra. Nothing to enable.
 
 ---
 
@@ -81,7 +82,7 @@ For every item below: single Layer, "All Selected Layers"/"First/Only Selected L
 
 - [ ] Timer Setup / Adjust Time / Transport.
 - [ ] Timer State feedback.
-- [ ] `TIMER{n}.value`/`.hms`/`.h`/`.m`/`.s` variables - note these are currently gated to LivePremier4 firmware 4.03.38+; confirm what Midra's actual equivalent behavior/gate should be (untested assumption right now).
+- [x] `TIMER{n}.value`/`.hms`/`.h`/`.m`/`.s` variables - confirmed impossible on Midra (2026-09-22, Eikos 4K simulator state): a timer carries only `control/pp` (type, label, `countdownDuration`, the transport flags) and `status/pp/state`. The device reports no running time at all, so there is nothing to expose - `countdownDuration` is the configured length, not a live value. The `timerValue` subscription staying LivePremier4-only is correct; only `TIMER{n}.status` exists here. Nothing to enable.
 
 ## 7. Audio
 
@@ -120,6 +121,7 @@ Things this session touched broadly that are worth spot-checking specifically on
 
 - [ ] sortName ordering - action/feedback picker groups appear in the documented order (LIVE → Multiviewer → Layer Properties → Timers → Audio → Preconfig → Device → Custom Commands) with nothing missing or duplicated for Midra's specific action set.
 - [ ] Dynamic dropdowns (Screens, Inputs, Layers, Images, Memories, Timers, Outputs) behave correctly while disconnected and immediately after connecting to the simulator - full theoretical range offline, real range once connected, no stale entries after a reconnect.
+- [x] Platform constants match the real device (2026-09-22, Eikos 4K simulator state): Inputs 16, Screen Memories 200, Master Memories 50, Multiviewer Memories 20, Stills 50, Timers 3 - all exactly as declared in `src/midra/constants.ts`. The device additionally reports 4 Screens, 4 Aux screens, 7 Outputs and 27 Multiviewer widgets. One loose end, cosmetic only: `auxMemoryLabel`'s `ini` hardcodes `200` (`src/awjdevice/subscriptions.ts`) instead of a constant, and no `maxAuxMemories` exists - the number happens to be right.
 - [ ] Expression Mode / local variables work on every option field that should support them (spot-check a handful across different action families, not just Layer Properties).
 - [ ] "(Midra/Alta)" name suffixes - once everything above is confirmed working, this is the point where those suffixes get removed from the Midra-tested items (leave Alta-only-relevant uncertainty in place until RC3, if the code truly can't tell them apart yet).
 
