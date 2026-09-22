@@ -8134,7 +8134,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 		const deviceFailoverToHotBackup: AWJaction<DeviceFailoverToHotBackup> = {
 			name: 'Device - Failover to Hot Backup',
 			sortName: '07 Device - Failover to Hot Backup',
-			description: 'Swaps the Hot Backup Device address with the current Device Network Address, then reconnects to what was the Hot Backup Device - use this immediately if the main device fails during a show. The old main device becomes the new Hot Backup Device address, so this action is also how you swap back afterwards. Requires "Enable Hot Backup Device" to be checked and a valid Hot Backup Device Address configured; does nothing otherwise.',
+			description: 'Swaps the Hot Backup Device address with the current Device Network Address, then reconnects to what was the Hot Backup Device - use this immediately if the main device fails during a show. The old main device becomes the new Hot Backup Device address, so this action is also how you swap back afterwards. Requires "Enable Hot Backup Device" to be checked and a valid Hot Backup Device Address configured; does nothing otherwise. If "Button to Press on Failover" is configured in this connection\'s config, that Companion button is also pressed every time - e.g. to switch a video router/crossbar at the same moment - and swapped with "...Failback" alongside the addresses, so it always targets the currently-correct physical button.',
 			options: [
 				{
 					id: 'currentMainDeviceInfo',
@@ -8205,6 +8205,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				const oldMainAddr = this.instance.config.deviceaddr
 				this.instance.config.deviceaddr = backupAddr
 				this.instance.config.hotBackupAddress = oldMainAddr
+				// There's no fixed Main/Backup button either, same as the addresses above - "Button to Press on
+				// Failover" always means "switch to whatever is currently configured as Backup", which is
+				// exactly what every trigger of this action does from the real hardware's perspective (the
+				// device that was Backup a moment ago is now becoming Main). So the Failover button is always
+				// the one actually pressed below; swap the two fields the same way as the addresses so the
+				// button just pressed becomes the "switch back" one, ready for the next trigger.
+				const buttonToPress = this.instance.config.hotBackupFailoverButton
+				this.instance.config.hotBackupFailoverButton = this.instance.config.hotBackupFailbackButton
+				this.instance.config.hotBackupFailbackButton = buttonToPress
 				// saveConfig() called BY THE MODULE ITSELF (as opposed to the user editing a field in
 				// Companion's UI) only persists/displays the new values - confirmed live (2026-09-05) that it
 				// does NOT loop back into configUpdated(), so the "deviceaddr changed -> reconnect" logic
@@ -8217,6 +8226,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				this.connection.connect(backupAddr)
 				this.connection.updateBackupConnection()
 				this.instance.log('warn', `Failed over: now connecting to the former Hot Backup Device (${backupAddr}). The old main device (${oldMainAddr}) is now configured as the Hot Backup Device.`)
+				// Not awaited - see pressCompanionButton()'s own doc comment on why this must never block the
+				// actual device failover.
+				this.connection.pressCompanionButton(buttonToPress, this.instance.config.hotBackupApiPort)
 			}
 		}
 

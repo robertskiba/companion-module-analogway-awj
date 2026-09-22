@@ -39,6 +39,9 @@ export interface Config extends JsonObject {
 	hotBackupAddress: string
 	hotBackupAutoFailover: boolean
 	hotBackupFailoverTimeout: number
+	hotBackupFailoverButton: string
+	hotBackupFailbackButton: string
+	hotBackupApiPort: string
 }
 
 export interface FoundDevice {
@@ -383,6 +386,33 @@ export function GetConfigFields(config?: Config, cardSummaries?: DeviceCardSumma
 			default: 20,
 			min: 3,
 			max: 300,
+			width: 12,
+		}] : []),
+		...(config?.hotBackupEnabled ? [{
+			id: 'hotBackupFailoverButton',
+			type: 'textinput' as const,
+			label: 'Button to Press on Failover (switch to Backup)',
+			tooltip:
+				'Optional - a Companion button location to press (down + up) every time "Device - Failover to Hot Backup" is triggered. Useful for switching something else at the same moment, e.g. a video router/crossbar feeding the same output. This field always means "switch to whatever is currently the Backup Device" - since there is no fixed Main/Backup (the two roles simply swap in this config on every trigger, same as Device Network Address/Hot Backup Device Address above), this field and "...Failback" below swap along with them, so it always points at the right physical button without you having to re-enter anything. Format is a Companion location string "page/row/column", exactly as shown by that button\'s own right-click menu -> Copy Location (e.g. "1/0/0"). Left empty, nothing is pressed.',
+			default: '',
+			width: 12,
+		},
+		{
+			id: 'hotBackupFailbackButton',
+			type: 'textinput' as const,
+			label: 'Button to Press on Failback (switch to Main)',
+			tooltip:
+				'The other button - switches back to whatever is currently the Main Device. Not pressed directly: it just holds that button\'s location until the next trigger swaps it into "Button to Press on Failover" above (see that field\'s tooltip). Only fill in both fields once, when first setting this up.',
+			default: '',
+			width: 12,
+		},
+		{
+			id: 'hotBackupApiPort',
+			type: 'textinput' as const,
+			label: 'Companion HTTP API Port (for the buttons above)',
+			tooltip:
+				'Only used if a button is configured above. This is Companion\'s own Admin GUI port (Settings -> Admin GUI Port in Companion) - default 8000, change only if you have customized it.',
+			default: '8000',
 			width: 12,
 		}] : []),
 		{

@@ -866,6 +866,27 @@ class AWJconnection {
 			.finally(() => { this.isScanningNetwork = false })
 	}
 
+	/**
+	 * Presses (down, then up) a button on this same Companion instance via Companion's own local HTTP API -
+	 * used by "Device - Failover to Hot Backup" to optionally trigger something else (e.g. a video
+	 * router/crossbar) at the same moment as the failover/failback. `location` is a Companion location string
+	 * "page/row/column", exactly what that button's own right-click menu -> Copy Location gives. Does nothing
+	 * if `location` is empty (feature not configured). Fire-and-forget from the caller's perspective: errors
+	 * are logged, never thrown, so a misconfigured/unreachable Companion API can never block the actual device
+	 * failover itself.
+	 */
+	async pressCompanionButton(location: string | undefined, port: string | undefined): Promise<void> {
+		const loc = location?.trim()
+		if (!loc) return
+		const base = `http://127.0.0.1:${port?.trim() || '8000'}/api/location/${loc}`
+		try {
+			await ky.post(`${base}/down`, { timeout: 3000, retry: 0 })
+			await ky.post(`${base}/up`, { timeout: 3000, retry: 0 })
+		} catch (error: any) {
+			this.instance.log('error', `Failed to press Companion button "${loc}" via the HTTP API (port ${port?.trim() || '8000'}): ${error?.message ?? error}`)
+		}
+	}
+
 	async downloadDevicestate(urlObj: URI) {
 		let downloaded = 0
 		this.instance.updateStatus(InstanceStatus.Connecting, `Syncing`)

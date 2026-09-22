@@ -264,6 +264,9 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.config.hotBackupAddress = 'http://192.168.2.141'
 			this.config.hotBackupAutoFailover = false
 			this.config.hotBackupFailoverTimeout = 20
+			this.config.hotBackupFailoverButton = ''
+			this.config.hotBackupFailbackButton = ''
+			this.config.hotBackupApiPort = '8000'
 			this.saveConfig(this.config)
 		}
 
