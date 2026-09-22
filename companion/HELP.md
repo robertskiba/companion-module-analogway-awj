@@ -396,7 +396,11 @@ Assigns which physical connector an Input listens on.
 ### Preconfig - Inputs - Set Input Keying
 
 Available at: LivePremier, Alta 4K, Midra 4K  
-Remember that keying is not a functionality done in the layer but in the input. If you change keying it will immediately impact all occurences of that input in any layer on preview and program. The Mode choices also include CremaTTe3D (a more precise external keying system) and Cut&Fill - on LivePremier, Cut&Fill requires firmware 4.0.254 or newer; on Alta/Midra, whether either mode is actually supported by the device has not been confirmed yet.
+Remember that keying is not a functionality done in the layer but in the input. If you change keying it will immediately impact all occurences of that input in any layer on preview and program.
+
+Every Input offers Keying Disabled, Chroma Key and Luma Key. Beyond that the series differ:
+- **LivePremier** adds CremaTTe3D (a more precise external keying system) and Cut&Fill, the latter requiring firmware 4.0.254 or newer.
+- **Alta 4K / Midra 4K** have no CremaTTe3D at all, so it is not offered there. Cut&Fill is offered but works only on **odd-numbered Inputs**: the odd Input carries the Fill and the even one immediately after it automatically becomes the Cut, so the two always work as a pair (Input 1 + 2, Input 3 + 4, and so on). Selecting it on an even Input does nothing - the module asks the device which Inputs can do it rather than assuming.
 
 **Feedback: Preconfig - Inputs - Input Keying Status** - Available at: LivePremier, Alta 4K, Midra 4K. Shows whether an Input's own keying mode currently matches a selected value - the read-side of the action above.
 

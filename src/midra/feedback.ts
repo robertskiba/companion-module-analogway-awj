@@ -307,6 +307,19 @@ export default class FeedbacksMidra extends Feedbacks  {
 	get deviceInputKeyingStatus() {
 		const deviceInputKeyingStatus = super.deviceInputKeyingStatus
 
+		// Same list as the action's - CremaTTe3D is Aquilon-only and does not exist here, and Cut&Fill drops
+		// the inherited Aquilon firmware note, which Midra's own numbering can never satisfy. Kept in step with
+		// the action so a button's feedback can check exactly what the action can set.
+		const modeField = deviceInputKeyingStatus.options.find((opt) => opt.id === 'mode')
+		if (modeField) {
+			modeField['choices'] = [
+				{ id: 'DISABLE', label: 'Keying Disabled' },
+				{ id: 'CHROMA', label: 'Chroma Key' },
+				{ id: 'LUMA', label: 'Luma Key' },
+				{ id: 'CUT_AND_FILL', label: 'Cut&Fill (odd-numbered Inputs only)' },
+			]
+		}
+
 		deviceInputKeyingStatus.callback = (feedback) => {
 			const match = (feedback.options.input ?? '').toString().match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
 			if (!match) return false

@@ -937,21 +937,46 @@ export default class ActionsMidra extends Actions {
 	get deviceInputKeying() {
 		const deviceInputKeying = super.deviceInputKeying
 
+		// CremaTTe3D is an Aquilon-only keying system and does not exist here at all, so it is dropped rather
+		// than left in the list to be silently ignored - same treatment as "Wipe 2" and the Speed Linear switch.
+		// Cut&Fill loses its inherited firmware gate: that gate names an Aquilon version (4.0.254), and Midra's
+		// firmware is numbered in a completely different series, so isFirmwareAtLeast() can never be true and
+		// the mode was blocked outright on every Midra. The device answers the question directly instead, per
+		// input - see the callback below.
+		const modeField = deviceInputKeying.options.find((opt) => opt.id === 'mode')
+		if (modeField) {
+			modeField['choices'] = [
+				{ id: 'DISABLE', label: 'Keying Disabled' },
+				{ id: 'CHROMA', label: 'Chroma Key' },
+				{ id: 'LUMA', label: 'Luma Key' },
+				{ id: 'CUT_AND_FILL', label: 'Cut&Fill (odd-numbered Inputs only)' },
+			]
+		}
+
 		deviceInputKeying.callback = (action) => {
 			// The dropdown's own choices (inherited unchanged from the base action) use this module's short
 			// 'IN{n}' convention (e.g. 'IN3', no underscore) - a plain '.replace(\'IN_\', \'INPUT_\')' never
 			// matched that (only the old V2-style 'IN_3'), so a fresh, untouched dropdown selection silently
 			// targeted a nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'. Same lenient
 			// bare-number/'IN{n}'/'IN_{n}' extraction the Aquilon version of this action already uses.
-			// Carries over the base callback's Cut&Fill guard, which this override used to drop - without it the
-			// Mode dropdown showed Cut&Fill as unavailable while the action happily sent it anyway. The device
-			// does expose a per-input capability flag for this (status/keying/cutNFill/pp/isAvailable, seen true
-			// on an Eikos 4K simulator), which would be a far better gate than a version number - see the Midra
-			// Known Gaps entry before enabling it.
-			if (action.options.mode === 'CUT_AND_FILL' && !this.choices.isFirmwareAtLeast('4.0.254')) return
 			const match = (action.options.input ?? '').match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
 			if (!match) return
 			const input = `INPUT_${match[1]}`
+			// Cut&Fill pairs two inputs: the odd-numbered one carries the Fill and the even one that follows it
+			// automatically becomes the Cut, so only an odd input can be switched into the mode. The device says
+			// so itself per input, which is what this asks rather than inferring it from the number - live-
+			// confirmed on an Eikos 4K simulator, where status/keying/cutNFill/pp/isAvailable is true for Inputs
+			// 1, 3, 5, 7 and 9 and false for 2, 4, 6, 8 and 10, and each odd input's cutNFill source already
+			// names its own even partner (INPUT_1 -> INPUT_2, and so on).
+			//
+			// Deliberately not the inherited firmware gate: that names an Aquilon version, which Midra's own
+			// numbering can never satisfy, so it blocked the mode on every Midra regardless of the hardware.
+			// The neighbouring flag status/keying/pp/isAvailable is NOT a usable gate for Chroma/Luma - it reads
+			// false on every input here, including one actively set to LUMA.
+			if (
+				action.options.mode === 'CUT_AND_FILL' &&
+				this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'status', 'keying', 'cutNFill', 'pp', 'isAvailable']) !== true
+			) return
 			this.connection.sendWSmessage(
 				[
 					'device',
