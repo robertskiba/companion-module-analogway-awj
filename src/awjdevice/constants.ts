@@ -51,12 +51,16 @@ export default class Constants {
     static readonly propsCroppingPath = ['cropping', 'classic', 'pp']
     static readonly propsMaskPath = ['cropping', 'mask', 'pp']
 
-    /** The property under a layer's `source/pp` that names its source. LivePremier calls it `inputNum`,
-     * Midra/Alta calls it `input` (live-confirmed on an Eikos 4K simulator). */
+    /** Tail of the path that tells which preset bank is currently live, appended to screenGroupPath.
+     * LivePremier exposes it as control/pp/presetUp, Midra/Alta as status/pp/transition. */
+    static readonly presetSideIndicator: string[] = ['control', 'pp', 'presetUp']
+
     /** The two `speed/pp/type` enum values, or null on a platform that has no Linear/Smooth speed switch at
      * all - Midra/Alta only offers Pt1/Pt2 and stores a plain 'SMOOTH', so there is nothing to write there. */
     static readonly layerSpeedTypes: { linear: string, smooth: string } | null = { linear: 'LINEAR_TRANSITION', smooth: 'SMOOTH_TRANSITION' }
 
+    /** The property under a layer's `source/pp` that names its source. LivePremier calls it `inputNum`,
+     * Midra/Alta calls it `input` (live-confirmed on an Eikos 4K simulator). */
     static readonly layerSourceProp: string = 'inputNum'
     /** Prefix of `device/inputList`'s own item keys, and of the id a layer stores for a live input.
      * LivePremier uses `IN_` (with `LIVE_` appearing as the layer-side spelling), Midra/Alta uses `INPUT_`

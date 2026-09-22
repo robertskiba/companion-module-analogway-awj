@@ -49,6 +49,7 @@ export default class ConstantsMidra extends Constants {
     static override readonly propsPositionPath = ['position', 'pp']
     static override readonly propsCroppingPath = ['crop', 'pp']
     static override readonly propsMaskPath = ['mask', 'pp']
+    static override readonly presetSideIndicator = ['status', 'pp', 'transition']
     static override readonly layerSpeedTypes = null
     static override readonly layerSourceProp = 'input' as const
     static override readonly inputKeyPrefix = 'INPUT_' as const

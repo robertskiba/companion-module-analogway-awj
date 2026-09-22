@@ -969,14 +969,14 @@ export default class Subscriptions {
 		const availablePath = (num: string) => `DEVICE/device/inputList/items/${this.constants.inputKeyPrefix}${num}/status/pp/isAvailable`
 
 		return {
-			pat: 'device/inputList/items/IN_(\\d+)/control/pp/freeze',
+			pat: `device/inputList/items/${this.constants.inputKeyPrefix}(\\d+)/control/pp/freeze`,
 			fbk: 'deviceInputFreeze',
 			ini: () => {
 				this.instance.removeVariable('inputFreeze')
 				for (let i = 1; i <= this.constants.maxInputs; i += 1) {
 					if (!this.instance.state.get(availablePath(i.toString()))) continue
 					this.instance.addVariable({ id: 'inputFreeze', variableId: `IN${i}.freeze`, name: `Freeze state of Input ${i}` })
-					this.instance.setVariableValues({ [`IN${i}.freeze`]: !!this.instance.state.get(`DEVICE/device/inputList/items/IN_${i}/control/pp/freeze`) })
+					this.instance.setVariableValues({ [`IN${i}.freeze`]: !!this.instance.state.get(`DEVICE/device/inputList/items/${this.constants.inputKeyPrefix}${i}/control/pp/freeze`) })
 				}
 				return []
 			},
@@ -1659,12 +1659,12 @@ export default class Subscriptions {
 		const screenOrAux = `(?:${this.constants.screenPath.join('/')}|${this.constants.auxPath.join('/')})/items/\\w+`
 		const numberedLayerSegment = this.instance.choices.getLayerPath('1')[0]
 		const bgSegments = this.instance.choices.getLayerPath('NATIVE').join('/')
-		const presetUpPat = `${this.constants.screenGroupPath.join('/')}/items/\\w+/control/pp/presetUp`
-		const inputSignalPat = 'device/inputList/items/IN_\\d+/plugList/items/\\w+/status/signal/pp/isValid'
+		const presetUpPat = `${this.constants.screenGroupPath.join('/')}/items/\\w+/${this.constants.presetSideIndicator.join('/')}`
+		const inputSignalPat = `device/inputList/items/${this.constants.inputKeyPrefix}\\d+/plugList/items/\\w+/status/signal/pp/isValid`
 		const anchorPat = 'live/screens/layers/anchorPoint'
 
 		return {
-			pat: `(?:${screenOrAux}/(?:status/pp/(?:layerCount|mode)|presetList/items/\\w+/(?:${numberedLayerSegment}/items/\\d+/(?:source/pp/(?:inputNum|input)|position/pp/(?:posH|posV|sizeH|sizeV))|${bgSegments}/source/pp/(?:inputNum|input)))|${presetUpPat}|${inputSignalPat}|${anchorPat})`,
+			pat: `(?:${screenOrAux}/(?:status/pp/(?:layerCount|mode)|presetList/items/\\w+/(?:${numberedLayerSegment}/items/\\d+/(?:source/pp/(?:inputNum|input)|${this.constants.propsPositionPath.join('/')}/(?:posH|posV)|${this.constants.propsSizePath.join('/')}/(?:sizeH|sizeV))|${bgSegments}/source/pp/(?:inputNum|input)))|${presetUpPat}|${inputSignalPat}|${anchorPat})`,
 			ini: () => {
 				this.refreshLayerVariables()
 				return []
