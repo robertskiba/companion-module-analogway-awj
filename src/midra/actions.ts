@@ -1274,31 +1274,75 @@ export default class ActionsMidra extends Actions {
 	get deviceSaveScreenMemory() {
 		const deviceSaveScreenMemory = super.deviceSaveScreenMemory
 
-		deviceSaveScreenMemory.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, ...this.choices.getScreenChoices()]
-		deviceSaveScreenMemory.options[0]['tooltip'] = 'A Screen Memory always holds exactly one Screen\'s state, so there is no multi-selection here, unlike Recall - an expression resolving to several Screens uses the first one. Auxes are not offered: they have their own separate Aux Memory bank on this platform.'
+		deviceSaveScreenMemory.name = 'LIVE - Save Screen/Aux Memory to Slot (+ edit label/delete Memory)'
+		deviceSaveScreenMemory.options[0]['label'] = 'Screen / Aux'
+		deviceSaveScreenMemory.options[0]['choices'] = [{ id: 'first', label: 'First/Only Selected Screen' }, ...this.choices.getScreenAuxChoices()]
+		deviceSaveScreenMemory.options[0]['tooltip'] = 'A memory always holds exactly one Screen\'s or Aux\'s state, so there is no multi-selection here, unlike Recall - an expression resolving to several uses the first one. Which memory bank is written follows from this choice: a Screen goes to the Screen Memories, an Aux to the separate Aux Memories.'
+
+		// Screens and Auxes have separate 200-slot banks, so they get a dropdown each rather than one merged
+		// 400-entry list, with only the relevant one shown. Visibility follows the Screen/Aux field, which can
+		// only be judged statically when it names a concrete target - with "First/Only Selected Screen" either
+		// is possible, so both stay visible and the callback picks the bank from the target it actually
+		// resolves. That resolution is the authority either way; this is only about keeping the form tidy.
+		const bankNote = ' Screens and Auxes use entirely separate memory banks on this platform, so a Screen is always saved into a Screen Memory and an Aux into an Aux Memory - whichever of the two fields matches your Screen/Aux choice above is the one that applies.'
+		const memoryField = deviceSaveScreenMemory.options.find((opt) => opt.id === 'memory') as CompanionInputFieldDropdown | undefined
+		if (memoryField) {
+			memoryField.label = 'Screen Memory'
+			memoryField.tooltip = 'Only used when the target is a Screen.' + bankNote
+			memoryField.isVisibleExpression = "indexOf($(options:screens), 'A') != 0"
+		}
+		const auxMemoryField: CompanionInputFieldDropdown = {
+			id: 'memoryAux',
+			allowInvalidValues: true,
+			type: 'dropdown',
+			label: 'Aux Memory',
+			tooltip: 'Only used when the target is an Aux.' + bankNote,
+			choices: [{ id: 'next', label: 'Next Available (first empty slot)' }, ...this.choices.getAllAuxMemorySlotChoices()],
+			default: 'next',
+			isVisibleExpression: "indexOf($(options:screens), 'A') == 0 || $(options:screens) == 'first'",
+		}
+		deviceSaveScreenMemory.options.splice(deviceSaveScreenMemory.options.indexOf(memoryField as never) + 1, 0, auxMemoryField)
 
 		deviceSaveScreenMemory.callback = (action) => {
-			const slot = action.options.memory === 'next' ? this.choices.getNextAvailableScreenMemorySlot() : stripMemoryPrefix(action.options.memory, 'SM')
-			if (!slot) return Promise.resolve()
-
 			// Serialized on the slot (two buttons racing for the same one) and, for a save, on the source
 			// screen too - same reasoning as the Aquilon version. Relabel and delete touch no live Screen.
 			const screen = action.options.action === 'save'
-				? (action.options.screens === 'first' ? this.choices.getSelectedScreens() : this.choices.getChosenScreenAuxes(action.options.screens)).filter((scr) => scr.startsWith('S'))[0]
+				? (action.options.screens === 'first' ? this.choices.getSelectedScreens() : this.choices.getChosenScreenAuxes(action.options.screens))[0]
 				: undefined
-			const keys = [`SM:${slot}`, ...(screen ? [screen] : [])]
+			if (action.options.action === 'save' && !screen) return Promise.resolve()
+
+			// The bank follows the resolved target, which is the thing that cannot be wrong. Relabel and delete
+			// have no target at all - they act on the bank alone - so there the Aux field decides: it is only
+			// visible when an Aux is, or could be, chosen, and its slot is taken whenever it names one.
+			// memoryAux is this platform's own extra field, not part of the shared action's option type.
+			const options = action.options as typeof action.options & { memoryAux?: string }
+			const auxChosen = String(options.memoryAux ?? '')
+			const isAux = screen !== undefined
+				? this.choices.getScreenInfo(screen).isAux
+				: auxChosen !== '' && auxChosen !== 'next' && String(action.options.screens ?? '').startsWith('A')
+
+			const kind = isAux ? 'Aux' : 'Screen'
+			const chosen = String((isAux ? options.memoryAux : options.memory) ?? '')
+			const slot = chosen === 'next'
+				? (isAux ? this.choices.getNextAvailableAuxMemorySlot() : this.choices.getNextAvailableScreenMemorySlot())
+				: stripMemoryPrefix(chosen, isAux ? 'AM' : 'SM')
+			if (!slot) return Promise.resolve()
+
+			const keys = [`${isAux ? 'AM' : 'SM'}:${slot}`, ...(screen ? [screen] : [])]
 
 			return this.instance.serialize(keys, async () => {
-				const alreadyValid = this.choices.getScreenMemoryArray().some((mem) => mem.id === slot)
+				const alreadyValid = (isAux ? this.choices.getAuxMemoryArray() : this.choices.getScreenMemoryArray()).some((mem) => mem.id === slot)
 				// Says so in the log rather than just returning: the guard covers relabel and delete as well as
 				// save, so with it unchecked those two do nothing on any slot that has content - which is every
 				// slot worth relabelling. Silently doing nothing is what makes that expensive to work out.
 				if (alreadyValid && !parseBoolean(action.options.allowExisting)) {
-					this.instance.log('info', `Screen Memory ${slot} already has content - not touching it. Tick "Allow save, update or delete of existing Screen Memory?" on this action to act on a slot that is in use.`)
+					this.instance.log('info', `${kind} Memory ${slot} already has content - not touching it. Tick "Allow save, update or delete of existing Screen Memory?" on this action to act on a slot that is in use.`)
 					return
 				}
 
-				const slotPath = [...this.constants.screenMemoryPath, 'items', String(slot)]
+				// The two banks are the same shape, one level apart - live-confirmed on the wire for both.
+				const bankPath = isAux ? ['device', 'preset', 'auxBank', 'slotList'] : [...this.constants.screenMemoryPath]
+				const slotPath = [...bankPath, 'items', String(slot)]
 				const bankItemPath = [...slotPath, 'control', 'pp']
 				const bankValidPath = ['DEVICE', ...slotPath, 'status', 'pp', 'isValid']
 

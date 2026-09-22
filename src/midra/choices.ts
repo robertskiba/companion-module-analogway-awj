@@ -325,6 +325,42 @@ export default class ChoicesMidra extends Choices {
 		})
 	}
 
+	/**
+	 * Every Aux Memory slot, empty ones included - the counterpart to getAllScreenMemorySlotArray(), for
+	 * "Save to Slot" where an empty slot is the normal target, unlike Recall which can only offer saved ones.
+	 * Aux memories exist on this platform only: LivePremier has no separate Aux bank at all, its Auxes use
+	 * Screen Memories, which is why the base class answers with an empty list.
+	 */
+	public getAllAuxMemorySlotArray(): Choicemeta[] {
+		const bankpath = 'DEVICE/device/preset/auxBank/slotList'
+		const real: Choicemeta[] = (
+			this.state.get(this.state.concat(bankpath, 'itemKeys'))?.map((mem: string) => {
+				const isValid = this.state.get(this.state.concat(bankpath, ['items', mem, 'status', 'pp', 'isValid']))
+				return {
+					id: mem,
+					label: isValid ? this.state.get(this.state.concat(bankpath, ['items', mem, 'control', 'pp', 'label'])) : '',
+				}
+			}) ?? []
+		)
+		return this.syntheticRangeIfNeverConnected(real, this.constants.maxAuxMemories, (n) => `${n}`)
+	}
+
+	public override getAllAuxMemorySlotChoices(): Dropdown<string>[] {
+		const usedIds = new Set(this.getAuxMemoryArray().map((mem) => mem.id))
+		return this.placeholderIfEmpty(this.getAllAuxMemorySlotArray().map((mem: Choicemeta) => {
+			return {
+				id: mem.id,
+				label: usedIds.has(mem.id) ? `AM${mem.id}${mem.label === '' ? '' : ' - ' + mem.label} (overwrite)` : `AM${mem.id} (empty)`
+			}
+		}), 'No Aux Memories configured')
+	}
+
+	/** First currently-empty Aux Memory slot id, or undefined once every slot is in use. */
+	public override getNextAvailableAuxMemorySlot(): string | undefined {
+		const usedIds = new Set(this.getAuxMemoryArray().map((mem) => mem.id))
+		return this.getAllAuxMemorySlotArray().find((mem) => !usedIds.has(mem.id))?.id
+	}
+
 	public getMultiviewerArray(): string[] {
 		return ['1']
 	}

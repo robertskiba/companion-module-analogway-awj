@@ -73,7 +73,7 @@ export default class Choices {
 	 * connection.ts), so its mere presence reliably means "we have seen real device data at least once",
 	 * regardless of whether we're currently connected/reconnecting.
 	 */
-	private placeholderIfEmpty(list: Dropdown<string>[], label: string): Dropdown<string>[] {
+	protected placeholderIfEmpty(list: Dropdown<string>[], label: string): Dropdown<string>[] {
 		if (list.length > 0) return list
 		const everConnected = !!this.state.get('DEVICE')
 		return [{ id: '', label: everConnected ? label : 'No device connected' }]
@@ -92,7 +92,7 @@ export default class Choices {
 	 * platform-specific subclass's own override actually ran - this is a no-op; genuinely-empty-after-
 	 * connecting stays handled by placeholderIfEmpty()'s "No X configured", never by this.
 	 */
-	private syntheticRangeIfNeverConnected(real: Choicemeta[], count: number, buildId: (n: number) => string): Choicemeta[] {
+	protected syntheticRangeIfNeverConnected(real: Choicemeta[], count: number, buildId: (n: number) => string): Choicemeta[] {
 		if (real.length > 0) return real
 		if (this.state.get('DEVICE')) return real
 		return Array.from({ length: count }, (_, i) => ({ id: buildId(i + 1), label: '', index: (i + 1).toString() }))
@@ -810,6 +810,19 @@ export default class Choices {
 
 	public getAuxMemoryChoices(): Dropdown<string>[] {
 		return []
+	}
+
+	/**
+	 * Aux Memories are a Midra/Alta concept: LivePremier has no separate bank for them at all, its Auxes use
+	 * Screen Memories. These two answer empty here for the same reason getAuxMemoryArray() above does, and are
+	 * declared so that shared code can ask without knowing which platform it is on.
+	 */
+	public getAllAuxMemorySlotChoices(): Dropdown<string>[] {
+		return []
+	}
+
+	public getNextAvailableAuxMemorySlot(): string | undefined {
+		return undefined
 	}
 
 	public getLayerMemoryArray(): Choicemeta[] {
