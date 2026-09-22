@@ -1143,7 +1143,10 @@ export default class Actions {
 						// item before appending the read path.
 						const groupItemPath = groupPath.slice(0, -2)
 						const current = this.state.get(['DEVICE', ...groupItemPath, ...this.constants.tbarPositionReadPath]) ?? 0
-						const newValue = Math.round(Math.min(65535, Math.max(0, current + direction * delta0to100 / 100 * 65535)))
+						// The user's +/- says "advance" or "go back"; which numeric direction that is depends on the
+						// platform and, on Midra, on which end the bar is currently parked at.
+						const advance = this.choices.getTbarAdvanceDirection(screen)
+						const newValue = Math.round(Math.min(65535, Math.max(0, current + direction * advance * delta0to100 / 100 * 65535)))
 						this.connection.sendWSmessage([...groupPath, 'tbarPosition'], newValue)
 					} else {
 						const deltaDeciseconds = hasRaw ? Number(rawStr) : Number(pctStr) / 100 * 3000

@@ -559,6 +559,10 @@ export default class ChoicesMidra extends Choices {
 	 */
 	/** Midra's own Aspect Override list, in WebRCS's own order - no NONE, but a Global Settings entry at the
 	 *  top and Input Setting (the equivalent of LivePremier's NONE) at the bottom. */
+	/** Parked at 0 after AT_DOWN and at the maximum after AT_UP, so advancing means moving the other way. */
+	public override getTbarAdvanceDirection(screenAuxKey: string): 1 | -1 {
+		return this.getLivePresetKey(screenAuxKey) === 'UP' ? -1 : 1
+	}
 	/** Midra reports the live side as 'AT_UP'/'AT_DOWN' while its preset keys are 'UP'/'DOWN'. */
 	public override getLivePresetKey(screenAuxKey: string): string | undefined {
 		const raw = super.getLivePresetKey(screenAuxKey)
