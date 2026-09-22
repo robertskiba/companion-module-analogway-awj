@@ -202,6 +202,8 @@ So, when do you actually want this on or off?
 
 Companion can turn its own synchronization on automatically right after connecting (see Configuration) - a WebRCS client, on the other hand, never does this by itself; you always have to switch it on by hand there.
 
+**One thing to watch with synchronization off:** Screen selection and Layer selection are two separate things, and with synchronization off Companion keeps both of them itself. In WebRCS you cannot really have one without the other - clicking a layer picks its screen too - but Companion's own selections stay independent, because "Layer Selection" only ever touches the layer one. So an action set to **both** "First/Only Selected Screen" *and* "First/Only Selected Layer" needs both selections to have been made: the layer list is filtered down to the selected screens, and no selected screen means no target at all, however well the layer is selected. If such an action seems to do nothing, check that you have actually selected the screen too - or address the screen directly by name, which does not depend on any selection.
+
 **Feedback: Synchronization of the selection** - Available at: LivePremier, Alta 4K, Midra 4K.
 
 **Variable:** `connectionLabel` - how you labelled the Connection in Companion.
