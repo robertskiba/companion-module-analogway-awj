@@ -55,6 +55,16 @@ export default class Constants {
      * LivePremier exposes it as control/pp/presetUp, Midra/Alta as status/pp/transition. */
     static readonly presetSideIndicator: string[] = ['control', 'pp', 'presetUp']
 
+    /** How a Layer transition's "Allow Cross Effect" is expressed in transition/pp/flags. LivePremier uses
+     * a mutually exclusive FORCE_CROSS / FORCE_TRANSITION pair; Midra/Alta instead carries a single negative
+     * DISABLE_CROSS_EFFECT token, whose presence means the cross effect is off - so its "on" adds nothing and
+     * just clears that token again. */
+    static readonly crossEffectFlags: { on: string | null, off: string | null, clear: string[] } =
+        { on: 'FORCE_CROSS', off: 'FORCE_TRANSITION', clear: ['FORCE_CROSS', 'FORCE_TRANSITION'] }
+
+    /** Prefix of the "Allow Cross Depth" transition flag, or null on a platform that has no such setting -
+     * Midra/Alta carries no DEPTH_CUT token at all. */
+    static readonly crossDepthFlagPrefix: string | null = 'DEPTH_CUT_'
     /** The two `speed/pp/type` enum values, or null on a platform that has no Linear/Smooth speed switch at
      * all - Midra/Alta only offers Pt1/Pt2 and stores a plain 'SMOOTH', so there is nothing to write there. */
     static readonly layerSpeedTypes: { linear: string, smooth: string } | null = { linear: 'LINEAR_TRANSITION', smooth: 'SMOOTH_TRANSITION' }

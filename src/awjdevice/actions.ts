@@ -2022,17 +2022,6 @@ export default class Actions {
 			unlockIfLocked: boolean, relockAfterChange: boolean,
 		}
 
-		// Enum values confirmed live (2026-08-27) from WebRCS's own bundle (VAR_ENUMS: ELEMENT_TRANSITION,
-		// TRANSITION_WAY, PE_FLYING_TYPE, PE_TRANSITION_FLAGS) against a real Aquilon (192.168.20.112)
-		const transitionTypeChoices = [
-			{ id: 'CUT', label: 'Cut' },
-			{ id: 'FADE', label: 'Fade' },
-			{ id: 'SLIDE', label: 'Slide' },
-			{ id: 'WIPE', label: 'Wipe' },
-			{ id: 'CIRCLE', label: 'Circle' },
-			{ id: 'STRETCH', label: 'Stretch' },
-			{ id: 'WIPE_ADVANCED', label: 'Wipe 2' },
-		]
 		const transitionWayChoices = [
 			{ id: 'LEFT_TO_RIGHT', label: 'Left to Right' },
 			{ id: 'RIGHT_TO_LEFT', label: 'Right to Left' },
@@ -2106,7 +2095,7 @@ export default class Actions {
 					id: 'openingType',
 					type: 'dropdown',
 					label: 'Type',
-					choices: [{ id: 'keep', label: "Don't change" }, ...transitionTypeChoices],
+					choices: [{ id: 'keep', label: "Don't change" }, ...this.choices.getTransitionTypeChoices()],
 					default: 'keep',
 				},
 				{
@@ -2121,7 +2110,7 @@ export default class Actions {
 					id: 'closingType',
 					type: 'dropdown',
 					label: 'Type',
-					choices: [{ id: 'keep', label: "Don't change" }, ...transitionTypeChoices],
+					choices: [{ id: 'keep', label: "Don't change" }, ...this.choices.getTransitionTypeChoices()],
 					default: 'keep',
 				},
 				{
@@ -2254,24 +2243,46 @@ export default class Actions {
 						// picked from the shared list collapses to CUT instead of being sent as-is. Inert on
 						// LivePremier, where every layer supports the full set.
 						const fullTransitions = this.choices.layerSupports(layer.layerKey, 'transitionWay')
-						const transitionType = (chosen: string): string => fullTransitions ? chosen : (chosen === 'FADE' ? 'FADE' : 'CUT')
-						if (action.options.openingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'type'], transitionType(action.options.openingType))
+						// Also drops a type this platform does not have at all (Midra has no "Wipe 2") - the dropdown omits
+						// it already, but an Expression Mode value can still name anything.
+						const availableTypes = new Set(this.choices.getTransitionTypeChoices().map((choice) => choice.id))
+						const transitionType = (chosen: string): string | undefined =>
+							fullTransitions
+								? (availableTypes.has(chosen) ? chosen : undefined)
+								: (chosen === 'FADE' ? 'FADE' : 'CUT')
+						const sendType = (which: 'opening' | 'closing', chosen: string) => {
+							const value = transitionType(chosen)
+							if (value !== undefined) this.connection.sendWSmessage([...path, 'transition', which, 'pp', 'type'], value)
+						}
+						if (action.options.openingType !== 'keep') sendType('opening', action.options.openingType)
 						if (action.options.openingWay !== 'keep' && fullTransitions) this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'way'], action.options.openingWay)
-						if (action.options.closingType !== 'keep') this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'type'], transitionType(action.options.closingType))
+						if (action.options.closingType !== 'keep') sendType('closing', action.options.closingType)
 						if (action.options.closingWay !== 'keep' && fullTransitions) this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
-						// only touches the flags array at all if at least one of Allow Cross Effect/Depth actually
-						// changed - the untouched half is preserved from the layer's current live flags
-						if ((action.options.allowCrossEffect !== 'keep' || action.options.allowCrossDepth !== 'keep') && this.choices.layerSupports(layer.layerKey, 'transitionFlags')) {
+						// Only touches the flags array at all if at least one of Allow Cross Effect/Depth actually changed -
+						// the untouched half is preserved from the layer's current live flags.
+						// The two platforms express this very differently: LivePremier toggles between a mutually exclusive
+						// FORCE_CROSS / FORCE_TRANSITION pair, while Midra carries a single negative DISABLE_CROSS_EFFECT whose
+						// presence means "off" - so there, turning it on means removing a token rather than adding one. Cross
+						// Depth does not exist on Midra at all and is skipped there.
+						const crossEffect = this.constants.crossEffectFlags
+						const depthPrefix = this.constants.crossDepthFlagPrefix
+						const wantsEffect = action.options.allowCrossEffect !== 'keep'
+						const wantsDepth = action.options.allowCrossDepth !== 'keep' && depthPrefix !== null
+						if ((wantsEffect || wantsDepth) && this.choices.layerSupports(layer.layerKey, 'transitionFlags')) {
 							let flags: string[] = this.state.get(['DEVICE', ...path, 'transition', 'pp', 'flags']) ?? []
-							if (action.options.allowCrossEffect !== 'keep') {
-								const turnOn = action.options.allowCrossEffect === 'toggle' ? !flags.includes('FORCE_CROSS') : action.options.allowCrossEffect === 'on'
-								flags = flags.filter(f => f !== 'FORCE_TRANSITION' && f !== 'FORCE_CROSS')
-								flags.push(turnOn ? 'FORCE_CROSS' : 'FORCE_TRANSITION')
+							if (wantsEffect) {
+								const currentlyOn = crossEffect.on !== null
+									? flags.includes(crossEffect.on)
+									: !flags.includes(crossEffect.off as string)
+								const turnOn = action.options.allowCrossEffect === 'toggle' ? !currentlyOn : action.options.allowCrossEffect === 'on'
+								flags = flags.filter(flag => !crossEffect.clear.includes(flag))
+								const token = turnOn ? crossEffect.on : crossEffect.off
+								if (token !== null) flags.push(token)
 							}
-							if (action.options.allowCrossDepth !== 'keep') {
-								const turnOn = action.options.allowCrossDepth === 'toggle' ? !flags.some(f => f.startsWith('DEPTH_CUT_')) : action.options.allowCrossDepth === 'on'
-								flags = flags.filter(f => !f.startsWith('DEPTH_CUT_'))
-								if (!turnOn) flags.push('DEPTH_CUT_MIDDLE')
+							if (wantsDepth && depthPrefix !== null) {
+								const turnOn = action.options.allowCrossDepth === 'toggle' ? !flags.some(flag => flag.startsWith(depthPrefix)) : action.options.allowCrossDepth === 'on'
+								flags = flags.filter(flag => !flag.startsWith(depthPrefix))
+								if (!turnOn) flags.push(`${depthPrefix}MIDDLE`)
 							}
 							this.connection.sendWSmessage([...path, 'transition', 'pp', 'flags'], flags)
 						}

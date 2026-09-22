@@ -1029,6 +1029,23 @@ export default class ActionsMidra extends Actions {
 	 * enum, so the base action's value would not be understood anyway. The field is removed rather than
 	 * left visible and inert, and the callback's own 'keep' default means nothing is ever sent for it.
 	 */
+	/**
+	 * MARK: Layer Properties - Transitions - Midra
+	 *
+	 * Midra has no Cross Depth setting - its transition flags carry no DEPTH_CUT token at all, only the
+	 * single DISABLE_CROSS_EFFECT (see constants.crossDepthFlagPrefix). The field is removed rather than
+	 * left visible and inert; the callback skips it via that same constant, so a button saved before this
+	 * still sends nothing for it.
+	 */
+	get deviceLayerTransitionsV3() {
+		const deviceLayerTransitionsV3 = super.deviceLayerTransitionsV3
+
+		const depthIndex = deviceLayerTransitionsV3.options.findIndex((opt) => opt.id === 'allowCrossDepth')
+		if (depthIndex !== -1) deviceLayerTransitionsV3.options.splice(depthIndex, 1)
+
+		return deviceLayerTransitionsV3
+	}
+
 	get deviceLayerSpeedV3() {
 		const deviceLayerSpeedV3 = super.deviceLayerSpeedV3
 

@@ -572,6 +572,11 @@ export default class ChoicesMidra extends Choices {
 		return { pgm, prw: pgm === 'UP' ? 'DOWN' : 'UP' }
 	}
 
+	/** Midra has every transition type except "Wipe 2" (WIPE_ADVANCED). */
+	public override getTransitionTypeChoices(): Dropdown<string>[] {
+		return super.getTransitionTypeChoices().filter((choice) => choice.id !== 'WIPE_ADVANCED')
+	}
+
 	public override getAspectOverrideChoices(): Dropdown<string>[] {
 		return [
 			{ id: 'GLOBAL_SETTING', label: 'Global Settings' },

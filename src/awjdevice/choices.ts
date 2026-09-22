@@ -1017,6 +1017,23 @@ export default class Choices {
 	 * while Midra/Alta splits it into GLOBAL_SETTING and INPUT_SETTING and has no NONE at all (both values
 	 * live-confirmed by reading them back off an Eikos 4K simulator).
 	 */
+	/**
+	 * A Layer transition's type. Enum values confirmed live (2026-08-27) from WebRCS's own bundle
+	 * (VAR_ENUMS: ELEMENT_TRANSITION) against a real Aquilon. Midra/Alta overrides this - it has the same
+	 * set minus "Wipe 2".
+	 */
+	public getTransitionTypeChoices(): Dropdown<string>[] {
+		return [
+			{ id: 'CUT', label: 'Cut' },
+			{ id: 'FADE', label: 'Fade' },
+			{ id: 'SLIDE', label: 'Slide' },
+			{ id: 'WIPE', label: 'Wipe' },
+			{ id: 'CIRCLE', label: 'Circle' },
+			{ id: 'STRETCH', label: 'Stretch' },
+			{ id: 'WIPE_ADVANCED', label: 'Wipe 2' },
+		]
+	}
+
 	public getAspectOverrideChoices(): Dropdown<string>[] {
 		return [
 			{ id: 'NONE', label: 'None (use input aspect ratio)' },
