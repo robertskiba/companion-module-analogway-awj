@@ -491,10 +491,16 @@ export default class Subscriptions {
 			return false
 		}
 
-		const groupPath = [...this.constants.screenGroupPath, 'items', screenId, 'control', 'pp']
+		// platformId, not the 'S1'-style id: Midra keys this list by the bare number ('1'), so using screenId
+		// directly built a path that simply does not exist there - SelectedScreen.tbarPosition and
+		// .TransitionTime.* stayed blank while .number/.numberOfLayers (which never touch this path) worked.
+		const groupPath = [...this.constants.screenGroupPath, 'items', this.instance.choices.getScreenInfo(screenId).platformId, 'control', 'pp']
 		const tbarRaw = this.instance.state.get(['DEVICE', ...groupPath, 'tbarPosition'])
-		const takeUpTime = this.instance.state.get(['DEVICE', ...groupPath, 'takeUpTime'])
-		const takeDownTime = this.instance.state.get(['DEVICE', ...groupPath, 'takeDownTime'])
+		// LivePremier splits the transition time per bank (takeUpTime/takeDownTime); Midra has a single
+		// takeTime that applies to both directions, so it stands in for both there.
+		const singleTakeTime = this.instance.state.get(['DEVICE', ...groupPath, 'takeTime'])
+		const takeUpTime = this.instance.state.get(['DEVICE', ...groupPath, 'takeUpTime']) ?? singleTakeTime
+		const takeDownTime = this.instance.state.get(['DEVICE', ...groupPath, 'takeDownTime']) ?? singleTakeTime
 		// Read presetUp directly off the same control object rather than choices.getPreset(id, 'PGM') - that
 		// goes through LOCAL/screens/{screen}/pgm/preset, which is ONLY ever written by screenPreset's own
 		// AT_UP/AT_DOWN transition handler and is never seeded from the device's actual current state at
@@ -558,7 +564,8 @@ export default class Subscriptions {
 	 * refreshSelectedScreen. Same per-platform screenGroupPath reasoning as selectedScreenTbarChange above. */
 	get selectedScreenTransitionTimeChange():Subscription {
 		return {
-			pat: this.constants.screenGroupPath.join('/') + '/items/(S|A)?(\\d{1,3})/control/pp/take(Up|Down)Time',
+			// takeUpTime/takeDownTime on LivePremier, a single takeTime on Midra - both spellings covered.
+			pat: this.constants.screenGroupPath.join('/') + '/items/(S|A)?(\\d{1,3})/control/pp/take(?:Up|Down)?Time',
 			fun: this.refreshSelectedScreen,
 		}
 	}
