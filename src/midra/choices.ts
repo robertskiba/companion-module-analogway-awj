@@ -644,16 +644,27 @@ export default class ChoicesMidra extends Choices {
 	 * numbered layer, and writing into a node the device does not have is silently ignored - so callers ask
 	 * here first and skip the write instead.
 	 *
-	 * Background: source, opacity, mask, transition (opening/closing type only), timing, speed.
-	 * Foreground: the same plus position, crop and flying, with transition also offering `way`.
-	 * Neither has size, effects or border; only a numbered layer has those, plus the transition flags.
+	 * On a Screen:
+	 * - Background: source, opacity, mask, transition (opening/closing type only), timing, speed.
+	 * - Foreground: the same plus position, crop and flying, with transition also offering `way`.
+	 * - Neither has size, effects or border; only a numbered layer has those, plus the transition flags.
+	 *
+	 * On an Aux the background is the only addressable layer at all, and it is far barer still - source,
+	 * colour, `crop/pp/aspectOverride` and the *opening* transition type, and nothing else: no opacity, no
+	 * mask, no timing, no speed, not even a closing transition. Read straight off an Eikos 4K simulator by
+	 * dumping an Aux preset's background node beside a Screen's.
 	 */
-	public override layerSupports(layerKey: string, property: LayerProperty): boolean {
+	public override layerSupports(screenAuxKey: string, layerKey: string, property: LayerProperty): boolean {
+		// The Aux answer does not depend on the layer key: an Aux has exactly one layer.
+		if (this.getScreenInfo(screenAuxKey).isAux) return property === 'aspectOverride'
+
 		const isBackground = /^(bg|bkg|background|native)$/i.test(layerKey)
 		const isForeground = /^top$/i.test(layerKey)
 		if (!isBackground && !isForeground) return true
 		if (property === 'size' || property === 'effects' || property === 'border' || property === 'transitionFlags') return false
 		if (property === 'aspectOverride') return false
+		// Both kinds have these, so they are settled before the Foreground-only ones below.
+		if (property === 'opacity' || property === 'mask' || property === 'timing' || property === 'speed' || property === 'transitionClosing') return true
 		// Everything still open here - position, crop, transitionWay, flying - exists on the Foreground only.
 		return isForeground
 	}

@@ -1,6 +1,6 @@
 import {AWJinstance} from '../index.js'
 
-import Choices, { Choicemeta, AnchorPoint } from './choices.js'
+import Choices, { Choicemeta, AnchorPoint, LayerProperty } from './choices.js'
 import {
 	CompanionActionContext,
 	CompanionActionDefinitions,
@@ -1998,14 +1998,14 @@ export default class Actions {
 						}
 						// Midra's foreground frame has a position but no size node - skip the size writes there
 						// rather than sending into nothing. Always true on LivePremier, where every layer has a size.
-						if (sizeChanges && this.choices.layerSupports(layer.layerKey, 'size')) {
+						if (sizeChanges && this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'size')) {
 							const sizeH = targetSizeH
 							if (sizeH !== laydata.sizeH) {
 								this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
 								this.connection.sendWSmessage([...laydata.path, ...this.constants.propsSizePath, 'sizeH'], sizeH)
 							}
 						}
-						if (sizeVChanges && this.choices.layerSupports(layer.layerKey, 'size')) {
+						if (sizeVChanges && this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'size')) {
 							const sizeV = targetSizeV
 							if (sizeV !== laydata.sizeV) {
 								this.state.set(['DEVICE', ...laydata.path, ...this.constants.propsSizePath, 'sizeV'], sizeV)
@@ -2253,7 +2253,7 @@ export default class Actions {
 						// Midra's background transition understands only FADE and CUT and has no `way`; anything else
 						// picked from the shared list collapses to CUT instead of being sent as-is. Inert on
 						// LivePremier, where every layer supports the full set.
-						const fullTransitions = this.choices.layerSupports(layer.layerKey, 'transitionWay')
+						const fullTransitions = this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'transitionWay')
 						// Also drops a type this platform does not have at all (Midra has no "Wipe 2") - the dropdown omits
 						// it already, but an Expression Mode value can still name anything.
 						const availableTypes = new Set(this.choices.getTransitionTypeChoices().map((choice) => choice.id))
@@ -2267,8 +2267,9 @@ export default class Actions {
 						}
 						if (action.options.openingType !== 'keep') sendType('opening', action.options.openingType)
 						if (action.options.openingWay !== 'keep' && fullTransitions) this.connection.sendWSmessage([...path, 'transition', 'opening', 'pp', 'way'], action.options.openingWay)
-						if (action.options.closingType !== 'keep') sendType('closing', action.options.closingType)
-						if (action.options.closingWay !== 'keep' && fullTransitions) this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
+						const hasClosing = this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'transitionClosing')
+						if (action.options.closingType !== 'keep' && hasClosing) sendType('closing', action.options.closingType)
+						if (action.options.closingWay !== 'keep' && fullTransitions && hasClosing) this.connection.sendWSmessage([...path, 'transition', 'closing', 'pp', 'way'], action.options.closingWay)
 						// Only touches the flags array at all if at least one of Allow Cross Effect/Depth actually changed -
 						// the untouched half is preserved from the layer's current live flags.
 						// The two platforms express this very differently: LivePremier toggles between a mutually exclusive
@@ -2279,7 +2280,7 @@ export default class Actions {
 						const crossDepth = this.constants.crossDepthFlags
 						const wantsEffect = action.options.allowCrossEffect !== 'keep'
 						const wantsDepth = action.options.allowCrossDepth !== 'keep'
-						if ((wantsEffect || wantsDepth) && this.choices.layerSupports(layer.layerKey, 'transitionFlags')) {
+						if ((wantsEffect || wantsDepth) && this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'transitionFlags')) {
 							let flags: string[] = this.state.get(['DEVICE', ...path, 'transition', 'pp', 'flags']) ?? []
 							if (wantsEffect) {
 								const currentlyOn = crossEffect.on !== null
@@ -2300,7 +2301,7 @@ export default class Actions {
 							}
 							this.connection.sendWSmessage([...path, 'transition', 'pp', 'flags'], flags)
 						}
-						if (action.options.flyingCurve !== 'keep' && this.choices.layerSupports(layer.layerKey, 'flying')) this.connection.sendWSmessage([...path, 'flying', 'pp', 'type'], action.options.flyingCurve)
+						if (action.options.flyingCurve !== 'keep' && this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'flying')) this.connection.sendWSmessage([...path, 'flying', 'pp', 'type'], action.options.flyingCurve)
 					}
 				}
 
@@ -2942,6 +2943,8 @@ export default class Actions {
 								'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
 								...this.choices.getLayerPath(layer.layerKey),
 							]
+							// A Midra Aux background has no opacity node - skip rather than write into nothing.
+							if (!this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'opacity')) continue
 							this.connection.sendWSmessage([...path, 'opacity', 'pp', 'opacity'], rawOpacity)
 						}
 					}
@@ -3207,7 +3210,7 @@ export default class Actions {
 						]
 						// Midra's foreground frame has crop but no aspectOverride field - skip it there rather than
 						// writing into nothing. Always true on LivePremier.
-						if (action.options.aspectOverride !== 'keep' && this.choices.layerSupports(layer.layerKey, 'aspectOverride')) this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, 'aspectOverride'], action.options.aspectOverride)
+						if (action.options.aspectOverride !== 'keep' && this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'aspectOverride')) this.connection.sendWSmessage([...path, ...this.constants.propsCroppingPath, 'aspectOverride'], action.options.aspectOverride)
 
 						let source: {width: number | '', height: number | ''} | undefined
 						for (const [pxId, pctId, prop, axis] of cropFields) {
@@ -3473,6 +3476,9 @@ export default class Actions {
 							'presetList', 'items', this.choices.getPreset(layer.screenAuxKey, preset),
 							...this.choices.getLayerPath(layer.layerKey),
 						]
+
+						// A Midra Aux background has no mask node at all - skip rather than write into nothing.
+						if (!this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'mask')) continue
 
 						// unlike Aspect & Crop (normalized against the source's native resolution), Mask is confirmed
 						// live to normalize against the layer's own current on-screen size instead - via
@@ -4392,6 +4398,9 @@ export default class Actions {
 							...this.choices.getLayerPath(layer.layerKey),
 						]
 
+						// A Midra Aux background has no speed node at all - skip rather than write into nothing.
+						if (!this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'speed')) continue
+
 						// Skipped entirely on a platform without a Linear/Smooth switch (Midra/Alta) - including for
 						// buttons saved before the field was removed from its form there, which would otherwise
 						// still carry an 'on'/'off' value and send an enum the device does not know.
@@ -4631,13 +4640,17 @@ export default class Actions {
 						}
 
 						// Each mode targets a different property, and Midra's Background/Foreground layers only have some of
-						// them - skip instead of writing into a node the device does not have. Opacity and Mask exist on every
-						// layer kind, so they need no check. Inert on LivePremier, where layerSupports() answers yes to all.
-						const encoderProperty = (action.options.value === 'posX' || action.options.value === 'posY') ? 'position'
+						// them - skip instead of writing into a node the device does not have. Opacity and Mask are checked
+						// too: they do exist on a Screen's Background and Foreground, but an Aux background has neither.
+						// Inert on LivePremier, where layerSupports() answers yes to all.
+						const encoderProperty: LayerProperty | undefined =
+							(action.options.value === 'posX' || action.options.value === 'posY') ? 'position'
 							: (action.options.value === 'sizeW' || action.options.value === 'sizeH') ? 'size'
 							: action.options.value.startsWith('crop') ? 'crop'
+							: action.options.value.startsWith('mask') ? 'mask'
+							: action.options.value === 'opacity' ? 'opacity'
 							: undefined
-						if (encoderProperty !== undefined && !this.choices.layerSupports(layer.layerKey, encoderProperty)) continue
+						if (encoderProperty !== undefined && !this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, encoderProperty)) continue
 						switch (action.options.value) {
 							case 'opacity': {
 								const current = this.state.get(['DEVICE', ...path, 'opacity', 'pp', 'opacity']) ?? 0
@@ -4651,13 +4664,11 @@ export default class Actions {
 								break
 							}
 							case 'posX': case 'posY': case 'sizeW': case 'sizeH': {
-								const screenPath = [
-									...(screenInfo.isAux ? this.constants.auxPath : this.constants.screenPath),
-									'items', screenInfo.platformId,
-									...this.constants.screenSizePath,
-								]
-								const screenSizeH = this.state.get(['DEVICE', ...screenPath, 'sizeH']) ?? 1920
-								const screenSizeV = this.state.get(['DEVICE', ...screenPath, 'sizeV']) ?? 1080
+								// Via choices, which knows where a given platform keeps a Screen's or Aux's resolution -
+								// a Midra Aux has no canvas of its own and takes it from the output it feeds.
+								const canvas = this.choices.getScreenCanvasSize(screenInfo.id)
+								const screenSizeH = canvas.width ?? 1920
+								const screenSizeV = canvas.height ?? 1080
 								if (action.options.value === 'posX') applyLinear([...this.constants.propsPositionPath, 'posH'], screenSizeH)
 								else if (action.options.value === 'posY') applyLinear([...this.constants.propsPositionPath, 'posV'], screenSizeV)
 								else if (action.options.value === 'sizeW') applyLinear([...this.constants.propsSizePath, 'sizeH'], screenSizeH)
@@ -4886,6 +4897,9 @@ export default class Actions {
 							'presetList', 'items', presetKey,
 							...this.choices.getLayerPath(layer.layerKey),
 						]
+
+						// A Midra Aux background has no timing node at all - skip rather than write into nothing.
+						if (!this.choices.layerSupports(layer.screenAuxKey, layer.layerKey, 'timing')) continue
 
 						let transitionMs: number | undefined
 						for (const [msId, prop] of fields) {

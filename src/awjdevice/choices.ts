@@ -11,7 +11,7 @@ export type Choicemeta = { id: string, label: string, index?: string, longname?:
 export type AnchorPoint = 'TOP_LEFT' | 'TOP_CENTER' | 'TOP_RIGHT' | 'LEFT_CENTER' | 'CENTER' | 'RIGHT_CENTER' | 'BOTTOM_LEFT' | 'BOTTOM_CENTER' | 'BOTTOM_RIGHT'
 
 /** Property groups a layer may or may not have, see Choices.layerSupports(). */
-export type LayerProperty = 'position' | 'size' | 'crop' | 'aspectOverride' | 'effects' | 'border' | 'transitionWay' | 'transitionFlags' | 'flying'
+export type LayerProperty = 'position' | 'size' | 'crop' | 'aspectOverride' | 'effects' | 'border' | 'transitionWay' | 'transitionClosing' | 'transitionFlags' | 'flying' | 'opacity' | 'mask' | 'timing' | 'speed'
 
 /**
  * Anchor-point math ported 1:1 from WebRCS's own source (aw-utils/geometry/position/anchor/anchor.ts,
@@ -988,8 +988,11 @@ export default class Choices {
 	 * layer - the background (NATIVE) included - is a full layer carrying the whole property set, so the answer
 	 * is always yes here and nothing changes for it; Midra/Alta overrides this with its real, much narrower
 	 * matrix. Callers use it to skip writes instead of sending values into nodes the device does not have.
+	 *
+	 * Takes the Screen/Aux it belongs to, not just the layer key: on Midra the same key 'NATIVE' means a
+	 * fairly complete layer on a Screen and a nearly empty one on an Aux, so the key alone cannot answer.
 	 */
-	public layerSupports(_layerKey: string, _property: LayerProperty): boolean {
+	public layerSupports(_screenAuxKey: string, _layerKey: string, _property: LayerProperty): boolean {
 		return true
 	}
 
