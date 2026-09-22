@@ -1020,6 +1020,23 @@ export default class ActionsMidra extends Actions {
 	/**
 	 * MARK: Layer position and size V3
 	 */
+	/**
+	 * MARK: Layer Properties - Speed - Midra
+	 *
+	 * Midra has no Linear/Smooth speed switch: WebRCS only offers Pt1/Pt2 there, and the device stores
+	 * `speed/pp/type` as plain 'SMOOTH' rather than LivePremier's 'SMOOTH_TRANSITION'/'LINEAR_TRANSITION'
+	 * enum, so the base action's value would not be understood anyway. The field is removed rather than
+	 * left visible and inert, and the callback's own 'keep' default means nothing is ever sent for it.
+	 */
+	get deviceLayerSpeedV3() {
+		const deviceLayerSpeedV3 = super.deviceLayerSpeedV3
+
+		const linearIndex = deviceLayerSpeedV3.options.findIndex((opt) => opt.id === 'linear')
+		if (linearIndex !== -1) deviceLayerSpeedV3.options.splice(linearIndex, 1)
+
+		return deviceLayerSpeedV3
+	}
+
 	get devicePositionSizeV3() {
 		const devicePositionSizeV3 = super.devicePositionSizeV3
 

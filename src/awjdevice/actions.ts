@@ -4337,7 +4337,8 @@ export default class Actions {
 				}
 
 				const type = this.state.get(['DEVICE', ...path, 'speed', 'pp', 'type'])
-				if (typeof type === 'string') newoptions.linear = type === 'LINEAR_TRANSITION' ? 'on' : 'off'
+				// Nothing to learn back on a platform without the switch - the field does not exist there.
+				if (this.constants.layerSpeedTypes !== null && typeof type === 'string') newoptions.linear = type === this.constants.layerSpeedTypes.linear ? 'on' : 'off'
 				const point1 = this.state.get(['DEVICE', ...path, 'speed', 'pp', 'point1'])
 				if (typeof point1 === 'number') newoptions.point1 = point1
 				const point2 = this.state.get(['DEVICE', ...path, 'speed', 'pp', 'point2'])
@@ -4372,11 +4373,15 @@ export default class Actions {
 							...this.choices.getLayerPath(layer.layerKey),
 						]
 
-						if (action.options.linear !== 'keep') {
+						// Skipped entirely on a platform without a Linear/Smooth switch (Midra/Alta) - including for
+						// buttons saved before the field was removed from its form there, which would otherwise
+						// still carry an 'on'/'off' value and send an enum the device does not know.
+						const speedTypes = this.constants.layerSpeedTypes
+						if (speedTypes !== null && action.options.linear !== undefined && action.options.linear !== 'keep') {
 							const turnOn = action.options.linear === 'toggle'
-								? this.state.get(['DEVICE', ...path, 'speed', 'pp', 'type']) !== 'LINEAR_TRANSITION'
+								? this.state.get(['DEVICE', ...path, 'speed', 'pp', 'type']) !== speedTypes.linear
 								: action.options.linear === 'on'
-							this.connection.sendWSmessage([...path, 'speed', 'pp', 'type'], turnOn ? 'LINEAR_TRANSITION' : 'SMOOTH_TRANSITION')
+							this.connection.sendWSmessage([...path, 'speed', 'pp', 'type'], turnOn ? speedTypes.linear : speedTypes.smooth)
 						}
 						if (Number(action.options.point1) >= 0) {
 							this.connection.sendWSmessage([...path, 'speed', 'pp', 'point1'], Math.round(Number(action.options.point1)))
