@@ -1202,7 +1202,13 @@ export default class ActionsMidra extends Actions {
 
 			return this.instance.serialize(keys, async () => {
 				const alreadyValid = this.choices.getScreenMemoryArray().some((mem) => mem.id === slot)
-				if (alreadyValid && !parseBoolean(action.options.allowExisting)) return
+				// Says so in the log rather than just returning: the guard covers relabel and delete as well as
+				// save, so with it unchecked those two do nothing on any slot that has content - which is every
+				// slot worth relabelling. Silently doing nothing is what makes that expensive to work out.
+				if (alreadyValid && !parseBoolean(action.options.allowExisting)) {
+					this.instance.log('info', `Screen Memory ${slot} already has content - not touching it. Tick "Allow save, update or delete of existing Screen Memory?" on this action to act on a slot that is in use.`)
+					return
+				}
 
 				const slotPath = [...this.constants.screenMemoryPath, 'items', String(slot)]
 				const bankItemPath = [...slotPath, 'control', 'pp']
