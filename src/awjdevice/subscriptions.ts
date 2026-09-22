@@ -357,7 +357,7 @@ export default class Subscriptions {
 	/** A layer's assigned source changes (new input/still picked) - refreshes SelectedLayer.Input.*, see refreshSelectedLayerRect */
 	get selectedLayerSourceChange():Subscription {
 		return {
-			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/source/pp/inputNum',
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/source/pp/(?:inputNum|input)',
 			fun: this.refreshSelectedLayerRect,
 		}
 	}
@@ -402,7 +402,7 @@ export default class Subscriptions {
 	 * convention as layerPropertyStatusChange above. */
 	get layerSourceStatusChange():Subscription {
 		return {
-			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/source/pp/inputNum',
+			pat: 'device/(auxiliaryScreen|screen|auxiliary)List/items/(S|A)?(\\d{1,3})/presetList/items/(\\w+)/l(iveL)?ayerList/items/(\\d{1,3}|NATIVE)/source/pp/(?:inputNum|input)',
 			fbk: 'deviceLayerSourceStatus',
 		}
 	}
@@ -1664,7 +1664,7 @@ export default class Subscriptions {
 		const anchorPat = 'live/screens/layers/anchorPoint'
 
 		return {
-			pat: `(?:${screenOrAux}/(?:status/pp/(?:layerCount|mode)|presetList/items/\\w+/(?:${numberedLayerSegment}/items/\\d+/(?:source/pp/inputNum|position/pp/(?:posH|posV|sizeH|sizeV))|${bgSegments}/source/pp/inputNum))|${presetUpPat}|${inputSignalPat}|${anchorPat})`,
+			pat: `(?:${screenOrAux}/(?:status/pp/(?:layerCount|mode)|presetList/items/\\w+/(?:${numberedLayerSegment}/items/\\d+/(?:source/pp/(?:inputNum|input)|position/pp/(?:posH|posV|sizeH|sizeV))|${bgSegments}/source/pp/(?:inputNum|input)))|${presetUpPat}|${inputSignalPat}|${anchorPat})`,
 			ini: () => {
 				this.refreshLayerVariables()
 				return []
