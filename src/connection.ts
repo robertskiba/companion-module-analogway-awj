@@ -591,6 +591,11 @@ class AWJconnection {
 								this.instance.config.deviceFirmware = fwVersion
 								configChanged = true
 							}
+							const deviceSeries = this.instance.state.get('LOCAL/deviceSeries') ?? ''
+							if (this.instance.config.deviceSeries !== deviceSeries) {
+								this.instance.config.deviceSeries = deviceSeries
+								configChanged = true
+							}
 							// Kept fully in sync with live reality in both directions - e.g. after picking a
 							// simulator found via the network-scan dropdown, the checkbox should reflect that
 							// without a separate manual step, and equally should clear itself if pointed at a
@@ -648,7 +653,10 @@ class AWJconnection {
 								const chassis = await this.fetchChassisInfo(deviceKey)
 								this.instance.state.set(['LOCAL', 'chassis', deviceKey.toString()], chassis)
 								const slotCount = Array.isArray(chassis?.slots) ? chassis.slots.length : 'n/a'
-								this.instance.log('warn', `chassis info for device ${deviceKey}: ${chassis === null ? 'FAILED (null - see any error above)' : `OK, ${slotCount} slots`}`)
+								// Not a warning when absent - see fetchChassisInfo()'s own catch for why a missing
+								// chassis endpoint is an expected, harmless outcome rather than a failure.
+								if (chassis === null) this.instance.log('debug', `chassis info for device ${deviceKey}: not available, skipping the Installed Cards panel`)
+								else this.instance.log('debug', `chassis info for device ${deviceKey}: OK, ${slotCount} slots`)
 							}))
 							// The chassis fetch itself never changes anything under this.instance.config, but its
 							// result must reach the UI - force the same saveConfig() refresh path unconditionally.
@@ -1022,7 +1030,12 @@ class AWJconnection {
 				retry: 0,
 				timeout: 5000,
 			}).json()
-		} catch {
+		} catch (error) {
+			// Debug, not warn: this endpoint is a WebRCS "Hardware panel" extra that nothing else depends on,
+			// and it is legitimately absent on devices/simulators that don't serve it (confirmed on the Eikos
+			// 4K simulator). Logging the actual reason here rather than swallowing it silently - the caller
+			// used to point at "any error above" when nothing had been logged at all.
+			this.instance.log('debug', `chassis info for device ${deviceKey} not available: ${error}`)
 			return null
 		}
 	}

@@ -200,7 +200,9 @@ export default class ChoicesMidra extends Choices {
 	public getAuxBackgroundChoices(): Dropdown<string>[] {
 		return [
 			{id: 'NONE', label: 'None'},
-			...this.getLiveInputChoices('INPUT'),
+			// Short ids (IN{n}) like every other Source field in the module - callers convert back to the raw
+			// INPUT_n the `content` property expects via shortSourceToBackgroundContent() before sending.
+			...this.getLiveInputChoices('INPUT').map((c) => ({ id: this.backgroundContentToShortSource(c.id), label: c.label })),
 			...this.getScreensArray().map((screen: Choicemeta): Dropdown<string> => {
 				return {
 					id: 'PROGRAM_' + screen.index,
@@ -338,12 +340,17 @@ export default class ChoicesMidra extends Choices {
 	 */
 	public getLayersAsArray(param: string | number, bkg?: boolean, top?: boolean): Choicemeta[] {
 		const ret: Choicemeta[] = []
+		// Per getLayerChoices()'s documented contract: an explicit `top` wins, and only when it is omitted does
+		// the foreground follow `bkg`. The previous condition had this inverted for the explicit case - passing
+		// `top: true` was the one thing that reliably excluded the foreground layer, because it also required
+		// `top === undefined`, so a caller asking for it by name never got it.
+		const includeTop = top === undefined ? (bkg === undefined || bkg === true) : top
 		if (typeof param === 'number') {
 			if (bkg === undefined || bkg === true) ret.push({ id: 'BG', label: 'Background', longname: 'BKG' })
 			for (let i = 1; i <= param; i += 1) {
 				ret.push({ id: `${i}`, label: `Layer ${i}`, longname:`L${i}` })
 			}
-			if (top !== false && (bkg === undefined || (bkg === true && top === undefined))) ret.push({ id: 'TOP', label: 'Foreground', longname: 'TOP' })
+			if (includeTop) ret.push({ id: 'TOP', label: 'Foreground', longname: 'TOP' })
 			return ret
 		} else if (typeof param === 'string') {
 			if (param.startsWith('A')) {
@@ -355,7 +362,7 @@ export default class ChoicesMidra extends Choices {
 				for (let i = 1; i <= layercount; i += 1) {
 					ret.push({ id: `${i}`, label: `Layer ${i}`, longname:`L${i}` })
 				}
-				if (bkg === undefined || bkg === true) ret.push({ id: 'TOP', label: 'Foreground Layer', longname: 'TOP' })
+				if (includeTop) ret.push({ id: 'TOP', label: 'Foreground Layer', longname: 'TOP' })
 				}
 		}
 		return ret

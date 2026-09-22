@@ -529,7 +529,7 @@ export default class ActionsMidra extends Actions {
 					]
 					if (screen.isAux && action.options['sourceBack'] !== 'keep')
 						// on Midra on aux there is only background, so we don't show a layer dropdown and just set the background
-						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
+						this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], this.choices.shortSourceToBackgroundContent(action.options['sourceBack']))
 					else
 						// else decide which dropdown to use for which layer
 						for (const layer of action.options[`layer${screen.id}`]) {
@@ -538,7 +538,7 @@ export default class ActionsMidra extends Actions {
 							} else if (layer === 'TOP' && action.options['sourceFront'] !== 'keep') {
 								this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], action.options['sourceFront'].replace(/\D/g, ''))
 							} else if ( action.options['sourceLayer'] !== 'keep') {
-								this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', layer, 'source', 'pp', 'input'], action.options['sourceLayer'])
+								this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', layer, 'source', 'pp', 'input'], this.choices.shortSourceToBackgroundContent(action.options['sourceLayer']))
 							}
 						}
 				}
@@ -562,11 +562,11 @@ export default class ActionsMidra extends Actions {
 						if (layer.layerKey === 'BKG' && layer.screen.isScreen && action.options['sourceNative'] !== 'keep') {
 								this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], action.options['sourceNative'].replace(/\D/g, ''))
 							} else if (layer.layerKey === 'BKG' && layer.screen.isAux && action.options['sourceBack'] !== 'keep') {
-								this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
+								this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], this.choices.shortSourceToBackgroundContent(action.options['sourceBack']))
 							} else if (layer.layerKey === 'TOP' && action.options['sourceFront'] !== 'keep') {
 								this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], action.options['sourceFront'].replace(/\D/g, ''))
 							} else if ( action.options['sourceLayer'] !== 'keep') {
-								this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', layer.layerKey, 'source', 'pp', 'input'], action.options['sourceLayer'])
+								this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', layer.layerKey, 'source', 'pp', 'input'], this.choices.shortSourceToBackgroundContent(action.options['sourceLayer']))
 							}
 					})
 			}
@@ -607,7 +607,7 @@ export default class ActionsMidra extends Actions {
 				id: 'sourceLayer',
 				type: 'dropdown',
 				label: 'Screen Layer Source',
-				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getSourceChoices()],
+				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label }))],
 				default: 'keep',
 				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
 				// selected screens (of any kind) have a non-NATIVE (numeric) layer selected in their per-screen layer
@@ -620,7 +620,7 @@ export default class ActionsMidra extends Actions {
 			{
 				id: 'sourceFront',
 				type: 'dropdown',
-				label: 'Screen Foreground Source',
+				label: 'Foreground Source',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.choicesForegroundImagesSource],
 				default: 'keep',
 				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
@@ -634,7 +634,7 @@ export default class ActionsMidra extends Actions {
 			{
 				id: 'sourceBack',
 				type: 'dropdown',
-				label: 'Aux Background Source',
+				label: 'Background Source (Aux)',
 				choices: [{ id: 'keep', label: "Don't change source"}, ...this.choices.getAuxBackgroundChoices()],
 				default: 'keep',
 				// TODO(isVisible-migration): original logic hides this field only when method is 'spec' and none of the
@@ -667,37 +667,22 @@ export default class ActionsMidra extends Actions {
 			]
 		}
 
-		// Aux screens (background only, via "content") and the TOP frame layer (via "frame") use their own
-		// separate device properties, distinct from numbered layers' "sourceLayer" - added here as raw
-		// passthrough textinputs (blank = don't change) since their exact accepted values are NOT live-verified
-		// on Midra yet (unlike sourceLayer/sourceColor, confirmed live on LivePremier4 only). This fixes a real
-		// bug found live-auditing this action: the callback below always referenced
-		// `action.options['sourceBack']`/`['sourceFront']` even though no such fields existed in the schema,
-		// so they were always `undefined` at runtime - silently sending `undefined` to every Aux target on
-		// every run (even with nothing changed), and throwing on every TOP-layer target (`undefined.replace`
-		// is not a function). Shown unconditionally like sourceLayer/sourceColor (same "showing an unneeded
-		// field is safer than hiding a needed one" precedent used elsewhere in this file), only applied when
-		// the resolved target is actually an Aux/TOP layer.
-		const sourceColorIndex = deviceSelectSourceV3.options.findIndex((opt) => opt.id === 'sourceColor')
-		if (sourceColorIndex !== -1) {
-			deviceSelectSourceV3.options.splice(sourceColorIndex + 1, 0,
-				{
-					id: 'sourceBack',
-					type: 'textinput',
-					label: 'Aux Background Source',
-					tooltip: 'Leave empty to not change this value. Only applies when the resolved target is an Aux screen (which only has a background, no per-layer addressing on Midra). Raw value, sent 1:1 - exact accepted values not yet confirmed live on Midra.',
-					default: '',
-					useVariables: true,
-				},
-				{
-					id: 'sourceFront',
-					type: 'textinput',
-					label: 'TOP Frame Source',
-					tooltip: 'Leave empty to not change this value. Only applies when the resolved target is the TOP (foreground frame) layer. Raw value (digits only are used), sent 1:1 - exact accepted values not yet confirmed live on Midra.',
-					default: '',
-					useVariables: true,
-				},
-			)
+		// One "Source" field drives every target type, so which of the device's three differently-named
+		// properties gets written is decided purely by the Layer/Screen selection, not by asking the user to
+		// fill the matching one of several parallel fields. The id spaces are disjoint - NONE, COLOR, IN{n},
+		// NATIVE_{n} (Background Set) and TOP_{n} (Foreground Image) - so a single list stays unambiguous, and
+		// the callback ignores any pick that isn't valid for the resolved target, the same way an invalid pick
+		// on a Screen's background layer has always been a no-op.
+		const sourceField = deviceSelectSourceV3.options.find((opt) => opt.id === 'sourceLayer')
+		if (sourceField) {
+			// Foreground Images sit directly in front of the Background Sets, so the list reads front-to-back:
+			// inputs, then foreground, then background. 'NONE' is dropped from the foreground list because the
+			// shared one already starts with it.
+			const foreground = this.choices.choicesForegroundImagesSource.filter((c) => c.id !== 'NONE')
+			const choices = [...sourceField['choices']]
+			const firstBackgroundSet = choices.findIndex((c: { id: string | number }) => /^NATIVE_\d+$/.test(String(c.id)))
+			choices.splice(firstBackgroundSet === -1 ? choices.length : firstBackgroundSet, 0, ...foreground)
+			sourceField['choices'] = choices
 		}
 
 		const resolveTargets = (opt: {screen: string, layer: string}): {screenAuxKey: string, layerKey: string}[] => {
@@ -748,7 +733,7 @@ export default class ActionsMidra extends Actions {
 				'presetList', 'items', this.choices.getPreset(screen.id, preset)
 			]
 
-			const newoptions: Partial<typeof action.options> & {sourceBack?: string, sourceFront?: string} = {
+			const newoptions: Partial<typeof action.options> & {sourceFront?: string} = {
 				screen: screen.id,
 				layer: target.layerKey,
 				preset,
@@ -762,14 +747,19 @@ export default class ActionsMidra extends Actions {
 			}
 
 			if (screen.isAux) {
+				// An Aux background is read back into the shared "Source" field, matching where the callback
+				// now takes it from - converted to this module's short id (INPUT_2 -> IN2) like every other
+				// source, so Learn produces a value the dropdown actually contains.
 				const raw = this.state.get(['DEVICE', ...presetpath, 'background', 'source', 'pp', 'content'])
-				if (typeof raw === 'string') newoptions.sourceBack = raw
+				if (typeof raw === 'string') newoptions.sourceLayer = this.choices.backgroundContentToShortSource(raw)
 				return newoptions
 			}
 
 			if (target.layerKey === 'TOP') {
+				// Stored as the bare digit ("3") or "NONE" - mapped back to the TOP_{n} id the shared "Source"
+				// dropdown offers, mirroring what the callback sends in the other direction.
 				const raw = this.state.get(['DEVICE', ...presetpath, 'top', 'source', 'pp', 'frame'])
-				if (raw !== undefined) newoptions.sourceFront = String(raw)
+				if (raw !== undefined) newoptions.sourceLayer = /^\d+$/.test(String(raw)) ? `TOP_${raw}` : String(raw)
 				return newoptions
 			}
 
@@ -780,15 +770,23 @@ export default class ActionsMidra extends Actions {
 				// callback's own `source.replace(/\D/g, '')` does in the other direction. Otherwise convert the
 				// raw AWJ id (e.g. STILL_3) to this module's own short id (IMG3) - backgroundContentToShortSource()
 				// passes anything else (NONE/COLOR) through unchanged.
-				newoptions.sourceLayer = /^\d+$/.test(raw) ? `NATIVE_${raw}` : this.choices.backgroundContentToShortSource(raw)
-				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'background', 'source', 'color', 'pp'])
+				if (/^\d+$/.test(raw)) {
+					newoptions.sourceLayer = `NATIVE_${raw}`
+					return newoptions
+				}
+				// `set` is NONE for both "None" and "Color", since Color is expressed as "no Background Set plus
+				// a colour" (see the callback). The two are told apart by the colour itself: the callback always
+				// forces black for None, so anything else was a deliberate Color pick.
+				const backgroundColor = readColor([...presetpath, 'background', 'color', 'pp'])
+				newoptions.sourceLayer = backgroundColor === 0 ? 'NONE' : 'COLOR'
+				if (backgroundColor !== 0) newoptions.sourceColor = backgroundColor
 				return newoptions
 			}
 
 			const raw = this.state.get(['DEVICE', ...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'])
 			if (typeof raw === 'string') {
 				newoptions.sourceLayer = this.choices.backgroundContentToShortSource(raw)
-				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp'])
+				if (raw === 'COLOR') newoptions.sourceColor = readColor([...presetpath, 'liveLayerList', 'items', target.layerKey, 'color', 'pp'])
 			}
 			return newoptions
 		}
@@ -813,20 +811,26 @@ export default class ActionsMidra extends Actions {
 						'items', screen.platformId,
 						'presetList', 'items', this.choices.getPreset(screen.id, preset)
 					]
-					// on Midra, aux screens only have a background - there is no per-layer addressing at all
+					// On Midra an Aux screen only has a background - no per-layer addressing at all - so the Layer
+					// field is irrelevant here and the shared "Source" field drives it, exactly like every other
+					// target type. An Aux background stores a plain input in `content`, so Color and Background
+					// Sets are silently ignored rather than sent, the same way an invalid pick on a Screen's
+					// background layer is a no-op below.
 					if (screen.isAux) {
-						if (action.options['sourceBack'] !== '') {
-							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], action.options['sourceBack'])
+						const source = this.choices.shortSourceToBackgroundContent(action.options['sourceLayer'])
+						if (action.options['sourceLayer'] !== 'keep' && (source === 'NONE' || /^INPUT_\d+$/.test(source))) {
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'content'], source)
 						}
 					} else if (target.layerKey === 'NATIVE' || target.layerKey === 'BKG') {
 						// Converts this module's own short id (IN{n}/IMG{n}) back to the raw AWJ id (LIVE_n/STILL_n)
 						// the device expects - anything else (NONE/COLOR/NATIVE_n, or an already-raw id typed
 						// directly via Expression Mode) passes through unchanged.
 						const source = this.choices.shortSourceToBackgroundContent(action.options['sourceLayer'])
-						// NOT live-verified on Midra (only confirmed on a LivePremier4 device: color lives at
-						// .../source/color/pp/{red,green,blue}, sibling to .../source/pp/{inputNum|set|input}) -
-						// assumed to follow the same sibling-of-source convention here, please verify before relying on it
-						const colorpath = [...presetpath, 'background', 'source', 'color', 'pp']
+						// Live-verified against an Eikos 4K simulator: on Midra the colour is a sibling of `source`
+						// (background/color/pp/{red,green,blue}), NOT nested under it the way LivePremier4 has it
+						// at layerList/items/NATIVE/source/color/pp. The previous path assumed LivePremier's shape
+						// and wrote into a node that does not exist here.
+						const colorpath = [...presetpath, 'background', 'color', 'pp']
 						const sendColor = (r: number, g: number, b: number) => {
 							this.connection.sendWSmessage([...colorpath, 'red'], r)
 							this.connection.sendWSmessage([...colorpath, 'green'], g)
@@ -836,24 +840,44 @@ export default class ActionsMidra extends Actions {
 							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'NONE')
 							sendColor(0, 0, 0) // "None" always resets the background to black, regardless of the color picker
 						} else if (source === 'COLOR') {
-							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'COLOR')
+							// `set` selects a Background Set and has no "COLOR" value of its own - the picked colour
+							// only becomes visible once the Background Set is cleared, so Color is sent as NONE plus
+							// the colour.
+							// Deliberately NOT the same as LivePremier4, where the background is a normal layer and
+							// its `source/pp/inputNum` does accept 'COLOR' directly (live-confirmed working on an
+							// Aquilon). The two platforms genuinely differ here - do not "harmonise" them.
+							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], 'NONE')
 							const color = Number(action.options['sourceColor'])
 							sendColor((color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff)
 						} else if (/^NATIVE_\d+$/.test(source)) {
 							this.connection.sendWSmessage([...presetpath, 'background', 'source', 'pp', 'set'], source.replace(/\D/g, ''))
 						}
 						// anything else picked from the shared list isn't valid for a background layer - no-op
-					} else if (target.layerKey === 'TOP' && action.options['sourceFront'] !== '') {
-						this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], action.options['sourceFront'].replace(/\D/g, ''))
+					} else if (target.layerKey === 'TOP') {
+						// The foreground frame holds a Foreground Image (TOP_{n}, sent as the bare digit) or NONE -
+						// inputs, Color and Background Sets are not valid here and are ignored rather than sent.
+						const picked = this.choices.normalizeSourceId(action.options['sourceLayer'])
+						if (picked === 'NONE') {
+							this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], 'NONE')
+						} else if (/^TOP_\d+$/.test(picked)) {
+							this.connection.sendWSmessage([...presetpath, 'top', 'source', 'pp', 'frame'], picked.replace(/\D/g, ''))
+						}
 					} else if (action.options['sourceLayer'] !== 'keep') {
 						const source = this.choices.shortSourceToBackgroundContent(action.options['sourceLayer'])
-						this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'], source)
-						if (source === 'COLOR') {
-							const color = Number(action.options['sourceColor'])
-							const colorpath = [...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'color', 'pp']
-							this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
-							this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
-							this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+						// A numbered layer takes an input, Color or None - Background Sets and Foreground Images
+						// belong to the background/foreground layers and are ignored here rather than sent.
+						// Deliberately not an early `continue`: the relock below has to run either way, or a
+						// screen this action unlocked itself would silently stay unlocked.
+						if (source === 'NONE' || source === 'COLOR' || /^INPUT_\d+$/.test(source)) {
+							this.connection.sendWSmessage([...presetpath, 'liveLayerList', 'items', target.layerKey, 'source', 'pp', 'input'], source)
+							if (source === 'COLOR') {
+								const color = Number(action.options['sourceColor'])
+								// Sibling of `source`, not nested under it - same Midra shape as the background above.
+							const colorpath = [...presetpath, 'liveLayerList', 'items', target.layerKey, 'color', 'pp']
+								this.connection.sendWSmessage([...colorpath, 'red'], (color >> 16) & 0xff)
+								this.connection.sendWSmessage([...colorpath, 'green'], (color >> 8) & 0xff)
+								this.connection.sendWSmessage([...colorpath, 'blue'], color & 0xff)
+							}
 						}
 					}
 					if (unlockedByUs && parseBoolean(action.options.relockAfterChange)) {
@@ -863,24 +887,6 @@ export default class ActionsMidra extends Actions {
 			}
 			this.instance.sendXupdate()
 		}
-
-		// inserted before the last 2 fields (Unlock Screen if locked? / Relock after change), which must stay last
-		deviceSelectSourceV3.options.splice(deviceSelectSourceV3.options.length - 2, 0,
-			{
-				id: 'sourceFront',
-				type: 'dropdown',
-				label: 'Screen Foreground Source',
-				choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.choicesForegroundImagesSource],
-				default: 'keep',
-			},
-			{
-				id: 'sourceBack',
-				type: 'dropdown',
-				label: 'Aux Background Source',
-				choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.getAuxBackgroundChoices()],
-				default: 'keep',
-			},
-		)
 
 		return deviceSelectSourceV3
 	}
@@ -898,6 +904,12 @@ export default class ActionsMidra extends Actions {
 			// matched that (only the old V2-style 'IN_3'), so a fresh, untouched dropdown selection silently
 			// targeted a nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'. Same lenient
 			// bare-number/'IN{n}'/'IN_{n}' extraction the Aquilon version of this action already uses.
+			// Carries over the base callback's Cut&Fill guard, which this override used to drop - without it the
+			// Mode dropdown showed Cut&Fill as unavailable while the action happily sent it anyway. The device
+			// does expose a per-input capability flag for this (status/keying/cutNFill/pp/isAvailable, seen true
+			// on an Eikos 4K simulator), which would be a far better gate than a version number - see the Midra
+			// Known Gaps entry before enabling it.
+			if (action.options.mode === 'CUT_AND_FILL' && !this.choices.isFirmwareAtLeast('4.0.254')) return
 			const match = (action.options.input ?? '').match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
 			if (!match) return
 			const input = `INPUT_${match[1]}`

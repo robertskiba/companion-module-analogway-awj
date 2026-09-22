@@ -9,6 +9,9 @@ export interface Config extends JsonObject {
 	macaddress: string
 	deviceModel: string
 	deviceFirmware: string
+	/** 'Midra 4K' or 'LivePremier', mirrored from LOCAL/deviceSeries so the config page can tell the two
+	 * firmware version series apart without a live connection - see updateSuggestedField(). */
+	deviceSeries: string
 	device2ip: string
 	device2mac: string
 	device2model: string
@@ -80,6 +83,26 @@ function installedCardsField(id: string, summary?: string): SomeCompanionConfigF
 // available when it actually would be once connected.
 export const RECOMMENDED_FIRMWARE = '6.2.73'
 
+// Midra/Alta firmware is numbered in an entirely separate series from Aquilon's - a Midra on 3.3.7 is current,
+// while an Aquilon on 3.x is pre-V4 and unsupported. Comparing the two against one shared constant told a
+// perfectly healthy Midra its firmware was "not supported any more" (live-confirmed on an Eikos 4K simulator
+// reporting 3.3.7), so the two series get their own baselines and their own wording.
+// Unlike Aquilon there is no protocol break to migrate across and no third-party-control compatibility story
+// here, so there is no reason for a Midra to stay on old firmware - an outdated one just gets a plain "please
+// update" nudge.
+// V3.3.10, released end of 2025, is the newest version on Analog Way's website as of this module's release.
+// Note compareFirmwareVersions() parses each segment as a number, so 3.3.10 correctly sorts above 3.3.7 -
+// a plain string comparison would get this backwards.
+export const MIDRA_RECOMMENDED_FIRMWARE = '3.3.10'
+
+/** True for a device whose firmware is numbered in the Midra/Alta series rather than Aquilon's. */
+function isMidraSeries(series?: string): boolean {
+	return series === 'Midra 4K'
+}
+
+const UPDATE_SUGGESTED_TEXT_MIDRA =
+	`An update to V${MIDRA_RECOMMENDED_FIRMWARE} is recommended - as of this module's release that is the newest version offered on Analog Way's website (released end of 2025; a newer one may exist by now if this module hasn't been updated recently). The update is low-risk: no communications protocol changes and no unwanted changes to your existing setup are expected, and there is no update path to follow - simply read the update instructions for your device and install it. This module is developed and tested against the current firmware, so older versions may be missing functions it expects.`
+
 function isFirmwareBelow(version: string, threshold: string): boolean {
 	return compareFirmwareVersions(version, threshold) < 0
 }
@@ -118,8 +141,21 @@ function firmwareLabel(fw: string): string {
  * instead, since there's nothing left to warn about other than not being on the very latest build). For the
  * below-V4 case, AWJconnection persists config.deviceFirmware even though it refuses the connection (see its
  * Aquilon branch), specifically so this notice reliably shows up here instead of only in the connection log. */
-function updateSuggestedField(id: string, firmware?: string): SomeCompanionConfigField[] {
-	if (!firmware || !isFirmwareBelow(firmware, RECOMMENDED_FIRMWARE)) return []
+function updateSuggestedField(id: string, firmware?: string, series?: string): SomeCompanionConfigField[] {
+	if (!firmware) return []
+	// Midra/Alta has its own baseline and its own single tier - none of the Aquilon tiers below (the V4
+	// protocol break, the "near current" 6.0.4 cutoff) mean anything in that version series.
+	if (isMidraSeries(series)) {
+		if (!isFirmwareBelow(firmware, MIDRA_RECOMMENDED_FIRMWARE)) return []
+		return [{
+			id,
+			type: 'static-text' as const,
+			label: 'Update Suggested',
+			value: UPDATE_SUGGESTED_TEXT_MIDRA,
+			width: 12,
+		}]
+	}
+	if (!isFirmwareBelow(firmware, RECOMMENDED_FIRMWARE)) return []
 	const major = parseInt(firmware.split('.')[0], 10)
 	if (isNaN(major)) return []
 	const value = major < 4
@@ -154,26 +190,21 @@ export function GetConfigFields(config?: Config, cardSummaries?: DeviceCardSumma
 					width: 12,
 				},
 				...installedCardsField(`device${n}cards`, cardSummaries?.[`device${n}` as const]),
-				...updateSuggestedField(`device${n}updateSuggested`, firmware),
+				...updateSuggestedField(`device${n}updateSuggested`, firmware, config?.deviceSeries),
 			]
 		})
 
 	return [
-		// Companion version requirement first of all - if someone ended up here on a Companion old enough to
-		// not support this at all, Companion itself would have refused to even load the module, so this only
-		// reaches people on a new-enough Companion; it's here as a heads-up for anyone deciding whether to roll
-		// this module out to colleagues/other machines that might still be on an older Companion.
-		{
-			id: 'companionVersionRequirement',
-			type: 'static-text' as const,
-			label: 'Companion Version Requirement',
-			value: 'This module requires Companion 4.3 or newer (it relies on @companion-module/base v2, which needs the native expression/local-variable support added in Companion 4.3). It will not load at all on older Companion versions.',
-			width: 12,
-		},
+		// No "requires Companion 4.3+" notice here on purpose: the requirement is already enforced by the
+		// manifest's runtime.apiVersion, which makes an older Companion refuse to load the module at all - so
+		// the notice could only ever be read by people who already satisfy it. Showing it conditionally isn't
+		// possible either: the module API exposes no host version (neither a typed field nor an env var).
+		// The requirement is documented in README.md/HELP.md instead, where someone planning a rollout can
+		// actually find it before installing.
 		// The Leader's own "Update Suggested" notice (if applicable) sits above everything else, including
 		// Device Network Address - it's the one thing here worth seeing immediately, unlike the rest of this
 		// section which is purely informational and lives at the bottom instead.
-		...updateSuggestedField('deviceModelUpdateSuggested', config?.deviceFirmware),
+		...updateSuggestedField('deviceModelUpdateSuggested', config?.deviceFirmware, config?.deviceSeries),
 		// Shown as soon as a scan has actually completed at least once (networkScanResults !== undefined) -
 		// even with zero results, so "No Device Found" is a visible outcome, not just a log line the user
 		// might miss. Stays hidden only before any scan has ever run.

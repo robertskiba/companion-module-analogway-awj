@@ -1337,7 +1337,7 @@ export default class Actions {
 						{ id: 'CREMATTE3D', label: 'CremaTTe3D' },
 						// Analog Way's release notes: input-level Cut&Fill was added in firmware 4.0.254 -
 						// live-confirmed (2026-09-08) this is that same feature, not a separate protocol area.
-						{ id: 'CUT_AND_FILL', label: this.choices.isFirmwareAtLeast('4.0.254') ? 'Cut&Fill' : 'Cut&Fill (requires at least firmware 4.0.254)' },
+						{ id: 'CUT_AND_FILL', label: this.choices.isFirmwareAtLeast('4.0.254') ? 'Cut&Fill' : `Cut&Fill${this.choices.firmwareGateNote('4.0.254')}` },
 					],
 					default: 'DISABLE',
 				},

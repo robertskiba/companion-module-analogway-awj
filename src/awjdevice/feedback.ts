@@ -277,8 +277,8 @@ export default class Feedbacks {
 						{ id: 'filterSolar', label: 'Effects - Filter Solarize' },
 						{ id: 'transformFlipH', label: 'Effects - Transform Flip Horizontal' },
 						{ id: 'transformFlipV', label: 'Effects - Transform Flip Vertical' },
-						{ id: 'strobeEnable', label: this.choices.isFirmwareAtLeast('6.0.4') ? 'Effects - Strobe Active' : 'Effects - Strobe Active (requires at least firmware 6.0.4)' },
-						{ id: 'keyingEnable', label: this.choices.isFirmwareAtLeast('5.0.128') ? 'Keying Enabled' : 'Keying Enabled (requires at least firmware 5.0.128)' },
+						{ id: 'strobeEnable', label: this.choices.isFirmwareAtLeast('6.0.4') ? 'Effects - Strobe Active' : `Effects - Strobe Active${this.choices.firmwareGateNote('6.0.4')}` },
+						{ id: 'keyingEnable', label: this.choices.isFirmwareAtLeast('5.0.128') ? 'Keying Enabled' : `Keying Enabled${this.choices.firmwareGateNote('5.0.128')}` },
 						{ id: 'cutFillEnable', label: 'Cut&Fill - Enabled' },
 						{ id: 'maskActive', label: 'Mask Active' },
 						{ id: 'aspect1_1', label: 'Aspect Override - 1:1' },
@@ -2708,7 +2708,7 @@ export default class Feedbacks {
 						{ id: 'CREMATTE3D', label: 'CremaTTe3D' },
 						// Analog Way's release notes: input-level Cut&Fill was added in firmware 4.0.254 -
 						// live-confirmed (2026-09-08) this is that same feature, not a separate protocol area.
-						{ id: 'CUT_AND_FILL', label: this.choices.isFirmwareAtLeast('4.0.254') ? 'Cut&Fill' : 'Cut&Fill (requires at least firmware 4.0.254)' },
+						{ id: 'CUT_AND_FILL', label: this.choices.isFirmwareAtLeast('4.0.254') ? 'Cut&Fill' : `Cut&Fill${this.choices.firmwareGateNote('4.0.254')}` },
 					],
 					default: 'DISABLE',
 				},

@@ -417,9 +417,30 @@ export default class Choices {
 	 * (see this getter's own doc comment above on why no separate reactivity mechanism is needed for that).
 	 */
 	public isFirmwareAtLeast(minVersion: string): boolean {
+		// Every gate in this module is written against Aquilon's firmware numbering. Midra/Alta is numbered in
+		// a completely separate series (a current Midra reports e.g. 3.3.7), so comparing the two is
+		// meaningless - it happens to read "false" for most gates today, but only by accident of the numbers,
+		// and would flip to a false "supported" the moment Midra reaches 4.x.
+		// Per explicit user decision these features stay OFF on Midra rather than being assumed present: each
+		// one gets enabled individually once it has actually been verified against real Midra hardware (see
+		// the "Midra / Alta - Known Gaps" section in CHANGELOG.md and RC2_Midra_Testing_Checklist.md). An
+		// outdated Midra is nudged via the config page's own "Update Suggested" notice instead
+		// (MIDRA_RECOMMENDED_FIRMWARE in config.ts), not by silently reinterpreting Aquilon version gates.
+		if (this.state.platform === 'midra') return false
 		const fwVersion: string = this.instance.state.get('LOCAL/deviceFirmwareVersion') ?? ''
 		if (!fwVersion) return compareFirmwareVersions(RECOMMENDED_FIRMWARE, minVersion) >= 0
 		return compareFirmwareVersions(fwVersion, minVersion) >= 0
+	}
+
+	/**
+	 * The "why can't I pick this" suffix for a choice that isFirmwareAtLeast() currently rules out. On Aquilon
+	 * that genuinely is a firmware requirement; on Midra/Alta the version number would be nonsense (different
+	 * numbering series entirely), where the real reason is that the feature hasn't been verified on that
+	 * hardware yet - so the two get different wording rather than one misleading message.
+	 */
+	public firmwareGateNote(minVersion: string): string {
+		if (this.state.platform === 'midra') return ' (not verified on Midra/Alta yet)'
+		return ` (requires at least firmware ${minVersion})`
 	}
 
 	/**
@@ -578,9 +599,20 @@ export default class Choices {
 	 * than this needs). 'NONE' stays 'NONE'; anything unrecognized is passed through unchanged.
 	 */
 	public backgroundContentToShortSource(content: string): string {
-		const match = this.normalizeSourceId(content).match(/^(LIVE|STILL)_(\d+)$/)
+		const match = this.normalizeSourceId(content).match(/^(LIVE|INPUT|STILL)_(\d+)$/)
 		if (!match) return content
-		return match[1] === 'LIVE' ? `IN${match[2]}` : `IMG${match[2]}`
+		return match[1] === 'STILL' ? `IMG${match[2]}` : `IN${match[2]}`
+	}
+
+	/**
+	 * The raw AWJ prefix a live input carries on this platform. LivePremier uses `LIVE_n`, Midra/Alta uses
+	 * `INPUT_n` - live-confirmed against an Eikos 4K simulator, where both the device's own
+	 * `device/inputList` item keys and a layer's `source/pp/input` value read `INPUT_1`, so it is the real
+	 * wire-level id rather than an artifact of getLiveInputArray() rebuilding ids from a prefix + number.
+	 * Both map to the same `IN{n}` short id the user sees everywhere.
+	 */
+	private get liveInputRawPrefix(): string {
+		return this.state.platform === 'midra' ? 'INPUT' : 'LIVE'
 	}
 
 	/**
@@ -604,7 +636,7 @@ export default class Choices {
 		const normalized = this.normalizeSourceId(shortId)
 		const match = normalized.match(/^(IN|IMG)(\d+)$/)
 		if (!match) return normalized
-		return match[1] === 'IN' ? `LIVE_${match[2]}` : `STILL_${match[2]}`
+		return match[1] === 'IMG' ? `STILL_${match[2]}` : `${this.liveInputRawPrefix}_${match[2]}`
 	}
 
 	/**
