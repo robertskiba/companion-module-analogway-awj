@@ -2118,7 +2118,7 @@ export default class Subscriptions {
 	get auxMemoryLabel():Subscription {
 		return {
 			pat: 'DEVICE/device/preset/auxBank/slotList/items/(\\d+)/control/pp/label',
-			ini: Array.from({ length: 200 }, (_, i) => (i + 1).toString()),
+			ini: Array.from({ length: this.constants.maxAuxMemories }, (_, i) => (i + 1).toString()),
 			fun: (path, _value) => {
 				if (!path) return false;
 				const memory = Array.isArray(path) ? path[6] : path.split('/')[6];

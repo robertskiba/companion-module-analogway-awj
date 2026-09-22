@@ -10,6 +10,9 @@ export default class Constants {
     static readonly maxInputs: number = 256
     static readonly maxLayers: number = 128
     static readonly maxScreenMemories: number = 1000
+    /** Aux Memories are a Midra/Alta concept - LivePremier has no separate aux bank, so the generic ceiling
+     * just mirrors maxScreenMemories rather than claiming a number of its own. */
+    static readonly maxAuxMemories: number = 1000
     static readonly maxMasterMemories: number = 500
     static readonly maxMultiviewerMemories: number = 50
     static readonly maxStills: number = 192

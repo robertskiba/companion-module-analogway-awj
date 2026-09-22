@@ -14,6 +14,8 @@ export default class ConstantsMidra extends Constants {
     static override readonly maxInputs = 16
     static override readonly maxLayers = 8 as const
     static override readonly maxScreenMemories = 200 as const
+    // Live-confirmed on an Eikos 4K simulator: device/preset/auxBank/slotList holds exactly 200 slots.
+    static override readonly maxAuxMemories = 200 as const
     static override readonly maxMasterMemories = 50 as const
     static override readonly maxMultiviewerMemories = 20 as const
     static override readonly maxStills = 50 as const
