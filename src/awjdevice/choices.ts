@@ -1070,6 +1070,25 @@ export default class Choices {
 	}
 
 	/**
+	 * A layer's own on-screen size, used wherever a pixel value has to be turned into a fraction of it -
+	 * Mask above all, which normalizes against exactly this.
+	 *
+	 * Falls back to the Screen's own canvas rather than a fixed 1920x1080 when the layer has no size node.
+	 * On LivePremier every layer has one, so the fallback never runs there. On Midra the Background and the
+	 * Foreground frame have none - they are always full screen - and the old literal happened to be right
+	 * only as long as the Screen really was 1920x1080; on a 4K Screen a Mask given in pixels came out half
+	 * the size it should have been. The literal stays as a last resort for a device that has not reported a
+	 * canvas either, i.e. before the first connect.
+	 */
+	public getLayerSize(screenAuxKey: string, layerPath: string[]): { sizeH: number, sizeV: number } {
+		const canvas = this.getScreenCanvasSize(screenAuxKey)
+		return {
+			sizeH: this.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeH']) ?? canvas.width ?? 1920,
+			sizeV: this.state.get(['DEVICE', ...layerPath, ...this.constants.propsSizePath, 'sizeV']) ?? canvas.height ?? 1080,
+		}
+	}
+
+	/**
 	 * The source id a layer is currently showing, read from wherever that platform keeps it and returned in
 	 * the AWJ id form the rest of the module speaks ('NONE', 'LIVE_3'/'INPUT_3', 'NATIVE_2', 'PROGRAM_1').
 	 *

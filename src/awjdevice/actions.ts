@@ -1722,8 +1722,7 @@ export default class Actions {
 				path,
 				posH: this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posH']) ?? 0,
 				posV: this.state.get(['DEVICE', ...path, ...this.constants.propsPositionPath, 'posV']) ?? 0,
-				sizeH: this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920,
-				sizeV: this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080,
+				...this.choices.getLayerSize(screninfo.id, path),
 			}
 		}
 
@@ -3428,8 +3427,7 @@ export default class Actions {
 					preset,
 				}
 
-				const sizeH: number = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
-				const sizeV: number = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
+				const { sizeH, sizeV } = this.choices.getLayerSize(screenInfo.id, path)
 				const maskReadFields: [keyof DeviceLayerMaskV3, keyof DeviceLayerMaskV3, string, 'h' | 'v'][] = [
 					['maskTopPx', 'maskTopPct', 'top', 'v'], ['maskBottomPx', 'maskBottomPct', 'bottom', 'v'],
 					['maskLeftPx', 'maskLeftPct', 'left', 'h'], ['maskRightPx', 'maskRightPct', 'right', 'h'],
@@ -3477,8 +3475,9 @@ export default class Actions {
 						]
 
 						// unlike Aspect & Crop (normalized against the source's native resolution), Mask is confirmed
-						// live to normalize against the layer's own current on-screen size instead - defaults mirror
-						// "Reset Layer Size or Ratio"'s fallback for a layer whose size isn't known yet.
+						// live to normalize against the layer's own current on-screen size instead - via
+						// choices.getLayerSize(), which stands in the Screen's canvas for a layer that has no size of
+						// its own (Midra's Background and Foreground, both always full screen).
 						let sizeH: number | undefined
 						let sizeV: number | undefined
 						for (const [pxId, pctId, prop, axis] of maskFields) {
@@ -3486,8 +3485,7 @@ export default class Actions {
 							let fraction: number | undefined
 							if (rawPx !== '' && !isNaN(Number(rawPx))) {
 								if (sizeH === undefined) {
-									sizeH = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
-									sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
+									({ sizeH, sizeV } = this.choices.getLayerSize(screenInfo.id, path))
 								}
 								const dimension = axis === 'v' ? sizeV! : sizeH!
 								fraction = Math.min(1, Math.max(0, Number(rawPx) / dimension))
@@ -4674,8 +4672,7 @@ export default class Actions {
 								break
 							}
 							case 'maskTop': case 'maskBottom': case 'maskLeft': case 'maskRight': {
-								const sizeH = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeH']) ?? 1920
-								const sizeV = this.state.get(['DEVICE', ...path, ...this.constants.propsSizePath, 'sizeV']) ?? 1080
+								const { sizeH, sizeV } = this.choices.getLayerSize(layer.screenAuxKey, path)
 								const edge = action.options.value.replace('mask', '').toLowerCase()
 								const dimension = (edge === 'top' || edge === 'bottom') ? sizeV : sizeH
 								applyFraction([...this.constants.propsMaskPath, edge], dimension)
