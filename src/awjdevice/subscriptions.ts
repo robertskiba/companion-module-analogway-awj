@@ -1535,9 +1535,11 @@ export default class Subscriptions {
 	private refreshLayerVariables = (): boolean => {
 		const layerVariableSuffixes = ['source', 'status', 'width', 'height', 'x', 'y']
 		const screens = [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]
-		// A layer source of "NONE" (empty slot) is flattened to "" rather than the literal word, per explicit
-		// user request for the background layer - applied to numbered layers too for consistency.
-		const sourceValue = (raw: string | undefined): string => (raw && raw !== 'NONE' ? this.formatSourceShort(raw) : '')
+		// An empty layer reports the literal "NONE" rather than a blank string (this reverses an earlier
+		// decision to blank it): a blank is ambiguous - it reads the same as "not reported yet" or "no such
+		// layer" - and it makes expressions awkward, since an explicit comparison against "NONE" is clearer
+		// than testing for emptiness.
+		const sourceValue = (raw: string | undefined): string => (raw && raw !== 'NONE' ? this.formatSourceShort(raw) : 'NONE')
 		// A layer's own signal status - VALID/INVALID, same vocabulary as IN{n}.status. A live input source
 		// delegates straight to getInputSignalStatus() (its own physical signal presence); Still/Color/Timer/
 		// Screen-reinsertion sources are always-available generated/static content with no signal-loss
@@ -1630,7 +1632,7 @@ export default class Subscriptions {
 					const fgPath = [...presetPath, ...this.instance.choices.getLayerPath('TOP')]
 					const fgFrame = this.instance.state.get(['DEVICE', ...fgPath, 'source', 'pp', 'frame'])
 					this.instance.addVariable({ id: 'layerVariables', variableId: `${info.id}.${side}.layerfg.source`, name: `Foreground Image slot on ${info.id} ${sideLabel}` })
-					this.instance.setVariableValues({ [`${info.id}.${side}.layerfg.source`]: (fgFrame === undefined || fgFrame === 'NONE') ? '' : String(fgFrame) })
+					this.instance.setVariableValues({ [`${info.id}.${side}.layerfg.source`]: (fgFrame === undefined || fgFrame === 'NONE') ? 'NONE' : String(fgFrame) })
 				}
 			}
 		}
