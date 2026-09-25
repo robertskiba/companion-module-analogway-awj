@@ -102,7 +102,14 @@ See §14 for the individual connection/login bugs that were fixed.
 
 ## 13. Known gaps
 
-See `CHANGELOG.md`'s "Planned" and "Midra / Alta - Known Gaps" sections for the exact current list - in short: Input-level Cut & Fill is now done (§5), but Output Freeze, Screen/Layer Freeze, the inactive-Layer cleanup, and Cut&Fill (Layer-level) are all still LivePremier4/Aquilon-only pending Midra hardware verification; a couple of small internal cleanup items (duplicate option-field definitions, an id-convention mismatch on Midra's Source choices) are tracked but not yet fixed. The temporary "(Aquilon)"/"(Midra/Alta)" name suffixes seen throughout the current build are testing aids only and will be removed once testing is complete.
+See `CHANGELOG.md`'s "Planned" and "Midra / Alta - Known Gaps" sections for the exact current list. In short:
+
+- **Still LivePremier4/Aquilon-only, pending Midra verification**: Output Freeze, the newer purpose-built Screen/Layer Freeze actions (Midra keeps its own older, simpler equivalents - which one stays is still an open decision), the automatic inactive-Layer cleanup, and Layer-level Cut&Fill together with its Source feedback and the `canUseMask` capability guard.
+- **Alta/Zenith is not systematically verified yet.** It runs through the same internal platform as Midra, so every Midra finding applies to it in principle - but none of it has been confirmed on Alta hardware. That pass is what RC3 is for.
+- **The temporary "(Aquilon)"/"(Midra/Alta)" name suffixes** are testing aids and will be removed once each item is confirmed across all three series. Two of them are already gone, on the Screen Memory save actions.
+- **Dante channel renaming** does not take effect on the device despite matching WebRCS's own message sequence (see §6); Reboot and Factory Reset work.
+
+Resolved since this document was first written: the duplicate option-field definitions and the id-convention mismatch on Midra's Source choices are both fixed, input-level Cut&Fill now works on Midra (it had been blocked by a guard testing for an Aquilon firmware version Midra's own numbering can never reach), and writing memories - save to slot, save/revert changes, rename, delete - is implemented on Midra for Screens and Auxes alike.
 
 ## 14. All bugs fixed since V2
 
