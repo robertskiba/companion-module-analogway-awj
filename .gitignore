@@ -5,3 +5,5 @@ notizen/
 /pkg
 /pkg.tgz
 .VSC*
+# Generierte Roadmap-Exporte - werden aus RC2_Midra_Testing_Checklist.md erzeugt
+*.pdf
