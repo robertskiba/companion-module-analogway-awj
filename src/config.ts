@@ -95,9 +95,18 @@ export const RECOMMENDED_FIRMWARE = '6.2.73'
 // a plain string comparison would get this backwards.
 export const MIDRA_RECOMMENDED_FIRMWARE = '3.3.10'
 
-/** True for a device whose firmware is numbered in the Midra/Alta series rather than Aquilon's. */
+/** True for a Midra 4K. Deliberately NOT true for Alta: the two are separate product lines with separate
+ *  firmware numbering (a current Zenith 200 reports 1.3.10 where a current Eikos reports 3.2.29), so a
+ *  Midra threshold says nothing about an Alta device. */
 function isMidraSeries(series?: string): boolean {
 	return series === 'Midra 4K'
+}
+
+/** Alta (Zenith). This module knows no recommended Alta firmware version to compare against, so the
+ *  config page stays quiet for one rather than nagging its owner to install a Midra version that does not
+ *  exist for their device. */
+function isAltaSeries(series?: string): boolean {
+	return series === 'Alta 4K'
 }
 
 const UPDATE_SUGGESTED_TEXT_MIDRA =
@@ -143,6 +152,7 @@ function firmwareLabel(fw: string): string {
  * Aquilon branch), specifically so this notice reliably shows up here instead of only in the connection log. */
 function updateSuggestedField(id: string, firmware?: string, series?: string): SomeCompanionConfigField[] {
 	if (!firmware) return []
+	if (isAltaSeries(series)) return []
 	// Midra/Alta has its own baseline and its own single tier - none of the Aquilon tiers below (the V4
 	// protocol break, the "near current" 6.0.4 cutoff) mean anything in that version series.
 	if (isMidraSeries(series)) {

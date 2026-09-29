@@ -465,6 +465,12 @@ export default class Choices {
 	 * device is ever reachable.
 	 */
 	public isPlatformFirmwareAtLeast(minVersion: string): boolean {
+		// Alta shares Midra's platform class but not its firmware numbering - a current Zenith 200 reports
+		// 1.3.10 where a current Eikos reports 3.2.29 - so comparing a Midra threshold against an Alta version
+		// is the same category error as comparing an Aquilon one against Midra, and would have labelled
+		// Cut&Fill "requires at least firmware 3.2.29" on every Zenith. No Alta thresholds are known, so answer yes
+		// and leave the question to whatever capability the device itself reports.
+		if (this.instance.config.deviceSeries === 'Alta 4K') return true
 		const recommended = this.state.platform === 'midra' ? MIDRA_RECOMMENDED_FIRMWARE : RECOMMENDED_FIRMWARE
 		const fwVersion: string = this.instance.state.get('LOCAL/deviceFirmwareVersion') ?? ''
 		if (!fwVersion) return compareFirmwareVersions(recommended, minVersion) >= 0

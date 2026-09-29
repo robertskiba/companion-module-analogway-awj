@@ -532,7 +532,14 @@ class AWJconnection {
 						}
 
 						this.instance.state.set('LOCAL/deviceModel', modelName)
-						this.instance.state.set('LOCAL/deviceSeries', newPlatform === 'midra' ? 'Midra 4K' : 'LivePremier')
+						// Alta (Zenith) and Midra share one platform class because their device trees are identical -
+						// live-confirmed on a real Zenith 200 and Eikos 4K side by side, 2026-09-29 - but they are two
+						// separate product lines with two separate firmware numbering series (that Zenith reported 1.3.10
+						// while the Eikos reported 3.2.29). Deriving the series from the platform class therefore labelled
+						// every Zenith "Midra 4K", which also made the config page recommend a Midra firmware version to an
+						// Alta device. The model is what actually distinguishes them.
+						const series = newPlatform !== 'midra' ? 'LivePremier' : (device.match(/^ZEN/) ? 'Alta 4K' : 'Midra 4K')
+						this.instance.state.set('LOCAL/deviceSeries', series)
 						this.instance.state.set('LOCAL/deviceFirmwareVersion', fwVersion)
 						const fwMajor = parseInt(fwVersion.split('.')[0])
 						this.instance.state.set('LOCAL/deviceFirmwareGeneration', isNaN(fwMajor) ? '' : `V${fwMajor}`)
