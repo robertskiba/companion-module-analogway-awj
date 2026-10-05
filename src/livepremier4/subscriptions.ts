@@ -35,6 +35,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 		'inputKeyingStatusChange',
 		'selectedScreenChange',
 		'hotBackupSelectionChange',
+		'selectionPruneDisabled',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
 		'backupSetChange',

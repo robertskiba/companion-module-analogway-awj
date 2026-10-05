@@ -553,6 +553,63 @@ export default class Subscriptions {
 	 * subscription is needed for LOCAL-only changes - a plain state.set() never runs through this subscription
 	 * mechanism at all (only incoming DEVICE/REMOTE pushes do), so those call sites mirror directly instead.
 	 */
+	/** The selection last sent by pruneDisabledFromSelection, so a burst of patches does not resend it. */
+	private lastSelectionPrune = ''
+
+	/**
+	 * Actively deselects Screens/Auxes that are switched off in the preconfig. The device keeps a Screen in its
+	 * selection after it has been disabled, and WebRCS neither shows it nor lets you deselect it - live on an
+	 * Aquilon, a disabled S3 sat first in the selection and made every "First/Only Selected Screen" action do
+	 * nothing. getSelectedScreens() already ignores such entries; this also removes them from the selection
+	 * itself, per explicit user requirement, so WebRCS and every other client stop carrying them too.
+	 *
+	 * With Sync Selection on, the device's selection is replaced with the enabled part of it. With it off, only
+	 * this module's own selection is cleaned: the user chose not to share a selection with the device, so the
+	 * module does not write one there. Waits until the screen list has loaded - before that every screen would
+	 * look disabled and a perfectly valid selection would be wiped - and is debounced, since a preconfig apply
+	 * arrives as a burst of patches.
+	 */
+	public scheduleSelectionPrune = (): void => {
+		this.debounce('selectionPrune', 500, () => this.pruneDisabledFromSelection())
+	}
+
+	private pruneDisabledFromSelection(): void {
+		if (!this.instance.state.get('DEVICE/device/screenList')) return
+		const kept = this.instance.choices.getSelectedScreens()
+
+		if (!this.instance.state.syncSelection) {
+			const local: string[] = this.instance.state.get('LOCAL/screenAuxSelection/keys') ?? []
+			if (local.length === kept.length) return
+			this.instance.state.set('LOCAL/screenAuxSelection/keys', kept)
+			this.instance.checkFeedbacks('liveScreenSelection')
+			return
+		}
+
+		const raw: string[] = this.instance.state.get('REMOTE/live/screens/screenAuxSelection/keys') ?? []
+		if (raw.length === kept.length) {
+			this.lastSelectionPrune = ''
+			return
+		}
+		const ids = kept.map((id) => this.instance.choices.getScreenInfo(id).platformLongId)
+		const signature = JSON.stringify(ids)
+		if (signature === this.lastSelectionPrune) return
+		this.lastSelectionPrune = signature
+		const keptLong = new Set(ids)
+		const removed = raw.filter((id) => !keptLong.has(id))
+		this.instance.log('info', `Deselecting ${removed.join(', ')} on the device - switched off in the preconfig but still selected.`)
+		this.instance.connection.sendWSdata('REMOTE', 'replace', '/live/screens/screenAuxSelection', [ids])
+	}
+
+	get selectionPruneDisabled():Subscription {
+		return {
+			pat: 'live/screens/screenAuxSelection',
+			fun: (): boolean => {
+				this.scheduleSelectionPrune()
+				return false
+			},
+		}
+	}
+
 	get hotBackupSelectionChange():Subscription {
 		return {
 			pat: 'live/screens/screenAuxSelection',
@@ -1487,6 +1544,8 @@ export default class Subscriptions {
 		}
 		this.registeredActiveIds = currentIds
 		this.instance.checkFeedbacks('liveScreenActive')
+		// A Screen that was just switched off may still be selected.
+		this.scheduleSelectionPrune()
 	}
 
 	private refreshScreenSize = (): boolean => {

@@ -685,6 +685,9 @@ class AWJconnection {
 								this.instance.subscriptions.initSubscriptions('selectedLayerSelectionChange')
 								this.instance.subscriptions.initSubscriptions('globalAnchorPointChange')
 								this.instance.subscriptions.initSubscriptions('selectedScreenChange')
+								// The REMOTE INIT does not run through the subscriptions, so a disabled Screen
+								// selected before this connection would otherwise stay until the selection changes.
+								this.instance.subscriptions.scheduleSelectionPrune()
 							} catch (error: any) {
 								this.instance.log('error', `refreshing selection-derived variables after connect failed:\n${error}`)
 							}

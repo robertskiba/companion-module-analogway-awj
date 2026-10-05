@@ -37,6 +37,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 		'inputKeyingStatusChange',
 		'selectedScreenChange',
 		'hotBackupSelectionChange',
+		'selectionPruneDisabled',
 		'selectedScreenTbarChange',
 		'selectedScreenTransitionTimeChange',
 		// Backup does not exist on Midra/Alta - see the matching comment in midra/actions.ts.
