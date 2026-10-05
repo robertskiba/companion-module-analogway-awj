@@ -1451,10 +1451,9 @@ export default class Subscriptions {
 	 * to 3 decimals (there is no raw device field for it at this level at all) - same approach as
 	 * OUT{n}.aspectratio/MVW{n}.aspectratio, per explicit user request ("Die Anzeige NATIVE sagt niemandem
 	 * etwas").
-	 * No `.active` variable - per explicit user decision (mirroring IN{n}.active -> IN{n}.status and the
-	 * S{n}.layer{x}.active removal): a disabled screen's variables don't exist at all, rather than existing
-	 * with a value of `false` - "Wenn nicht aktiv, dann soll S? gar nicht existieren." Disabling a screen
-	 * removes its .width/.height/.aspectratio entirely; re-enabling it re-adds them.
+	 * A disabled screen's variables don't exist at all, rather than existing with empty values - "Wenn nicht
+	 * aktiv, dann soll S? gar nicht existieren." Disabling a screen removes its .width/.height/.aspectratio
+	 * entirely; re-enabling it re-adds them. S{n}.active follows the same rule, see refreshScreenActive.
 	 */
 	/** The screen/aux ids that currently have a registered `.active` variable. */
 	private registeredActiveIds: Set<string> = new Set()
@@ -1463,28 +1462,15 @@ export default class Subscriptions {
 	 * S{n}.active / A{n}.active - whether that Screen or Auxscreen is switched ON in the device's preconfig.
 	 * Purely the configured state: it says nothing about whether a sink is connected or a signal present.
 	 *
-	 * Deliberately registered for every Screen/Aux the device *lists*, enabled or not - unlike .width/.height/
-	 * .aspectratio, which exist only while their screen is enabled. That asymmetry is the whole point. The
-	 * earlier decision to drop this variable ("Wenn nicht aktiv, dann soll S? gar nicht existieren") made the
-	 * existence of the other variables the signal, which answers "is S1 on?" but cannot answer "is S3 off?" -
-	 * there is nothing left to ask. A `.active` that only existed for enabled screens would read `true`
-	 * forever and be worse than none at all.
-	 *
-	 * The cost is real and worth naming: an Aquilon lists 24 Screens and 96 Auxes whether configured or not,
-	 * so this is 120 variables there. On Midra it is 8.
+	 * Registered only while the Screen/Aux is enabled, and removed when it is switched off - per explicit user
+	 * decision, so an Aquilon does not carry 120 variables for its 24 Screens and 96 Auxes when a handful are in
+	 * use. The variable therefore reads `true` whenever it exists; it is meant for button text and expressions.
+	 * Asking "is S3 off?" is the job of the "LIVE - Screen Active" feedback (liveScreenActive), which accepts
+	 * disabled Screens too - which is why that feedback is re-checked from here, on the same trigger.
 	 */
 	private refreshScreenActive = (): void => {
-		const listed = [
-			...this.instance.choices.getScreensArray(true),
-			...this.instance.choices.getAuxArray(true),
-		]
-		const enabled = new Set([
-			...this.instance.choices.getScreensArray().map((scr) => scr.id),
-			...this.instance.choices.getAuxArray().map((scr) => scr.id),
-		])
-
 		const currentIds = new Set<string>()
-		for (const scr of listed) {
+		for (const scr of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
 			currentIds.add(scr.id)
 			if (!this.registeredActiveIds.has(scr.id)) {
 				this.instance.addVariable({
@@ -1493,13 +1479,14 @@ export default class Subscriptions {
 					name: `${scr.id} enabled in the preconfig`,
 				})
 			}
-			this.instance.setVariableValues({ [`${scr.id}.active`]: enabled.has(scr.id) })
+			this.instance.setVariableValues({ [`${scr.id}.active`]: true })
 		}
 		for (const id of this.registeredActiveIds) {
 			if (currentIds.has(id)) continue
 			this.instance.removeVariable('screenActive', `${id}.active`)
 		}
 		this.registeredActiveIds = currentIds
+		this.instance.checkFeedbacks('liveScreenActive')
 	}
 
 	private refreshScreenSize = (): boolean => {

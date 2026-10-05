@@ -90,6 +90,7 @@ export default class Feedbacks {
 		'deviceSourceTally',
 		'deviceTake',
 		'liveScreenSelection',
+		'liveScreenActive',
 		'liveScreenLock',
 		'livePresetSelection',
 		'remoteLayerSelection',
@@ -1134,6 +1135,49 @@ export default class Feedbacks {
 		}
 
 		return liveScreenSelection
+	}
+
+	// MARK: liveScreenActive
+	/**
+	 * Whether a Screen or Auxscreen is switched ON in the preconfig - the boolean counterpart of S{n}.active.
+	 * That variable only exists while its screen is enabled, so it cannot answer "is S3 off?"; this can, which
+	 * is why the dropdown lists every Screen/Aux the device has, enabled or not. Re-checked from
+	 * refreshScreenActive, i.e. on the same preconfig trigger that adds and removes the variable.
+	 */
+	get liveScreenActive() {
+
+		const enabled = new Set(this.choices.getScreensAuxArray().map((scr: Choicemeta) => scr.id))
+		const choices = this.choices.getScreensAuxArray(true).map((scr: Choicemeta) => ({
+			id: scr.id,
+			label: `${scr.id}${scr.label ? ' - ' + scr.label : ''}${enabled.has(scr.id) ? '' : ' (off)'}`,
+		}))
+
+		const liveScreenActive: AWJfeedback<{screen: string}> = {
+			type: 'boolean',
+			name: 'LIVE - Screen Active',
+			sortName: '01 LIVE - 08 Screen Active',
+			description: 'Shows whether a Screen or Auxscreen is switched on in the preconfig, regardless of whether anything is connected to it',
+			defaultStyle: {
+				color: this.config.color_dark,
+				bgcolor: this.config.color_highlight,
+			},
+			options: [
+				{
+					id: 'screen',
+					allowInvalidValues: true,
+					type: 'dropdown',
+					label: 'Screen / Auxscreen',
+					choices,
+					default: choices[0]?.id ?? 'S1',
+				},
+			],
+			callback: (feedback) => {
+				const screen = String(feedback.options.screen ?? '').trim().toUpperCase()
+				return this.choices.getScreensAuxArray().some((scr: Choicemeta) => scr.id === screen)
+			},
+		}
+
+		return liveScreenActive
 	}
 
 	// MARK: liveScreenLock

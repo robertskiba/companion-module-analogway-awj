@@ -45,6 +45,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		'deviceSourceTally',
 		'deviceTake',
 		'liveScreenSelection',
+		'liveScreenActive',
 		'liveScreenLock',
 		'livePresetSelection',
 		'remoteLayerSelection',

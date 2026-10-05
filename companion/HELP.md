@@ -148,6 +148,8 @@ If you want a custom selection (a.k.a. a group) instead, just use this action mu
 
 **Feedback: Screen Selection** - Available at: LivePremier, Alta 4K, Midra 4K. If selection synchronization is off you will see the selection status of Companion's own selection, if it's on you will see the selection status of the device. To work with the same selection on Companion and WebRCS, turn on selection synchronization on both clients.
 
+**Feedback: Screen Active** - Available at: LivePremier, Alta 4K, Midra 4K. On while the chosen Screen/Auxscreen is switched ON in the device's preconfig, regardless of connected sinks or signals. The list also contains the Screens/Auxes that are currently off, marked "(off)", so the feedback answers both "is S1 on?" and "is S3 off?" and changes live when the preconfig does. Use it to make a button's look or a Trigger depend on a screen being in use; combined with Companion's internal "Logic: AND / OR" feedbacks it builds conditions such as "S2 is active and selected" without any expression.
+
 ### Lock Screen
 
 Available at: LivePremier, Alta 4K, Midra 4K  
@@ -524,7 +526,7 @@ Swaps the "Hot Backup Device Address" with the current "Device Network Address" 
 - `Device.Connected.Maindevice` - this connection's own connection status.
 - `Device.Connected.Hotbackupdevice` / `Device.IP.Hotbackup` - Hot Backup Device connection status/address (LivePremier only, "not_configured" while disabled).
 - `Sx.label` / `Ax.label` - the label of the screen/aux screen (example: `S1.label` shows the label of Screen 1). A screen you have not named reports an empty string, on every series.
-- `Sx.active` / `Ax.active` - whether that Screen/Auxscreen is switched ON in the device's preconfig (example: `S3.active` shows whether Screen 3 is enabled). Purely the configured state - it says nothing about connected sinks or present signals. Unlike the size variables below, this one exists for **every** Screen/Aux the device lists, enabled or not, so you can also ask about a disabled one.
+- `Sx.active` / `Ax.active` - whether that Screen/Auxscreen is switched ON in the device's preconfig (example: `S3.active` shows whether Screen 3 is enabled). Purely the configured state - it says nothing about connected sinks or present signals. Like the size variables below, it exists only while that Screen/Aux is enabled and then always reads `true` - to ask whether a screen is *off*, use the "LIVE - Screen Active" feedback.
 - `Sx.width` / `.height` / `.aspectratio` - a Screen's/Aux's own canvas resolution, for currently-enabled screens/auxes only (example: `S1.width` shows Screen 1's canvas width). On Alta 4K and Midra 4K an Aux has no canvas of its own - it is always full screen on the output it feeds, so `Ax.*` reports that output's resolution.
 - `OUTx.width` / `.height` / `.refreshrate` / `.format` / `.formatkind` / `.aspectratio` / `.label` - a physical output's current signal and label (example: `OUT1.format` shows Output 1's current format).
 - `OUTx.hdcp` / `.colorspace` / `.sinkdetected` / `.sinkname` - a physical output's connected-sink status (example: `OUT1.sinkdetected` shows whether Output 1 has a connected sink).
