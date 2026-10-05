@@ -863,9 +863,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const targetScreens = action.options.screens === 'first'
-					? this.choices.getSelectedScreens().slice(0, 1)
-					: this.choices.getChosenScreenAuxes(action.options.screens)
+				const targetScreens = this.resolveScreenTargets(action.options.screens, "Cut")
 				// serialize() keyed by the actual target screens - see its own doc comment for why this must
 				// never be a single fixed key: an unrelated screen's action must never wait on this one. Cut
 				// itself is near-instant, so unlike Take there's no need to release the lock before waiting.
@@ -947,9 +945,7 @@ export default class Actions {
 						value = position / maximum
 					}
 					const tbarint = Math.round(value * tbarmax)
-					const targetScreens = action.options.screens === 'first'
-						? this.choices.getSelectedScreens().slice(0, 1)
-						: this.choices.getChosenScreenAuxes(action.options.screens)
+					const targetScreens = this.resolveScreenTargets(action.options.screens, "Set T-Bar Position")
 					for (const screen of targetScreens) {
 						this.connection.sendWSmessage([...this.choices.getScreenGroupPath(screen), 'items', screen, 'control', 'pp', 'tbarPosition'], tbarint)
 					}
@@ -1000,9 +996,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const targetScreens = action.options.screens === 'first'
-					? this.choices.getSelectedScreens().slice(0, 1)
-					: this.choices.getChosenScreenAuxes(action.options.screens)
+				const targetScreens = this.resolveScreenTargets(action.options.screens, "Set Transition Time")
 				// serialize() keyed by the actual target screens - see its own doc comment for why this must
 				// never be a single fixed key: an unrelated screen's action must never wait on this one.
 				return this.instance.serialize(targetScreens, async () => {
@@ -1129,9 +1123,7 @@ export default class Actions {
 				const hasPct = pctStr !== '' && !isNaN(Number(pctStr))
 				if (!hasRaw && !hasPct) return // nothing to apply
 
-				const targetScreens = action.options.screens === 'first'
-					? this.choices.getSelectedScreens().slice(0, 1)
-					: this.choices.getChosenScreenAuxes(action.options.screens)
+				const targetScreens = this.resolveScreenTargets(action.options.screens, "Screen - Encoder Adjust")
 				for (const screen of targetScreens) {
 					if (action.options.value === 'tbar') {
 						const delta0to100 = hasRaw ? Number(rawStr) : Number(pctStr)
@@ -5779,9 +5771,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 			],
 			callback: (action) => {
-				const targetScreens = action.options.screens === 'first'
-					? this.choices.getSelectedScreens().slice(0, 1)
-					: this.choices.getChosenScreenAuxes(action.options.screens)
+				const targetScreens = this.resolveScreenTargets(action.options.screens, "Copy Program to Preview")
 				for (const screen of targetScreens) {
 					if (this.choices.isLocked(screen, 'PREVIEW')) return
 					const screeninfo = this.choices.getScreenInfo(screen)
@@ -7870,6 +7860,31 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	 * Resolves `true` if the value was seen in time, `false` on timeout (never rejects - a stuck/slow device
 	 * should not hang a button forever, just skip the extra safety this wait provides for that one call).
 	 */
+	/**
+	 * Resolves a "Screens / Auxscreens" option into concrete targets for Take/Cut, and says so in the log when
+	 * it resolves to none.
+	 *
+	 * "Nothing happened" is the single hardest symptom to diagnose in this module, because an empty target
+	 * list and a successful no-op look identical from the outside - and the two usual causes sit far from the
+	 * button that appears broken: with Sync Selection off the module keeps its own selection, which only its
+	 * own Select actions ever fill, and with it on the selection comes from the device. The message names the
+	 * option, the mode and what the selection currently holds, so the next report answers all three at once.
+	 */
+	protected resolveScreenTargets(option: string, what: string): string[] {
+		const screens = option === 'first'
+			? this.choices.getSelectedScreens().slice(0, 1)
+			: this.choices.getChosenScreenAuxes(option)
+		if (screens.length === 0) {
+			const selection = this.choices.getSelectedScreens()
+			this.instance.log(
+				'warn',
+				`${what}: no target screen resolved - doing nothing. Screens option "${option}", Sync Selection ${this.state.syncSelection ? 'on' : 'off'}, ` +
+				`current selection [${selection.join(', ') || 'empty'}]. With Sync Selection off only this module's own "LIVE - Screen Selection" action fills that list.`
+			)
+		}
+		return screens
+	}
+
 	protected waitForStateValue(path: string[], predicate: (value: unknown) => boolean, timeoutMs = 3000, intervalMs = 50): Promise<boolean> {
 		return new Promise((resolve) => {
 			const start = Date.now()

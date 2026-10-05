@@ -130,9 +130,7 @@ export default class ActionsLivepremier4 extends Actions {
 		const deviceTakeScreen = super.deviceTakeScreen
 		deviceTakeScreen.callback = (action) => {
 			let dir = ''
-			const targetScreens = action.options.screens === 'first'
-				? this.choices.getSelectedScreens().slice(0, 1)
-				: this.choices.getChosenScreenAuxes(action.options.screens)
+			const targetScreens = this.resolveScreenTargets(action.options.screens, 'Take')
 			// Only the quick "command sent, receipt confirmed" phase holds the per-screen queue (see
 			// AWJinstance.serialize()'s own doc comment on why it's keyed per-screen at all) - the optional,
 			// potentially many-seconds-long "Wait for Transition Completion" below happens AFTER releasing it,
@@ -146,7 +144,12 @@ export default class ActionsLivepremier4 extends Actions {
 					} else if (pgm === 'B') {
 						dir = 'xTakeDown'
 					} else {
-						return
+						// Skip this one screen, do not abandon the batch. A bare return here meant that one
+						// screen whose live preset side is not known yet silently cancelled the Take for every
+						// other screen in the same press - so a multi-screen Take could do nothing at all while
+						// each of those screens taken individually worked fine.
+						this.instance.log('warn', `Take: no known Program preset for ${screen} yet - skipping it. The device reports the live side only after the first transition since connecting.`)
+						continue
 					}
 					this.connection.sendWSmessage(['device', 'screenAuxGroupList', 'items', screen, 'control', 'pp', dir], true)
 				}

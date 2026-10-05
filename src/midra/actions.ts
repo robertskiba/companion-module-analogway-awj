@@ -383,9 +383,7 @@ export default class ActionsMidra extends Actions {
 	get deviceTakeScreen() {
 		const deviceTakeScreen = super.deviceTakeScreen
 		deviceTakeScreen.callback = (action) => {
-			const targetScreens = action.options.screens === 'first'
-				? this.choices.getSelectedScreens().slice(0, 1)
-				: this.choices.getChosenScreenAuxes(action.options.screens)
+			const targetScreens = this.resolveScreenTargets(action.options.screens, 'Take')
 			let longestTransitionMs = 0
 			const sent = this.instance.serialize(targetScreens, async () => {
 				for (const screen of targetScreens) {
@@ -414,9 +412,7 @@ export default class ActionsMidra extends Actions {
 		const deviceCutScreen = super.deviceCutScreen
 
 		deviceCutScreen.callback = (action) => {
-			const targetScreens = action.options.screens === 'first'
-				? this.choices.getSelectedScreens().slice(0, 1)
-				: this.choices.getChosenScreenAuxes(action.options.screens)
+			const targetScreens = this.resolveScreenTargets(action.options.screens, 'Cut')
 			return this.instance.serialize(targetScreens, async () => {
 			for (const screen of targetScreens) {
 				const path = [
@@ -456,9 +452,7 @@ export default class ActionsMidra extends Actions {
 					value = position / maximum
 				}
 				const tbarint = Math.round(value * tbarmax)
-				const targetScreens = action.options.screens === 'first'
-					? this.choices.getSelectedScreens().slice(0, 1)
-					: this.choices.getChosenScreenAuxes(action.options.screens)
+				const targetScreens = this.resolveScreenTargets(action.options.screens, 'Set T-Bar Position')
 				for (const screen of targetScreens) {
 					this.connection.sendWSmessage(
 						[
@@ -485,9 +479,7 @@ export default class ActionsMidra extends Actions {
 		const deviceTakeTime = super.deviceTakeTime
 
 		deviceTakeTime.callback = (action) => {
-			const targetScreens = action.options.screens === 'first'
-				? this.choices.getSelectedScreens().slice(0, 1)
-				: this.choices.getChosenScreenAuxes(action.options.screens)
+			const targetScreens = this.resolveScreenTargets(action.options.screens, 'Set Transition Time')
 			return this.instance.serialize(targetScreens, async () => {
 			// round to whole deciseconds - see the same fix in the base action for why
 			const time = Math.round(action.options.time * 10)
