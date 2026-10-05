@@ -101,12 +101,12 @@ export default class Choices {
 	// 'prw' is the current, preferred value for Preview (matches the PVW->PRW variable-naming rename). The
 	// legacy 'pvw' value is deliberately NOT listed here (2026-08-28: an earlier attempt added it as a visible
 	// second "Preview (legacy value...)" choice, which just confused users with two near-identical entries).
-	// Instead, every "Preset (Program/Preview)" field using this list also sets `allowInvalidValues: true`, so
-	// a button saved before this rename with 'pvw' still stored keeps validating fine (Companion tolerates a
-	// stored value that isn't in the current choices list) without 'pvw' needing to clutter the dropdown -
-	// never remove that flag from those fields. Everything reading this option already treats 'pvw'/'prw' as
-	// fully equivalent regardless (see e.g. getPresetSelection()'s regex, or the inline `=== 'prw' ? 'pvw' :`
-	// normalization in a few action callbacks).
+	// Every "Preset (Program/Preview)" field using this list sets `allowInvalidValues: true`, so 'pvw' typed in an
+	// expression passes Companion's validation - never remove that flag from those fields. Since base 2.x that
+	// flag only applies in expression mode; a plain dropdown still holding a V2 'pvw' is rewritten to 'prw' by the
+	// migrateV2OptionValuesToV3Choices upgrade script instead. Everything reading this option treats 'pvw'/'prw'
+	// as fully equivalent regardless (see e.g. getPresetSelection()'s regex, or the inline `=== 'prw' ? 'pvw' :`
+	// normalization in a few action callbacks) - keep it that way, 'pvw' is a documented alternative.
 	choicesPreset: Dropdown<string>[] = [
 		{ id: 'prw', label: 'Preview' },
 		{ id: 'pgm', label: 'Program' },
