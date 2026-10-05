@@ -1456,7 +1456,56 @@ export default class Subscriptions {
 	 * with a value of `false` - "Wenn nicht aktiv, dann soll S? gar nicht existieren." Disabling a screen
 	 * removes its .width/.height/.aspectratio entirely; re-enabling it re-adds them.
 	 */
+	/** The screen/aux ids that currently have a registered `.active` variable. */
+	private registeredActiveIds: Set<string> = new Set()
+
+	/**
+	 * S{n}.active / A{n}.active - whether that Screen or Auxscreen is switched ON in the device's preconfig.
+	 * Purely the configured state: it says nothing about whether a sink is connected or a signal present.
+	 *
+	 * Deliberately registered for every Screen/Aux the device *lists*, enabled or not - unlike .width/.height/
+	 * .aspectratio, which exist only while their screen is enabled. That asymmetry is the whole point. The
+	 * earlier decision to drop this variable ("Wenn nicht aktiv, dann soll S? gar nicht existieren") made the
+	 * existence of the other variables the signal, which answers "is S1 on?" but cannot answer "is S3 off?" -
+	 * there is nothing left to ask. A `.active` that only existed for enabled screens would read `true`
+	 * forever and be worse than none at all.
+	 *
+	 * The cost is real and worth naming: an Aquilon lists 24 Screens and 96 Auxes whether configured or not,
+	 * so this is 120 variables there. On Midra it is 8.
+	 */
+	private refreshScreenActive = (): void => {
+		const listed = [
+			...this.instance.choices.getScreensArray(true),
+			...this.instance.choices.getAuxArray(true),
+		]
+		const enabled = new Set([
+			...this.instance.choices.getScreensArray().map((scr) => scr.id),
+			...this.instance.choices.getAuxArray().map((scr) => scr.id),
+		])
+
+		const currentIds = new Set<string>()
+		for (const scr of listed) {
+			currentIds.add(scr.id)
+			if (!this.registeredActiveIds.has(scr.id)) {
+				this.instance.addVariable({
+					id: 'screenActive',
+					variableId: `${scr.id}.active`,
+					name: `${scr.id} enabled in the preconfig`,
+				})
+			}
+			this.instance.setVariableValues({ [`${scr.id}.active`]: enabled.has(scr.id) })
+		}
+		for (const id of this.registeredActiveIds) {
+			if (currentIds.has(id)) continue
+			this.instance.removeVariable('screenActive', `${id}.active`)
+		}
+		this.registeredActiveIds = currentIds
+	}
+
 	private refreshScreenSize = (): boolean => {
+		// Same triggers, same moment: a screen being switched on or off in the preconfig is exactly what both
+		// of these react to, on both platforms.
+		this.refreshScreenActive()
 		const currentIds = new Set<string>()
 		for (const scr of [...this.instance.choices.getScreensArray(), ...this.instance.choices.getAuxArray()]) {
 			const info = this.instance.choices.getScreenInfo(scr.id)
