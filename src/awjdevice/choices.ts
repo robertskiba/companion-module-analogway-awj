@@ -1679,13 +1679,22 @@ export default class Choices {
 		return screens
 	}
 
-	/** Returns selected screens always in LP format */
+	/**
+	 * Returns selected screens always in LP format, in selection order, limited to Screens/Auxes that are
+	 * currently enabled.
+	 *
+	 * The device keeps a Screen in its selection after that Screen is switched off in the preconfig, and WebRCS
+	 * neither shows it nor offers a way to deselect it. Live on an Aquilon: S3 was DISABLED yet still the first
+	 * entry of `["S3","S1","S2","A1","A2"]`, so "First/Only Selected Screen" resolved to S3 and Take did nothing,
+	 * while "Selected Screens" quietly skipped S3 and looked fine.
+	 */
 	public getSelectedScreens(): string[] {
 		let path = 'LOCAL/screenAuxSelection/keys'
 		if (this.instance.state.syncSelection) {
 			path = 'REMOTE/live/screens/screenAuxSelection/keys'
 		}
-		return [...(this.state.get(path) ?? [])]
+		const enabled = new Set(this.getScreensAuxArray().map((scr: Choicemeta) => scr.id))
+		return [...(this.state.get(path) ?? [])].filter((id: string) => enabled.has(id))
 	}
 
 	/** Returns selected layers always in LP format */

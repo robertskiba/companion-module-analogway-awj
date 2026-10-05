@@ -743,13 +743,15 @@ export default class ChoicesMidra extends Choices {
 		return this.state.get('LOCAL/layerIds') ?? []
 	}
 
-	/** Returns selected screens in LP format */
+	/** Returns selected screens in LP format, limited to enabled ones - see the base class for why. */
 	public getSelectedScreens(): string[] {
+		const enabled = new Set(this.getScreensAuxArray().map((scr: Choicemeta) => scr.id))
 		if (this.instance.state.syncSelection) {
 			return [...(this.state.get('REMOTE/live/screens/screenAuxSelection/keys') ?? [])]
 				.map(scr => scr.replace(/CREEN_|UX_/, ''))
+				.filter((id: string) => enabled.has(id))
 		}
-		return [...(this.state.get('LOCAL/screenAuxSelection/keys') ?? [])]
+		return [...(this.state.get('LOCAL/screenAuxSelection/keys') ?? [])].filter((id: string) => enabled.has(id))
 	}
 
 }
