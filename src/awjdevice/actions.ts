@@ -6046,30 +6046,16 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 							break
 					}
 				} else {
-					const localSelection = this.state.get('LOCAL/screenAuxSelection/keys') as string[]
-					const idx = localSelection.indexOf(screeninfo.id)
-					switch (sel) {
-						case 0:
-							if (idx >= 0) {
-								localSelection.splice(idx, 1)
-							}
-							break
-						case 1:
-							if (idx === -1) {
-								localSelection.push(screeninfo.id)
-							}
-							break
-						case 2:
-								this.state.set('LOCAL/screenAuxSelection/keys', [ screeninfo.id ]) 
-							break
-						case 3:
-							if (idx >= 0) {
-								localSelection.splice(idx, 1)
-							} else {
-								localSelection.push(screeninfo.id)
-							}
-							break
-					}
+					// resultingSelection above already IS what the selection should become - computed from the
+					// guarded getSelectedScreens() with the same add/remove/replace/toggle logic, for the Backup
+					// mirror - so store that instead of recomputing it here. The recomputation this replaces had
+					// two faults, both invisible while Sync Selection was on: it read LOCAL/screenAuxSelection/keys
+					// raw and called indexOf on it, so the very first selection on a fresh connection threw before
+					// storing anything; and every case except "exclusive" then mutated its array in place without
+					// ever writing it back. Nothing was ever stored, so every "All/First Selected Screen" target
+					// resolved to nothing - Take, Cut and the rest silently did nothing, while naming a screen
+					// directly kept working. Same defect as the layer selection fixed earlier, in its screen twin.
+					this.state.set('LOCAL/screenAuxSelection/keys', resultingSelection)
 					this.instance.checkFeedbacks('liveScreenSelection')
 				}
 			},
