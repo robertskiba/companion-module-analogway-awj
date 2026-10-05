@@ -40,6 +40,23 @@ export default class ChoicesLivepremier4 extends Choices {
 		return ret
 	}
 
+	/**
+	 * The preset bank ('A'/'B') currently live on Program. presetUp/presetDown only say which bank sits at which
+	 * end of the T-Bar; Program is the bank at the end the transition currently rests at - AT_UP means presetUp,
+	 * AT_DOWN means presetDown, the same rule the transition handler in subscriptions.ts applies. Reading presetUp
+	 * alone was right only while the T-Bar happened to rest up: live on an Aquilon, S1 at AT_DOWN with presetUp B
+	 * and presetDown A has Program on A (LIVE_4), yet S1.pgm.layer1.source showed Preview's STILL_2.
+	 * Mid-transition neither end is settled, so it falls back to the last settled side that handler recorded.
+	 */
+	public override getLivePresetKey(screenAuxKey: string): string | undefined {
+		const info = this.getScreenInfo(screenAuxKey)
+		const group = ['DEVICE', ...this.getScreenGroupPath(screenAuxKey), 'items', info.platformId]
+		const transition = this.state.get([...group, 'status', 'pp', 'transition'])
+		if (transition === 'AT_UP') return this.state.get([...group, 'control', 'pp', 'presetUp'])
+		if (transition === 'AT_DOWN') return this.state.get([...group, 'control', 'pp', 'presetDown'])
+		return this.state.get(`LOCAL/screens/${info.id}/pgm/preset`) || undefined
+	}
+
 	/** returns array of the currently available and active auxscreens only (no regular screens)*/
 	public getAuxArray(getAlsoDisabled = false ): Choicemeta[] {
 		const ret: Choicemeta[] = []

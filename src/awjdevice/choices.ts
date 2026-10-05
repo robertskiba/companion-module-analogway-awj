@@ -1170,9 +1170,10 @@ export default class Choices {
 	 * the device rather than through getPreset() - that one goes via LOCAL, which is only written by the
 	 * transition handler and never seeded at connect, so it stays stale until the first Take.
 	 *
-	 * LivePremier reports it as `control/pp/presetUp` holding the key itself ('A'/'B'); Midra reports
-	 * `status/pp/transition` holding 'AT_UP'/'AT_DOWN' against keys 'UP'/'DOWN', so the override strips the
-	 * prefix. Returns undefined if the device has not reported it (yet).
+	 * This base version only reads presetSideIndicator. Midra reports `status/pp/transition` holding
+	 * 'AT_UP'/'AT_DOWN' against keys 'UP'/'DOWN', so its override strips the prefix. LivePremier overrides it
+	 * entirely: there `control/pp/presetUp` is only the bank at the upper end of the T-Bar, and Program depends
+	 * on which end the transition rests at. Returns undefined if the device has not reported it (yet).
 	 */
 	public getLivePresetKey(screenAuxKey: string): string | undefined {
 		const info = this.getScreenInfo(screenAuxKey)

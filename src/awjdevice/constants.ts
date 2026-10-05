@@ -51,8 +51,9 @@ export default class Constants {
     static readonly propsCroppingPath = ['cropping', 'classic', 'pp']
     static readonly propsMaskPath = ['cropping', 'mask', 'pp']
 
-    /** Tail of the path that tells which preset bank is currently live, appended to screenGroupPath.
-     * LivePremier exposes it as control/pp/presetUp, Midra/Alta as status/pp/transition. */
+    /** Tail of the path read by the base getLivePresetKey(), appended to screenGroupPath. Midra/Alta exposes
+     * the live side as status/pp/transition. LivePremier's control/pp/presetUp is only the bank at the upper
+     * end of the T-Bar, so LivePremier overrides getLivePresetKey() rather than relying on this. */
     static readonly presetSideIndicator: string[] = ['control', 'pp', 'presetUp']
 
     /** How a Layer transition's "Allow Cross Effect" is expressed in transition/pp/flags. LivePremier uses

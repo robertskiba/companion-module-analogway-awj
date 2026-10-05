@@ -741,14 +741,19 @@ export default class Subscriptions {
 			const info = this.instance.choices.getScreenInfo(scr.id)
 			const screenListPath = info.isAux ? this.constants.auxPath : this.constants.screenPath
 			const layerCount: number = this.instance.state.get(['DEVICE', ...screenListPath, 'items', info.platformId, 'status', 'pp', 'layerCount']) ?? 0
-			const presetKey = this.instance.state.get(['DEVICE', ...this.constants.screenGroupPath, 'items', info.id, 'control', 'pp', 'presetUp'])
-			const presetPath = [...screenListPath, 'items', info.platformId, 'presetList', 'items', presetKey]
-			for (let i = 1; i <= layerCount; i += 1) {
-				const layerPath = [...presetPath, ...this.instance.choices.getLayerPath(i)]
-				if (this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum']) === liveId) return true
+			// Both banks: the layer variables cover Program and Preview, so an input on either one is relevant.
+			// This used to read presetUp only, which is Program solely while the T-Bar rests up.
+			const presetKeys = this.instance.choices.getPresetKeys(info.id)
+			if (!presetKeys) continue
+			for (const presetKey of [presetKeys.pgm, presetKeys.prw]) {
+				const presetPath = [...screenListPath, 'items', info.platformId, 'presetList', 'items', presetKey]
+				for (let i = 1; i <= layerCount; i += 1) {
+					const layerPath = [...presetPath, ...this.instance.choices.getLayerPath(i)]
+					if (this.instance.state.get(['DEVICE', ...layerPath, 'source', 'pp', 'inputNum']) === liveId) return true
+				}
+				const bgPath = [...presetPath, ...this.instance.choices.getLayerPath('NATIVE')]
+				if (this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', 'inputNum']) === liveId) return true
 			}
-			const bgPath = [...presetPath, ...this.instance.choices.getLayerPath('NATIVE')]
-			if (this.instance.state.get(['DEVICE', ...bgPath, 'source', 'pp', 'inputNum']) === liveId) return true
 		}
 		return false
 	}
@@ -1800,7 +1805,11 @@ export default class Subscriptions {
 		const screenOrAux = `(?:${this.constants.screenPath.join('/')}|${this.constants.auxPath.join('/')})/items/\\w+`
 		const numberedLayerSegment = this.instance.choices.getLayerPath('1')[0]
 		const bgSegments = this.instance.choices.getLayerPath('NATIVE').join('/')
-		const presetUpPat = `${this.screenGroupPat}/items/\\w+/${this.constants.presetSideIndicator.join('/')}`
+		// Which bank is Program follows the T-Bar's resting end on LivePremier (status/pp/transition) as well as the
+		// presetUp/presetDown pair - see getLivePresetKey() in livepremier4/choices.ts. A Take changes only the
+		// transition, so watching presetUp alone left the pgm/prw variables on the old sides after every Take.
+		// On Midra presetSideIndicator already is status/pp/transition, and the other two never occur there.
+		const presetUpPat = `${this.screenGroupPat}/items/\\w+/(?:${this.constants.presetSideIndicator.join('/')}|status/pp/transition|control/pp/preset(?:Up|Down))`
 		const inputSignalPat = `device/inputList/items/${this.constants.inputKeyPrefix}\\d+/plugList/items/\\w+/status/signal/pp/isValid`
 		const anchorPat = 'live/screens/layers/anchorPoint'
 
