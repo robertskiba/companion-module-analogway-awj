@@ -553,9 +553,6 @@ export default class Subscriptions {
 	 * subscription is needed for LOCAL-only changes - a plain state.set() never runs through this subscription
 	 * mechanism at all (only incoming DEVICE/REMOTE pushes do), so those call sites mirror directly instead.
 	 */
-	/** The selection last sent by pruneDisabledFromSelection, so a burst of patches does not resend it. */
-	private lastSelectionPrune = ''
-
 	/**
 	 * Actively deselects Screens/Auxes that are switched off in the preconfig. The device keeps a Screen in its
 	 * selection after it has been disabled, and WebRCS neither shows it nor lets you deselect it - live on an
@@ -567,7 +564,10 @@ export default class Subscriptions {
 	 * this module's own selection is cleaned: the user chose not to share a selection with the device, so the
 	 * module does not write one there. Waits until the screen list has loaded - before that every screen would
 	 * look disabled and a perfectly valid selection would be wiped - and is debounced, since a preconfig apply
-	 * arrives as a burst of patches.
+	 * arrives as a burst of patches. Deliberately no "already sent this" guard on top: the debounce covers bursts,
+	 * and once the device has applied the replace the selection is clean, so nothing is sent again. Such a guard
+	 * existed and swallowed the cleanup when a disabled Screen was re-selected quickly - live, the third press of
+	 * an S3 button within a few seconds left S3 selected, because the replace it needed matched the last one sent.
 	 */
 	public scheduleSelectionPrune = (): void => {
 		this.debounce('selectionPrune', 500, () => this.pruneDisabledFromSelection())
@@ -586,14 +586,8 @@ export default class Subscriptions {
 		}
 
 		const raw: string[] = this.instance.state.get('REMOTE/live/screens/screenAuxSelection/keys') ?? []
-		if (raw.length === kept.length) {
-			this.lastSelectionPrune = ''
-			return
-		}
+		if (raw.length === kept.length) return
 		const ids = kept.map((id) => this.instance.choices.getScreenInfo(id).platformLongId)
-		const signature = JSON.stringify(ids)
-		if (signature === this.lastSelectionPrune) return
-		this.lastSelectionPrune = signature
 		const keptLong = new Set(ids)
 		const removed = raw.filter((id) => !keptLong.has(id))
 		this.instance.log('info', `Deselecting ${removed.join(', ')} on the device - switched off in the preconfig but still selected.`)
