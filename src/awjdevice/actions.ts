@@ -5965,6 +5965,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					sel = 2
 				}
 				const screeninfo = this.choices.getScreenInfo(action.options.screen)
+				// A Screen/Aux that is switched off in the preconfig is never selected. The dropdown only lists
+				// enabled ones, but a button saved while the Screen was still on keeps its id, and an expression
+				// can name anything - and the device accepts such a selection without complaint. Live on an
+				// Aquilon with only S1/S2 enabled, buttons for disabled Screens selected them on the device, where
+				// WebRCS cannot show or deselect them. Deselecting stays allowed; it can only help.
+				if (sel !== 0 && !this.choices.getScreensAuxArray().some((scr: Choicemeta) => scr.id === screeninfo.id)) {
+					this.instance.log('warn', `Screen Selection: ${action.options.screen} is not enabled in the preconfig - not selecting it.`)
+					return
+				}
 				// Computed once (from the currently-known selection, same add/remove/replace/toggle logic as
 				// below) regardless of which branch Main itself takes - this is what Main's selection SHOULD
 				// become, mirrored to Backup as one absolute "replace" rather than replaying the same relative
