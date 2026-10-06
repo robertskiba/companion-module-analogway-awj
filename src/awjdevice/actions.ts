@@ -347,7 +347,7 @@ export default class Actions {
 	 * MARK: Recall Layer Memory
 	 */
 	get deviceLayerMemory() {
-		type DeviceLayerMemory = { method: string, screen: string[], preset: string, layer: string[], memory: string, unlockIfLocked: boolean, relockAfterChange: boolean }
+		type DeviceLayerMemory = { method: string, screen: string[], preset: string, layer: string[], memory: string }
 
 		const returnAction: AWJaction<DeviceLayerMemory> = {
 			name: 'Deprecated from V2 - Recall Layer Memory (please upgrade to new action V3) (Aquilon)',
@@ -403,22 +403,6 @@ export default class Actions {
 					default: this.choices.getLayerMemoryChoices()[0]?.id,
 					disableAutoExpression: true,
 				},
-				{ id: 'additionalOptionsHeader', type: 'static-text', label: '', value: '---\n**Additional Options**', disableAutoExpression: true },
-				{
-					id: 'unlockIfLocked',
-					type: 'checkbox',
-					label: 'Unlock Screen if locked?',
-					tooltip: 'Unlocks all affected screens before execution if they are locked.',
-					default: false,
-				},
-				{
-					id: 'relockAfterChange',
-					type: 'checkbox',
-					label: 'Relock after change',
-					tooltip: 'Locks all affected screens after execution if they were previously locked.',
-					default: false,
-					isVisibleExpression: '$(options:unlockIfLocked) == true',
-				},
 			],
 			callback: (action) => {
 				const memory = stripMemoryPrefix(action.options.memory, 'LM')
@@ -438,17 +422,9 @@ export default class Actions {
 				// serialize() keyed by the actual target screens - see its own doc comment for why this must
 				// never be a single fixed key: an unrelated screen's action must never wait on this one.
 				return this.instance.serialize(layers.map((layer) => layer.screenAuxKey), async () => {
-				const unlockedScreens = new Set<string>()
-				layers = layers.filter((layer) => {
-					if (this.choices.isLocked(layer.screenAuxKey, preset)) {
-						if (!parseBoolean(action.options.unlockIfLocked)) return false
-						if (!unlockedScreens.has(layer.screenAuxKey)) {
-							this.choices.setScreenLock(layer.screenAuxKey, preset, false)
-							unlockedScreens.add(layer.screenAuxKey)
-						}
-					}
-					return true
-				})
+				// A locked screen is skipped, exactly as in V2. The Unlock/Relock options belong to the V3 action
+				// only; this deprecated one keeps V2's form and behaviour unchanged.
+				layers = layers.filter((layer) => !this.choices.isLocked(layer.screenAuxKey, preset))
 				const waitPromises: Promise<void>[] = []
 				for (const layer of layers) {
 					const listKey = layer.screenAuxKey.charAt(0) === 'A' ? this.constants.auxPath[1] : this.constants.screenPath[1]
@@ -473,11 +449,6 @@ export default class Actions {
 					]
 					this.connection.sendWSmessage([...layerPath, 'xRequest'], false, true)
 					waitPromises.push(this.waitForPulseComplete(['DEVICE', ...layerPath, 'isLoading']))
-				}
-				if (parseBoolean(action.options.relockAfterChange)) {
-					for (const screenAuxKey of unlockedScreens) {
-						this.choices.setScreenLock(screenAuxKey, preset, true)
-					}
 				}
 				this.instance.sendXupdate()
 				await Promise.all(waitPromises)
