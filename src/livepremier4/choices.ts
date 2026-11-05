@@ -195,11 +195,11 @@ export default class ChoicesLivepremier4 extends Choices {
 		// next add Screens
 		for (const screen of this.getScreensArray()) {
 			ret.push({
-				id: 'PROGRAM_S' + screen.index,
+				id: `S${screen.index}`,
 				label: `Screen ${screen.index} PGM${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 			ret.push({
-				id: 'PREVIEW_S' + screen.index,
+				id: `S${screen.index} PRW`,
 				label: `Screen ${screen.index} PRW${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 		}
@@ -207,7 +207,7 @@ export default class ChoicesLivepremier4 extends Choices {
 		// next add Auxscreens
 		for (const screen of this.getAuxArray()) {
 			ret.push({
-				id: screen.id,
+				id: `A${screen.index}`,
 				label: `Aux ${screen.index} PGM${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 		}

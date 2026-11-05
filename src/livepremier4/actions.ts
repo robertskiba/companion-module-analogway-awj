@@ -1035,8 +1035,10 @@ export default class ActionsLivepremier4 extends Actions {
 		const remoteMultiviewerSelectWidget = super.remoteMultiviewerSelectWidget
 
 		remoteMultiviewerSelectWidget.callback = (action) => {
-			const mvw = action.options.widget?.split(':')[0] ?? '1'
-			const widget = action.options.widget?.split(':')[1] ?? '0'
+			const target = this.choices.parseWidget(action.options.widget)
+			if (!target) return
+			const mvw = target.mvw
+			const widget = target.key
 			let widgetSelection: Record<'mocOutputLogicKey' | 'widgetKey', string>[] = []
 			if (this.state.syncSelection) {
 				widgetSelection = [...(this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds') ?? [])]
@@ -1074,19 +1076,16 @@ export default class ActionsLivepremier4 extends Actions {
 
 		deviceMultiviewerSource.callback = (action) => {
 			let widgetSelection: Record<'mocOutputLogicKey' | 'widgetKey', string>[] = []
-			if (action.options.widget === 'sel') {
+			if (String(action.options.widget ?? '').trim().toLowerCase() === 'sel') {
 				if (this.state.syncSelection) {
 					widgetSelection = [...(this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds') ?? [])]
 				} else {
 					widgetSelection = [...(this.state.get('LOCAL/widgetSelection/widgetIds') ?? [])]
 				}
 			} else {
-				widgetSelection = [
-					{
-						widgetKey: action.options.widget.split(':')[1] ?? '0',
-						mocOutputLogicKey: action.options.widget.split(':')[0] ?? '1',
-					},
-				]
+				const target = this.choices.parseWidget(action.options.widget)
+				if (!target) return
+				widgetSelection = [{ widgetKey: target.key, mocOutputLogicKey: target.mvw }]
 			}
 			for (const widget of widgetSelection) {
 				this.connection.sendWSmessage(

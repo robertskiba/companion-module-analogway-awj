@@ -377,11 +377,26 @@ export default class ChoicesMidra extends Choices {
 
 	public getWidgetChoices(): Dropdown<string>[] {
 		return (this.state.get('DEVICE/device/multiviewer/status/pp/widgetValidity') ?? []).map((widget: string) => {
+			const num = this.widgetKeyToNumber(widget)
 			return {
-				id: '1:' + widget,
-				label: `Widget ${parseInt(widget)}`,
+				id: `MV1W${num}`,
+				label: `Widget ${num}`,
 			}
 		})
+	}
+
+	public override widgetScreenSource(num: number, preview: boolean): string | undefined {
+		return `SCREEN_${preview ? 'PRW' : 'PRGM'}_${num}`
+	}
+
+	/** Midra lists no Aux as a widget source. */
+	public override widgetAuxSource(_num: number, _preview: boolean): string | undefined {
+		return undefined
+	}
+
+	/** Midra's widget keys are the widget numbers themselves (the module has always labelled key n "Widget n"). */
+	public override widgetKeyOffset(): number {
+		return 0
 	}
 
 	public getWidgetSourceChoices(): Dropdown<string>[] {
@@ -391,11 +406,11 @@ export default class ChoicesMidra extends Choices {
 		// next add Screens
 		for (const screen of this.getScreensArray()) {
 			ret.push({
-				id: 'SCREEN_PRGM_' + screen.index,
+				id: `S${screen.index}`,
 				label: `Screen ${screen.index} PGM${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 			ret.push({
-				id: 'SCREEN_PRW_' + screen.index,
+				id: `S${screen.index} PRW`,
 				label: `Screen ${screen.index} PRW${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})
 		}

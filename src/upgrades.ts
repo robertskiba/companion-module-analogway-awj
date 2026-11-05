@@ -380,6 +380,58 @@ const UpgradeScripts = [
 			updatedFeedbacks: [],
 		}
 	},
+
+	// RC4: the Multiviewer fields list short ids instead of raw device ids.
+	// - Widget: `MV1W20` - the widget number WebRCS shows - instead of `1:19` (Multiviewer:device key).
+	//   LivePremier keys count from 0 (W20 is key 19), Midra and Alta keys are the widget number itself, so the
+	//   stored series decides the conversion. A config that has never been connected has no series and keeps
+	//   its widget values: the old spelling is still understood, only its dropdown shows it invalid.
+	// - Source: Screens `S1` (Program) and `S1 PRW` instead of 'PROGRAM_S1'/'PREVIEW_S1' (LivePremier) and
+	//   'SCREEN_PRGM_1'/'SCREEN_PRW_1' (Midra, Alta). Auxes stay `A1`.
+	// Expressions are not touched: every field still accepts the old spellings with their old meaning.
+	function migrateMultiviewerIdsToShortConvention(_context, props: LooseObj) {
+		const series = String(props.config?.deviceSeries ?? '')
+		const offset = series === 'LivePremier' ? 1 : series === 'Midra 4K' || series === 'Alta 4K' ? 0 : undefined
+
+		const convert = (options: LooseObj, key: string, fn: (value: string) => string | undefined): boolean => {
+			const opt = options[key]
+			const wrapped = opt !== null && typeof opt === 'object' && !Array.isArray(opt) && 'isExpression' in opt
+			if (wrapped && opt.isExpression) return false
+			const value = wrapped ? opt.value : opt
+			if (typeof value !== 'string') return false
+			const after = fn(value)
+			if (after === undefined || after === value) return false
+			options[key] = wrapped ? { value: after, isExpression: false } : after
+			return true
+		}
+		const widget = (value: string): string | undefined => {
+			const match = value.match(/^(\d+):(\d+)$/)
+			return match && offset !== undefined ? `MV${parseInt(match[1])}W${parseInt(match[2]) + offset}` : undefined
+		}
+		const source = (value: string): string | undefined => {
+			const lp = value.match(/^(PROGRAM|PREVIEW)_S(\d+)$/)
+			if (lp) return lp[1] === 'PREVIEW' ? `S${lp[2]} PRW` : `S${lp[2]}`
+			const midra = value.match(/^SCREEN_(PRGM|PRW)_(\d+)$/)
+			if (midra) return midra[1] === 'PRW' ? `S${midra[2]} PRW` : `S${midra[2]}`
+			return undefined
+		}
+
+		const updatedActions: LooseObj[] = []
+		for (const oldAction of props.actions ?? []) {
+			if (oldAction.actionId !== 'remoteMultiviewerSelectWidget' && oldAction.actionId !== 'deviceMultiviewerSource') continue
+			const action = { ...oldAction, options: { ...oldAction.options } }
+			const widgetChanged = convert(action.options, 'widget', widget)
+			const sourceChanged = action.actionId === 'deviceMultiviewerSource' && convert(action.options, 'source', source)
+			if (widgetChanged || sourceChanged) updatedActions.push(action)
+		}
+		const updatedFeedbacks: LooseObj[] = []
+		for (const oldFeedback of props.feedbacks ?? []) {
+			if (oldFeedback.feedbackId !== 'remoteWidgetSelection') continue
+			const feedback = { ...oldFeedback, options: { ...oldFeedback.options } }
+			if (convert(feedback.options, 'widget', widget)) updatedFeedbacks.push(feedback)
+		}
+		return { updatedConfig: null, updatedActions, updatedFeedbacks }
+	},
 ]
 
 export { UpgradeScripts }

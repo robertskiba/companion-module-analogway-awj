@@ -343,7 +343,8 @@ export default class FeedbacksMidra extends Feedbacks  {
 		const remoteWidgetSelection = super.remoteWidgetSelection
 
 		remoteWidgetSelection.callback = (feedback) => {
-			const widget = feedback.options.widget?.toString().split(':')[1] ?? '0'
+			const target = this.choices.parseWidget(feedback.options.widget)
+			if (!target) return false
 			let widgetSelection: {widgetKey: string, mocOutputLogicKey: string}[] = []
 			if (this.state.syncSelection) {
 				widgetSelection = [
@@ -353,7 +354,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 			} else {
 				widgetSelection = this.state.get('LOCAL/widgetSelection/widgetIds') ?? []
 			}
-			return JSON.stringify(widgetSelection).includes(`{"widgetKey":"${widget}","mocOutputLogicKey":"1"}`)
+			return widgetSelection.some((itm) => String(itm.widgetKey) === target.key && String(itm.mocOutputLogicKey) === '1')
 		}
 
 		return remoteWidgetSelection

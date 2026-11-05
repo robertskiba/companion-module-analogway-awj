@@ -1385,18 +1385,20 @@ export default class Feedbacks {
 					label: 'Widget',
 					choices: this.choices.getWidgetChoices(),
 					default: this.choices.getWidgetChoices()[0]?.id,
+					allowInvalidValues: true,
+					tooltip: 'In an expression: MV1W20 is Widget 20 of Multiviewer 1, numbered as WebRCS shows it. W20 or a bare 20 means Multiviewer 1.',
 				},
 			],
 			callback: (feedback) => {
-				const mvw = feedback.options.widget?.toString().split(':')[0] ?? '1'
-				const widget = feedback.options.widget?.toString().split(':')[1] ?? '0'
+				const target = this.choices.parseWidget(feedback.options.widget)
+				if (!target) return false
 				let widgetSelection: {widgetKey: string, mocOutputLogicKey: string}[] = []
 				if (this.state.syncSelection) {
 					widgetSelection = [...(this.state.get('REMOTE/live/multiviewers/widgetSelection/widgetIds') ?? [])]
 				} else {
 					widgetSelection = this.state.get('LOCAL/widgetSelection/widgetIds') ?? []
 				}
-				return JSON.stringify(widgetSelection).includes(`{"widgetKey":"${widget}","mocOutputLogicKey":"${mvw}"}`)
+				return widgetSelection.some((itm) => String(itm.widgetKey) === target.key && String(itm.mocOutputLogicKey) === target.mvw)
 			},
 		}
 

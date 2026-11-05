@@ -190,6 +190,8 @@ Selects, deselects, or toggles which Layer(s) are currently selected, and can al
 Available at: LivePremier, Alta 4K, Midra 4K  
 "Multiviewer Widget Selection" works best in conjunction with "Select Source in Multiviewer Widget": first select a widget, then choose a source for it. Sometimes you just want to switch the source of one widget without writing many memories, and this covers exactly that.
 
+In an expression a widget is written `MV1W20` - Widget 20 of Multiviewer 1, numbered as WebRCS shows it; `W20` or a bare `20` means Multiviewer 1, and `sel` the selected widget(s). A source is written like everywhere else (`IN3`, `TIMER1`, `IMG2`); a Screen is `S1` for its Program or `S1 PRW` for its Preview, an Aux `A1`.
+
 **Feedback: Widget Selection** - Available at: LivePremier, Alta 4K, Midra 4K. Same sync-dependent behavior as above - shows whether a multiviewer widget is currently selected, on Companion or the device.
 
 ### <a name="sync"></a>Sync selection

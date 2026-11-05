@@ -1011,9 +1011,10 @@ export default class Choices {
 				'widgetList',
 				'itemKeys',
 			]) ?? []) {
+				const num = this.widgetKeyToNumber(widget)
 				ret.push({
-					id: `${multiviewer}:${widget}`,
-					label: `Multiviewer ${multiviewer} Widget ${parseInt(widget)+1}`,
+					id: `MV${multiviewer}W${num}`,
+					label: `Multiviewer ${multiviewer} Widget ${num}`,
 				})
 			}
 		}
@@ -1022,18 +1023,68 @@ export default class Choices {
 	}
 
 	/**
+	 * How far the widget number WebRCS shows (W1, W2, ...) is from the device's widget key. LivePremier counts its
+	 * keys from 0, so W1 is key 0 - live-confirmed on an Aquilon: W20 is key 19, W19 is key 18.
+	 */
+	public widgetKeyOffset(): number {
+		return 1
+	}
+
+	public widgetKeyToNumber(key: string | number): number {
+		return parseInt(String(key)) + this.widgetKeyOffset()
+	}
+
+	/**
+	 * The Multiviewer and the device widget key from a value of a Widget field. The choices are written
+	 * `MV1W20` - the widget number as WebRCS shows it - and an expression may also give `MV1 W20`, `W20` or a
+	 * bare `20` (both meaning Multiviewer 1). Up to RC3 the field held the raw `1:19` (Multiviewer:device key,
+	 * so one less than the number shown on LivePremier); that spelling stays valid with its old meaning, for
+	 * configs and expressions written back then.
+	 */
+	public parseWidget(value: unknown): { mvw: string, key: string } | undefined {
+		const text = String(value ?? '').trim().toUpperCase()
+		const legacy = text.match(/^(\d+):(\d+)$/)
+		if (legacy) return { mvw: String(parseInt(legacy[1])), key: String(parseInt(legacy[2])) }
+		const short = text.match(/^(?:(?:MVW?|MULTIVIEWER)\s*(\d+)\s*[:_\s]?\s*)?(?:W|WIDGET)?\s*(\d+)$/)
+		if (!short) return undefined
+		const mvw = short[1] === undefined ? 1 : parseInt(short[1])
+		const key = parseInt(short[2]) - this.widgetKeyOffset()
+		if (mvw < 1 || key < 0) return undefined
+		return { mvw: String(mvw), key: String(key) }
+	}
+
+	/**
 	 * The id a Multiviewer widget's `source` expects, from a value of getWidgetSourceChoices(). Inputs, Timers and
 	 * Images are listed in the short-id convention (IN3, TIMER1, IMG2) and converted here; a bare number is an
-	 * Input, and the raw spellings ('IN_3', 'INPUT_3', 'TIMER_1', 'STILL_2') stay valid. The Screen and Aux
-	 * entries ('PROGRAM_S1', 'SCREEN_PRW_1', 'A1', ...) and NONE are passed through.
+	 * Input, and the raw spellings ('IN_3', 'INPUT_3', 'TIMER_1', 'STILL_2') stay valid. Screens are `S1`
+	 * (Program, as in Show Thumbnail) and `S1 PRW`, Auxes `A1`; `S1 PGM`, `SCR1` and `S1PVW` are understood too.
+	 * The raw device ids these used to be listed as ('PROGRAM_S1', 'PREVIEW_S1', 'SCREEN_PRW_1') and NONE are
+	 * passed through.
 	 */
 	public resolveWidgetSource(value: unknown): string {
 		const raw = this.normalizeSourceId(String(value ?? ''))
+		const screen = raw.trim().toUpperCase().match(/^(S|SCR|SCREEN|A|AUX)[_\s]*0*([1-9][0-9]*)[_\s]*(PGM|PRGM|PROGRAM|PRW|PVW|PREVIEW)?$/)
+		if (screen) {
+			const num = parseInt(screen[2])
+			const preview = screen[3] !== undefined && /^P(RW|VW|REVIEW)$/.test(screen[3])
+			const isAux = screen[1] === 'A' || screen[1] === 'AUX'
+			return (isAux ? this.widgetAuxSource(num, preview) : this.widgetScreenSource(num, preview)) ?? raw
+		}
 		const id = this.parseShortId(raw, 'IN')
 		if (id?.kind === 'IN') return this.resolveInputKey(id.num) ?? raw
 		if (id?.kind === 'TIMER') return this.resolveTimerKey(id.num) ?? raw
 		if (id?.kind === 'IMG') return `STILL_${id.num}`
 		return raw
+	}
+
+	/** The device id of a Screen's Program or Preview as a Multiviewer widget source. */
+	public widgetScreenSource(num: number, preview: boolean): string | undefined {
+		return `${preview ? 'PREVIEW' : 'PROGRAM'}_S${num}`
+	}
+
+	/** The device id of an Aux as a Multiviewer widget source - Program only, an Aux has no Preview there. */
+	public widgetAuxSource(num: number, preview: boolean): string | undefined {
+		return preview ? undefined : `A${num}`
 	}
 
 	public getWidgetSourceChoices(): Dropdown<string>[] {
