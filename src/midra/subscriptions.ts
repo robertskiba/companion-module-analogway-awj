@@ -639,7 +639,9 @@ export default class SubscriptionsMidra extends Subscriptions {
 					setMemoryVariables(program, 'PGM');
 					setMemoryVariables(preview, 'PVW');
 				}
-				this.instance.checkFeedbacks('deviceSourceTally', 'deviceScreenMemory', 'deviceTake');
+				// A Take swaps which bank is Program, so every feedback that reads a bank by Program/Preview has to be
+				// re-evaluated - not just the ones whose own device path changed.
+				this.instance.checkFeedbacks('deviceSourceTally', 'deviceScreenMemory', 'deviceTake', 'deviceLayerSourceStatus', 'deviceLayerPropertyStatus', 'deviceLayerSignalStatus');
 				return false;
 			},
 		}

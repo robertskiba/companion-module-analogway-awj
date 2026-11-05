@@ -207,6 +207,44 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	}
 
 	/**
+	 * Feedbacks that can resolve their target through the current selection - "First/Only Selected Screen",
+	 * "All Selected Layers", "Selected Preset" - but are otherwise only rechecked when their own device path
+	 * changes. Keyed by the selection feedback that is rechecked whenever that selection changes.
+	 *
+	 * Without this, such a feedback kept showing what it evaluated for the previous selection - "Layer
+	 * Properties - Layer Source" on "First/Only Selected Screen/Layer", for one, did not follow a newly selected
+	 * Screen or Layer until that Layer's source itself changed. Hooking in here covers every way a selection changes in one place - the
+	 * device's own pushes with Sync Selection on, and the module's own selection actions with it off, which
+	 * call checkFeedbacks() directly. A Take, which swaps Program and Preview, is covered by the transition
+	 * handlers in livepremier4/ and midra/ subscriptions.ts.
+	 */
+	private static readonly selectionDependentFeedbacks: Record<string, string[]> = {
+		liveScreenSelection: [
+			'deviceLayerSourceStatus', 'deviceLayerPropertyStatus', 'deviceLayerCutFillSourceStatus',
+			'deviceLayerSignalStatus', 'deviceLayerFreezeV3', 'deviceScreenFreezeOutputs', 'deviceSourceTally',
+		],
+		remoteLayerSelection: [
+			'deviceLayerSourceStatus', 'deviceLayerPropertyStatus', 'deviceLayerCutFillSourceStatus',
+			'deviceLayerSignalStatus', 'deviceLayerFreezeV3',
+		],
+		livePresetSelection: [
+			'deviceLayerSourceStatus', 'deviceLayerPropertyStatus', 'deviceLayerCutFillSourceStatus',
+			'deviceLayerSignalStatus', 'deviceLayerFreezeV3',
+		],
+	}
+
+	/** Rechecks the given feedbacks plus everything that depends on them - see selectionDependentFeedbacks. */
+	override checkFeedbacks(feedbackType: string, ...feedbackTypes: string[]): void {
+		const requested = [feedbackType, ...feedbackTypes]
+		const all = new Set(requested)
+		for (const type of requested) {
+			for (const dependent of AWJinstance.selectionDependentFeedbacks[type] ?? []) all.add(dependent)
+		}
+		const [first, ...rest] = [...all]
+		super.checkFeedbacks(first, ...rest)
+	}
+
+	/**
 	 * Main initialization function called once the module
 	 * is OK to start doing things.
 	 */
