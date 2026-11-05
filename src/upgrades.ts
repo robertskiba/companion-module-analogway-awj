@@ -265,6 +265,106 @@ const UpgradeScripts = [
 			updatedFeedbacks,
 		}
 	},
+
+	// RC4: every field naming an Input, Output, Image, Timer, Background Set or Screen source lists it in the
+	// module's short-id convention (IN3, OUT1, IMG2, TIMER1, BS4, SCR2) - the spelling the variables use and the
+	// one an expression is written in. Up to RC3 these fields listed raw device ids ('IN_3', 'TIMER_1',
+	// 'NATIVE_4', a bare '1' for an Output) or, for Show Thumbnail, 'inputs:3'. Stored plain values are converted
+	// so the dropdowns show them as valid; expressions are left alone, since every field still accepts the old
+	// spellings. Same wrapped-or-bare option handling as migrateV2OptionValuesToV3Choices above.
+	function migrateIdsToShortConvention(_context, props: LooseObj) {
+		const getValue = (options: LooseObj, key: string): any => {
+			const opt = options[key]
+			if (opt !== null && typeof opt === 'object' && !Array.isArray(opt) && 'isExpression' in opt) {
+				return opt.isExpression ? undefined : opt.value
+			}
+			return opt
+		}
+		const setValue = (options: LooseObj, key: string, value: any): void => {
+			const opt = options[key]
+			options[key] = opt !== null && typeof opt === 'object' && !Array.isArray(opt) && 'isExpression' in opt
+				? { value, isExpression: false }
+				: value
+		}
+
+		const shortInput = (v: any): any => (typeof v === 'string' && /^(?:IN|INPUT|LIVE)_\d+$/.test(v) ? `IN${v.replace(/\D/g, '')}` : v)
+		const shortTimer = (v: any): any => (typeof v === 'string' && /^TIMER_\d+$/.test(v) ? `TIMER${v.replace(/\D/g, '')}` : v)
+		const prefixed = (prefix: string) => (v: any): any => (/^\d+$/.test(String(v ?? '')) ? `${prefix}${v}` : v)
+		// The source lists of the V3 Layer actions and feedbacks: Background Sets and Screen re-insertions.
+		const shortSource = (v: any): any => {
+			if (typeof v !== 'string') return v
+			if (/^NATIVE_\d+$/.test(v)) return `BS${v.replace(/\D/g, '')}`
+			if (/^(?:SCREEN|PROGRAM)_\d+$/.test(v)) return `SCR${v.replace(/\D/g, '')}`
+			return v
+		}
+		const thumbnailPrefix: Record<string, string> = { inputs: 'IN', outputs: 'OUT', imagesStore: 'IMG', timers: 'TIMER' }
+		const shortThumbnail = (v: any): any => {
+			const match = typeof v === 'string' ? v.match(/^(inputs|outputs|imagesStore|timers):(\d+)$/) : null
+			return match ? `${thumbnailPrefix[match[1]]}${match[2]}` : v
+		}
+
+		const conversions: Record<string, Record<string, (v: any) => any>> = {
+			'action:deviceTimerSetup': { timer: shortTimer },
+			'action:deviceTimerAdjust': { timer: shortTimer },
+			'action:deviceTimerTransport': { timer: shortTimer },
+			'feedback:timerState': { timer: shortTimer },
+			'action:deviceAssignImageLibraryToStore': { store: prefixed('IMG'), source: shortTimer },
+			'action:deviceTestpatterns': { outputList: prefixed('OUT'), inputList: shortInput },
+			'feedback:deviceTestpatternActive': { outputList: prefixed('OUT'), inputList: shortInput },
+			'action:deviceTestpatternRasterBox': { output: prefixed('OUT') },
+			'feedback:deviceTestpatternRasterBoxActive': { output: prefixed('OUT') },
+			'feedback:deviceInputSignalStatus': { input: shortInput },
+			'action:deviceMultiviewerSource': {
+				source: (v: any) => {
+					if (typeof v === 'string' && /^STILL_\d+$/.test(v)) return `IMG${v.replace(/\D/g, '')}`
+					return shortTimer(shortInput(v))
+				},
+			},
+			'action:deviceBackupSetSource': { target: (v: any) => (typeof v === 'string' && /^INPUT:IN_\d+$/.test(v) ? `IN${v.replace(/\D/g, '')}` : v) },
+			'action:deviceBackupAutoMode': { target: (v: any) => (typeof v === 'string' && /^INPUT:IN_\d+$/.test(v) ? `IN${v.replace(/\D/g, '')}` : v) },
+			'feedback:deviceBackupSetSourceStatus': { target: (v: any) => (typeof v === 'string' && /^INPUT:IN_\d+$/.test(v) ? `IN${v.replace(/\D/g, '')}` : v) },
+			'feedback:deviceBackupAutoModeStatus': { target: (v: any) => (typeof v === 'string' && /^INPUT:IN_\d+$/.test(v) ? `IN${v.replace(/\D/g, '')}` : v) },
+			'action:devicePreconfigBackgroundSetSource': { bgset: prefixed('BS') },
+			'feedback:devicePreconfigBackgroundSetSourceStatus': { bgset: prefixed('BS') },
+			'feedback:deviceThumbnail': { source: shortThumbnail },
+			'action:deviceSelectSourceV3': { sourceLayer: shortSource },
+			'action:deviceLayerCutFillV3': { source: shortSource },
+			'feedback:deviceLayerSourceStatus': { source: shortSource },
+			'feedback:deviceLayerCutFillSourceStatus': { source: shortSource },
+			'feedback:deviceSourceTally': { source: shortSource },
+		}
+
+		const migrate = (key: string, options: LooseObj): boolean => {
+			let changed = false
+			for (const [field, fn] of Object.entries(conversions[key] ?? {})) {
+				if (!(field in options)) continue
+				const before = getValue(options, field)
+				if (before === undefined) continue
+				const after = fn(before)
+				if (after === before) continue
+				setValue(options, field, after)
+				changed = true
+			}
+			return changed
+		}
+
+		const updatedActions: LooseObj[] = []
+		for (const oldAction of props.actions ?? []) {
+			const action = { ...oldAction, options: { ...oldAction.options } }
+			if (migrate(`action:${action.actionId}`, action.options)) updatedActions.push(action)
+		}
+		const updatedFeedbacks: LooseObj[] = []
+		for (const oldFeedback of props.feedbacks ?? []) {
+			const feedback = { ...oldFeedback, options: { ...oldFeedback.options } }
+			if (migrate(`feedback:${feedback.feedbackId}`, feedback.options)) updatedFeedbacks.push(feedback)
+		}
+
+		return {
+			updatedConfig: null,
+			updatedActions,
+			updatedFeedbacks,
+		}
+	},
 ]
 
 export { UpgradeScripts }

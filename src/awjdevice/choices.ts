@@ -6,7 +6,10 @@ import { RECOMMENDED_FIRMWARE, MIDRA_RECOMMENDED_FIRMWARE } from '../config.js'
 
 type Dropdown<t> = {id: t, label: string}
 
-export type Choicemeta = { id: string, label: string, index?: string, longname?: string, device?: number }
+/** The kinds of numbered id in this module's short-id convention, see Choices.parseShortId(). */
+export type ShortIdKind = 'IN' | 'IMG' | 'OUT' | 'TIMER' | 'BS' | 'SCR'
+
+export type Choicemeta ={ id: string, label: string, index?: string, longname?: string, device?: number }
 
 export type AnchorPoint = 'TOP_LEFT' | 'TOP_CENTER' | 'TOP_RIGHT' | 'LEFT_CENTER' | 'CENTER' | 'RIGHT_CENTER' | 'BOTTOM_LEFT' | 'BOTTOM_CENTER' | 'BOTTOM_RIGHT'
 
@@ -264,6 +267,41 @@ export default class Choices {
 		return this.syntheticRangeIfNeverConnected([], this.constants.maxInputs, (n) => `${prefix ?? 'IN'}_${n}`)
 	}
 
+	/** The Inputs in the short-id convention ('IN3'), for Input fields whose value is resolved with resolveInputKey().
+	 *  getLiveInputChoices() keeps the raw device ids for the source lists that send them unchanged. */
+	public getInputShortChoices(): Dropdown<string>[] {
+		return this.placeholderIfEmpty(this.getLiveInputArray().map((input) => ({
+			id: `IN${input.index ?? input.id.replace(/^\D+/, '')}`,
+			label: `Input ${input.index}${input.label.length === 0 ? '' : ' - ' + input.label}`,
+		})), 'No Inputs configured')
+	}
+
+	/** The device's inputList key ('IN_3' on LivePremier, 'INPUT_3' on Midra/Alta) from any spelling of an Input:
+	 *  'IN3', 'IN_3', 'INPUT_3', 'LIVE_3', 'in 3' or a bare '3'. */
+	public resolveInputKey(value: unknown): string | undefined {
+		const num = this.parseIdNumber(value, 'IN')
+		return num === undefined ? undefined : `${this.state.platform === 'midra' ? 'INPUT' : 'IN'}_${num}`
+	}
+
+	/** The device's outputList key (a plain number) from 'OUT3', 'OUTPUT_3', 'out 3' or a bare '3'. */
+	public resolveOutputKey(value: unknown): string | undefined {
+		return this.parseIdNumber(value, 'OUT')
+	}
+
+	/** The device key of a Testpattern target. Outputs and Inputs are listed in the short-id convention (OUT3,
+	 *  IN3), so an expression can use those, any raw spelling, or a bare number. A Screen key is 'S1' on
+	 *  LivePremier and a plain '1' on Midra/Alta - both spellings are accepted on both. */
+	public resolveTestpatternItemKey(group: string, value: unknown): string | undefined {
+		if (group === 'outputList') return this.resolveOutputKey(value)
+		if (group === 'inputList') return this.resolveInputKey(value)
+		const raw = String(value ?? '').trim().toUpperCase()
+		if (group === 'screenList' && /^S?\d+$/.test(raw)) {
+			const num = String(Number(raw.replace(/^S/, '')))
+			return this.state.platform === 'midra' ? num : `S${num}`
+		}
+		return raw === '' ? undefined : raw
+	}
+
 	public getLiveInputChoices(prefix?: string): Dropdown<string>[] {
 		const ret: Dropdown<string>[] = []
 		const inputs = this.getLiveInputArray(prefix)
@@ -295,7 +333,7 @@ export default class Choices {
 		)
 	}
 
-	/** All Image Store slots that actually exist on this device (licensed/available), meant as the target of an "assign image" action. Empty slots are included, since assigning is how you fill them. "Show also not existing..." additionally lists every slot up to maxStills, for pre-programming before a bigger/differently-licensed device is connected. */
+	/** All Image Store slots that actually exist on this device (licensed/available), meant as the target of an "assign image" action. Empty slots are included, since assigning is how you fill them. "Show also not existing..." additionally lists every slot up to maxStills, for pre-programming before a bigger/differently-licensed device is connected. Ids are the short 'IMG{n}', the same id a Layer source uses for that slot; read them back with parseIdNumber(value, 'IMG'). */
 	public getStillStoreChoices(): Dropdown<string>[] {
 		const bankpath = 'DEVICE/device/stillList/'
 		const availableIds = new Set<string>(
@@ -304,7 +342,7 @@ export default class Choices {
 			)
 		)
 		if (availableIds.size === 0 && !this.state.get('DEVICE')) {
-			return Array.from({ length: this.constants.maxStills }, (_, i) => ({ id: `${i + 1}`, label: `${i + 1}` }))
+			return Array.from({ length: this.constants.maxStills }, (_, i) => ({ id: `IMG${i + 1}`, label: `${i + 1}` }))
 		}
 		const maxN = this.instance.config.showNotExisting
 			? this.constants.maxStills
@@ -315,9 +353,9 @@ export default class Choices {
 			if (availableIds.has(id)) {
 				const label = this.state.get(this.state.concat(bankpath, ['items', id, 'control', 'pp', 'label']))
 				const isValid = this.state.get(this.state.concat(bankpath, ['items', id, 'status', 'pp', 'isValid']))
-				ret.push({ id, label: `${id}${label ? ' - ' + label : ''}${isValid ? '' : ' (empty)'}` })
+				ret.push({ id: `IMG${id}`, label: `${id}${label ? ' - ' + label : ''}${isValid ? '' : ' (empty)'}` })
 			} else if (this.instance.config.showNotExisting) {
-				ret.push({ id, label: `${id} (not existing)` })
+				ret.push({ id: `IMG${id}`, label: `${id} (not existing)` })
 			}
 		}
 		return ret
@@ -350,9 +388,9 @@ export default class Choices {
 		})
 	}
 
-	/** The 4 device timers plus all occupied Image Library slots, meant as the source of an "assign to Image Store" action. Timer ids (e.g. "TIMER_1") and library ids (plain numbers) never collide. */
+	/** The 4 device timers plus all occupied Image Library slots, meant as the source of an "assign to Image Store" action. Timer ids ("TIMER1") and library ids (plain numbers) never collide. */
 	public getStillTimerAndLibraryChoices(): Dropdown<string>[] {
-		return [...this.getTimerChoices(), ...this.getStillLibraryChoices()]
+		return [...this.getTimerShortChoices(), ...this.getStillLibraryChoices()]
 	}
 
 	public getSourceChoices(): Dropdown<string>[] {
@@ -483,14 +521,17 @@ export default class Choices {
 	}
 
 	/**
-	 * Resolves a "Backup Set" dropdown value (as produced by getBackupSetChoices(), "INPUT:IN_n" or
-	 * "GROUP:GROUP_n") to the AWJ path of its control.pp object (without the leading "device" - matches
+	 * Resolves a "Backup Set" dropdown value (as produced by getBackupSetChoices(): "IN{n}", "GROUP:GROUP_n" or
+	 * "BGSET:{screen}:{n}") to the AWJ path of its control.pp object (without the leading "device" - matches
 	 * connection.sendWSmessage()'s own path convention, callers prepend 'DEVICE' themselves for state reads).
+	 * An Input may also be given by any other spelling or a bare number, and "INPUT:IN_n" - the id the list
+	 * used up to RC3 - stays valid.
 	 * Public/shared (moved from actions.ts) so both actions and feedbacks can resolve the same target.
 	 */
 	public getBackupControlPath(target: string): string[] | undefined {
-		const [kind, ...rest] = (target ?? '').split(':')
-		if (kind === 'INPUT' && rest[0]) return ['device', 'inputList', 'items', rest[0], 'backup', 'control', 'pp']
+		const [kind, ...rest] = String(target ?? '').trim().split(':')
+		const input = rest.length === 0 ? this.resolveInputKey(kind) : kind.toUpperCase() === 'INPUT' ? this.resolveInputKey(rest[0]) : undefined
+		if (input) return ['device', 'inputList', 'items', input, 'backup', 'control', 'pp']
 		if (kind === 'GROUP' && rest[0]) return ['device', 'backup', 'groupList', 'items', rest[0], 'control', 'pp']
 		if (kind === 'BGSET' && rest[0] && rest[1]) {
 			return ['device', 'preconfig', 'backgrounds', 'screenList', 'items', rest[0], 'backgroundSetList', 'items', rest[1], 'backup', 'control', 'pp']
@@ -525,7 +566,7 @@ export default class Choices {
 				const sourceLabel = this.getSourceChoices().find((choice) => choice.id === source)?.label ?? source
 				parts.push(`Backup${slot}: ${sourceLabel}`)
 			}
-			ret.push({ id: `INPUT:${key}`, label: parts.join(' > ') })
+			ret.push({ id: `IN${key.replace(/^\D+/, '')}`, label: parts.join(' > ') })
 		}
 		// Background Set backups - live-confirmed (2026-08-28) on a real Aquilon: a completely separate
 		// structure from Input backups, one independent backup config per Screen per Background Set slot at
@@ -635,12 +676,15 @@ export default class Choices {
 	 * 'IMG{n}') used everywhere else a source is exposed to the user (variables, other actions/feedbacks) -
 	 * mirrors subscriptions.ts's formatSourceShort(), the canonical definition of this mapping (not reused
 	 * directly - that one is private to the Subscriptions class and covers more kinds (NATIVE/SCREEN/TIMER)
-	 * than this needs). 'NONE' stays 'NONE'; anything unrecognized is passed through unchanged.
+	 * than this needs). Also gives the source lists their ids: a Background Set ('NATIVE_n') becomes 'BS{n}'
+	 * and a Screen re-insertion ('SCREEN_n' on LivePremier, 'PROGRAM_n' on Midra/Alta) 'SCR{n}', the same
+	 * spelling the source variables use. 'NONE' stays 'NONE'; anything unrecognized is passed through unchanged.
 	 */
 	public backgroundContentToShortSource(content: string): string {
-		const match = this.normalizeSourceId(content).match(/^(LIVE|INPUT|STILL)_(\d+)$/)
+		const match = this.normalizeSourceId(content).match(/^(LIVE|INPUT|STILL|NATIVE|SCREEN|PROGRAM)_(\d+)$/)
 		if (!match) return content
-		return match[1] === 'STILL' ? `IMG${match[2]}` : `IN${match[2]}`
+		const prefix: Record<string, string> = { LIVE: 'IN', INPUT: 'IN', STILL: 'IMG', NATIVE: 'BS', SCREEN: 'SCR', PROGRAM: 'SCR' }
+		return `${prefix[match[1]]}${match[2]}`
 	}
 
 	/**
@@ -673,9 +717,48 @@ export default class Choices {
 	 */
 	public shortSourceToBackgroundContent(shortId: string): string {
 		const normalized = this.normalizeSourceId(shortId)
-		const match = normalized.match(/^(IN|IMG)(\d+)$/)
-		if (!match) return normalized
-		return match[1] === 'IMG' ? `STILL_${match[2]}` : `${this.liveInputRawPrefix}_${match[2]}`
+		// A bare number is an Input here: every caller is a source field, where the Inputs are what a number
+		// most naturally names. Every other spelling parseShortId() knows is converted as well, so 'IN_3',
+		// 'LIVE_3' on a Midra or 'BS2' reach the device in the form it expects.
+		const id = this.parseShortId(normalized, 'IN')
+		if (!id) return normalized
+		switch (id.kind) {
+			case 'IN': return `${this.liveInputRawPrefix}_${id.num}`
+			case 'IMG': return `STILL_${id.num}`
+			case 'BS': return `NATIVE_${id.num}`
+			case 'SCR': return `${this.state.platform === 'midra' ? 'PROGRAM' : 'SCREEN'}_${id.num}`
+			default: return normalized
+		}
+	}
+
+	/**
+	 * Reads any spelling of a numbered id into this module's short-id convention: the short id itself ('IN3',
+	 * 'IMG2', 'OUT1', 'TIMER1', 'BS4', 'SCR2'), the raw AWJ spellings ('LIVE_3', 'INPUT_3', 'IN_3', 'STILL_2',
+	 * 'TIMER_1', 'NATIVE_4', 'SCREEN_2', 'PROGRAM_2'), with or without underscore or space, in any case. A bare
+	 * number takes `defaultKind`; without one it is not accepted. Returns undefined for anything else
+	 * ('NONE', 'COLOR', '0', ...), so a caller can fall back to its own handling.
+	 */
+	public parseShortId(value: unknown, defaultKind?: ShortIdKind): { kind: ShortIdKind, num: string } | undefined {
+		const match = String(value ?? '').trim().toUpperCase().match(/^([A-Z]+)?[_\s]*(\d+)$/)
+		if (!match) return undefined
+		const kindByPrefix: Record<string, ShortIdKind> = {
+			IN: 'IN', INPUT: 'IN', LIVE: 'IN',
+			IMG: 'IMG', STILL: 'IMG',
+			OUT: 'OUT', OUTPUT: 'OUT',
+			TIMER: 'TIMER',
+			BS: 'BS', NATIVE: 'BS',
+			SCR: 'SCR', SCREEN: 'SCR', PROGRAM: 'SCR',
+		}
+		const kind = match[1] === undefined ? defaultKind : kindByPrefix[match[1]]
+		const num = String(Number(match[2]))
+		if (!kind || num === '0') return undefined
+		return { kind, num }
+	}
+
+	/** The number of a numbered id of one kind ('TIMER1', 'TIMER_1' and a bare '1' all give '1'), or undefined. */
+	public parseIdNumber(value: unknown, kind: ShortIdKind): string | undefined {
+		const id = this.parseShortId(value, kind)
+		return id?.kind === kind ? id.num : undefined
 	}
 
 	/**
@@ -938,15 +1021,30 @@ export default class Choices {
 		return this.placeholderIfEmpty(ret, 'No Widgets configured')
 	}
 
+	/**
+	 * The id a Multiviewer widget's `source` expects, from a value of getWidgetSourceChoices(). Inputs, Timers and
+	 * Images are listed in the short-id convention (IN3, TIMER1, IMG2) and converted here; a bare number is an
+	 * Input, and the raw spellings ('IN_3', 'INPUT_3', 'TIMER_1', 'STILL_2') stay valid. The Screen and Aux
+	 * entries ('PROGRAM_S1', 'SCREEN_PRW_1', 'A1', ...) and NONE are passed through.
+	 */
+	public resolveWidgetSource(value: unknown): string {
+		const raw = this.normalizeSourceId(String(value ?? ''))
+		const id = this.parseShortId(raw, 'IN')
+		if (id?.kind === 'IN') return this.resolveInputKey(id.num) ?? raw
+		if (id?.kind === 'TIMER') return this.resolveTimerKey(id.num) ?? raw
+		if (id?.kind === 'IMG') return `STILL_${id.num}`
+		return raw
+	}
+
 	public getWidgetSourceChoices(): Dropdown<string>[] {
 		// first add None which is always available
 		const ret: Dropdown<string>[] = [{ id: 'NONE', label: 'None' }]
 
 		// next add live inputs
-		ret.push(...this.getLiveInputChoices())
+		ret.push(...this.getInputShortChoices())
 
 		// next add timer
-		ret.push(...this.getTimerChoices())
+		ret.push(...this.getTimerShortChoices())
 
 		return ret
 	}
@@ -1233,10 +1331,11 @@ export default class Choices {
 		return this.syntheticRangeIfNeverConnected(real, maxOutputs, (n) => `${n}`)
 	}
 
+	/** The Outputs in the short-id convention ('OUT3'). Read a picked or typed value back with resolveOutputKey(). */
 	public getOutputChoices(): Dropdown<string>[] {
 		return this.placeholderIfEmpty(this.getOutputArray().map((itm: Choicemeta) => {
 			return {
-				id: itm.id,
+				id: `OUT${itm.id}`,
 				label: `Output ${itm.id}${itm.label === '' ? '' : ' - ' + itm.label}`
 			}
 		}), 'No Outputs configured')
@@ -1275,6 +1374,23 @@ export default class Choices {
 			})
 		}
 		return this.syntheticRangeIfNeverConnected(ret, this.constants.maxTimers, (n) => `TIMER_${n}`)
+	}
+
+	/** The Timers in the short-id convention ('TIMER1'), for the Timer fields of actions and feedbacks. Resolve a
+	 *  picked or typed value with resolveTimerKey(). getTimerChoices() keeps the raw device keys for the source
+	 *  lists that send them to the device unchanged. */
+	public getTimerShortChoices(): Dropdown<string>[] {
+		return this.getTimerArray().map((itm: Choicemeta) => ({
+			id: `TIMER${itm.index}`,
+			label: `Timer ${itm.index}${itm.label === '' ? '' : ' - ' + itm.label}`,
+		}))
+	}
+
+	/** The device key of a Timer ('TIMER_1') from any spelling: 'TIMER1', 'TIMER_1', 'timer 1' or a bare '1'. */
+	public resolveTimerKey(value: unknown): string | undefined {
+		const num = this.parseIdNumber(value, 'TIMER')
+		if (num === undefined) return undefined
+		return this.getTimerArray().find((itm) => itm.index === num)?.id ?? `TIMER_${num}`
 	}
 
 	public getTimerChoices(): Dropdown<string>[] {
@@ -1346,7 +1462,7 @@ export default class Choices {
 		}
 
 		// A layer's source references an Image Store slot as "STILL_<n>", while the store's own state is
-		// keyed by the bare "<n>" (same id as getStillStoreChoices()) - strip the prefix before looking it up.
+		// keyed by the bare "<n>" - strip the prefix before looking it up.
 		const stillMatch = typeof input === 'string' ? input.match(/^STILL_(\d+)$/) : null
 		if (stillMatch) {
 			const stillId = stillMatch[1]

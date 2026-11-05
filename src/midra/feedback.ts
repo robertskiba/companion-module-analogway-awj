@@ -368,7 +368,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 			// 'IN{n}' convention (e.g. 'IN3', no underscore) - '.replace(\'LIVE\', \'INPUT\')' never matched
 			// that, silently reading a nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'. Same
 			// lenient bare-number/'IN{n}'/'INPUT_{n}' extraction as the matching action's fix.
-			const match = (feedback.options.input ?? '').toString().match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			const match = (feedback.options.input ?? '').toString().match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 			const input = match ? `INPUT_${match[1]}` : ''
 			const freeze = this.state.get('DEVICE/device/inputList/items/' + input + '/control/pp/freeze')
 			if (freeze) {
@@ -416,7 +416,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 		}
 
 		deviceInputKeyingStatus.callback = (feedback) => {
-			const match = (feedback.options.input ?? '').toString().match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			const match = (feedback.options.input ?? '').toString().match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 			if (!match) return false
 			const input = `INPUT_${match[1]}`
 			const plug = this.state.get('DEVICE/device/inputList/items/' + input + '/status/pp/plug')
@@ -526,6 +526,7 @@ export default class FeedbacksMidra extends Feedbacks  {
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{

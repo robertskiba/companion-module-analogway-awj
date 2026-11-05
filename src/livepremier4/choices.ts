@@ -213,15 +213,15 @@ export default class ChoicesLivepremier4 extends Choices {
 		}
 
 		// next add live inputs
-		ret.push(...this.getLiveInputChoices())
+		ret.push(...this.getInputShortChoices())
 
 		// next add timer
-		ret.push(...this.getTimerChoices())
+		ret.push(...this.getTimerShortChoices())
 
 		// next add still images
 		ret.push(...this.getStillsArray().map((itm: Choicemeta) => {
 			return {
-				id: `STILL_${itm.id}`,
+				id: `IMG${itm.id}`,
 				label: `Image ${itm.id}${itm.label === '' ? '' : ' - ' + itm.label}`,
 			}
 		}))

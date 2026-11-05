@@ -8,6 +8,9 @@ This is a plain-language summary for people programming and running shows with t
 - **Feedbacks set to "Selected" follow the selection.** A feedback set to a selected Screen, Layer or Preset now updates as soon as you change the selection, not just when the layer itself changes.
 - **Switched-off screens can't be selected from Companion any more** – just like in WebRCS. An old button for such a screen only writes a warning to the log.
 - **The automatic deselect of switched-off screens is reliable now**, even when one is pressed several times in quick succession.
+- **One way of writing sources everywhere.** Wherever you pick an Input, Output, Image, Timer, Background Set or Screen, the list now uses the same names as the variables: `IN3`, `OUT1`, `IMG2`, `TIMER1`, `BS4`, `SCR2`. Your existing buttons are converted automatically. In an expression you can also just write a number – `3` means Input 3 in any source field.
+- **Thumbnails show up right away.** A new thumbnail button, or one whose source you change (e.g. with an encoder), fetches its picture immediately instead of waiting for the first refresh. Thumbnail sources are now written `IN3`, `OUT1`, `IMG2` or `TIMER1` too; the old `inputs:3` still works.
+- **Source Tally with old (V2) variable names** is called `tally_S1_pgm_LIVE_1` again, as in V2, so button texts using that name show the tally again.
 
 ## RC3 – since RC1
 

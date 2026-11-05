@@ -63,6 +63,8 @@ export default class Feedbacks {
 		itemId: string
 	}>()
 	private thumbnailFeedbackKey = new Map<string, string>()
+	/** Pending first fetch per feedback id, see the deviceThumbnail callback. */
+	private thumbnailFirstFetch = new Map<string, ReturnType<typeof setTimeout>>()
 	private thumbnailCache = new Map<string, string>()
 	/** How long a subscriber may go without renewing itself (see comment above) before being treated as a
 	 *  stale/one-off preview and dropped - always at least this floor, or 3x its own requested rate, whichever
@@ -902,7 +904,11 @@ export default class Feedbacks {
 	 * scripts only). Companion's own per-entry note field covers the use case instead.
 	 */
 	protected registerTallyVariable(feedbackId: string, rawScreens: string, sortedScreens: string[], preset: string, source: string): string | null {
-		const canonicalSource = this.choices.normalizeSourceId(source)
+		// One name per source, however it is spelled ('IN3', 'in3', 'LIVE_3', a bare '3'): the short id for
+		// V3 names, and V2's raw device id ('LIVE_3', 'STILL_2') for old names - V2 named the variable after
+		// its raw option value, which the upgrade has since converted to the short id.
+		const deviceSource = this.choices.shortSourceToBackgroundContent(source ?? '')
+		const canonicalSource = this.instance.config.useOldVariableNames ? deviceSource : this.choices.backgroundContentToShortSource(deviceSource)
 		const screensSegment = this.tallyScreensSegment(rawScreens, sortedScreens)
 		// Old-name mode spells out the resolved list even for the tokens, so there it still takes a non-empty one.
 		const screensPart = this.instance.config.useOldVariableNames ? sortedScreens.join('-') : screensSegment
@@ -956,7 +962,7 @@ export default class Feedbacks {
 					type: 'dropdown',
 					label: 'Source',
 					tooltip: 'This module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
-					choices: [...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources],
+					choices: [...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources.map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label }))],
 					default: 'NONE',
 				},
 				{
@@ -1412,7 +1418,7 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
-				const match = (feedback.options.input ?? '').toString().match(/^(?:IN_?)?(\d+)$/i)
+				const match = (feedback.options.input ?? '').toString().match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 				const input = match ? `IN_${match[1]}` : ''
 				// The IN{n}.freeze variable itself is maintained for every available input independently of
 				// this feedback (subscriptions.inputFreeze), so nothing to do here beyond the boolean result.
@@ -1440,12 +1446,14 @@ export default class Feedbacks {
 					id: 'input',
 					type: 'dropdown',
 					label: 'Input',
-					choices: this.choices.getLiveInputChoices(),
-					default: this.choices.getLiveInputChoices()[0]?.id,
+					choices: this.choices.getInputShortChoices(),
+					default: this.choices.getInputShortChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 			],
 			callback: (feedback) => {
-				const input = feedback.options.input?.toString().replace('LIVE', 'IN') || ''
+				const input = this.choices.resolveInputKey(feedback.options.input)
+				if (!input) return false
 				const activePlug = this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'status', 'pp', 'plug']) ?? '1'
 				return !!this.state.get(['DEVICE', 'device', 'inputList', 'items', input, 'plugList', 'items', activePlug, 'status', 'signal', 'pp', 'isValid'])
 			},
@@ -1801,7 +1809,7 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
-				const match = (feedback.options.output ?? '').toString().match(/^(?:OUT)?(\d+)$/i)
+				const match = (feedback.options.output ?? '').toString().match(/^(?:OUT|OUTPUT)?[_\s]*0*(\d+)$/i)
 				// The OUT{n}.freeze variable itself is maintained for every available output independently of
 				// this feedback (subscriptions.outputFreeze), so nothing to do here beyond the boolean result.
 				return match ? !!this.state.get('DEVICE/device/outputList/items/' + match[1] + '/control/pp/freeze') : false
@@ -1828,8 +1836,9 @@ export default class Feedbacks {
 					id: 'timer',
 					type: 'dropdown',
 					label: 'Timer',
-					choices: this.choices.getTimerChoices(),
-					default: this.choices.getTimerChoices()[0]?.id,
+					choices: this.choices.getTimerShortChoices(),
+					default: this.choices.getTimerShortChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'state',
@@ -1846,7 +1855,7 @@ export default class Feedbacks {
 			],
 			callback: (feedback) => {
 				return (
-					this.state.get('DEVICE/device/timerList/items/' + feedback.options.timer + '/status/pp/state') ===
+					this.state.get(['DEVICE', 'device', 'timerList', 'items', this.choices.resolveTimerKey(feedback.options.timer) ?? '', 'status', 'pp', 'state']) ===
 					feedback.options.state
 				)
 			},
@@ -2251,7 +2260,7 @@ export default class Feedbacks {
 			options,
 			callback: (feedback) => {
 				const group = feedback.options.group
-				const item = feedback.options[group as 'screenList' | 'outputList' | 'inputList']
+				const item = this.choices.resolveTestpatternItemKey(group, feedback.options[group as 'screenList' | 'outputList' | 'inputList'])
 				const pattern = feedback.options[`${group}Pat` as 'screenListPat' | 'outputListPat' | 'inputListPat']
 				if (!item || !pattern) return false
 				const path = ['DEVICE', 'device', group, 'items', item, 'pattern', 'control', 'pp']
@@ -2288,6 +2297,7 @@ export default class Feedbacks {
 					label: 'Output or Output Group',
 					choices: this.choices.getOutputChoices(),
 					default: this.choices.getOutputChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'box',
@@ -2301,7 +2311,7 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
-				const current: string[] = this.state.get(['DEVICE', 'device', 'outputList', 'items', feedback.options.output, 'pattern', 'control', 'pp', 'centering']) ?? []
+				const current: string[] = this.state.get(['DEVICE', 'device', 'outputList', 'items', this.choices.resolveOutputKey(feedback.options.output) ?? '', 'pattern', 'control', 'pp', 'centering']) ?? []
 				return Array.isArray(current) && current.includes(feedback.options.box)
 			},
 		}
@@ -2341,22 +2351,23 @@ export default class Feedbacks {
 		// several such indices and getting byte-for-byte identical tiny responses. There is no way to snapshot
 		// an arbitrary Library image this way, only what's actually live in a Store slot - so "Still Image
 		// (Library)" was removed entirely rather than silently showing black for most of its own choice list.
-		// All four categories are pooled into one flat "Source" dropdown (id prefixed with its category, e.g.
-		// 'outputs:1') instead of a "pick category, then pick item" two-step - avoids the same kind of
-		// method-style indirection already removed elsewhere in this module.
+		// All four categories are pooled into one flat "Source" dropdown, in this module's own short-id
+		// convention (IN3, OUT1, IMG2, TIMER1), so an expression uses the same spelling as everywhere else.
+		// Values saved before that ('inputs:3', ...) and a bare number (an Input) still resolve, see
+		// parseThumbnailSource().
 		const outputChoices = this.choices.getOutputArray()
 			.filter((o) => !this.choices.getMultiviewerOutputListKeys().includes(o.id))
-			.map((o) => ({ id: `outputs:${o.id}`, label: `Output ${o.id}${o.label ? ' - ' + o.label : ''}` }))
+			.map((o) => ({ id: `OUT${o.id}`, label: `Output ${o.id}${o.label ? ' - ' + o.label : ''}` }))
 		const inputChoices = this.choices.getLiveInputArray().map((inp) => ({
-			id: `inputs:${inp.index ?? inp.id.replace(/^\D+/, '')}`,
+			id: `IN${inp.index ?? inp.id.replace(/^\D+/, '')}`,
 			label: `Input ${inp.index}${inp.label ? ' - ' + inp.label : ''}`,
 		}))
 		const storeChoices = this.choices.getStillsArray().map((s) => ({
-			id: `imagesStore:${s.id}`,
+			id: `IMG${s.id}`,
 			label: `Store ${s.id}${s.label ? ' - ' + s.label : ''}`,
 		}))
 		const timerChoices = this.choices.getTimerArray().map((t) => ({
-			id: `timers:${t.index ?? t.id.replace(/^\w+_/, '')}`,
+			id: `TIMER${t.index ?? t.id.replace(/^\w+_/, '')}`,
 			label: `Timer ${t.index}${t.label ? ' - ' + t.label : ''}`,
 		}))
 		const sourceChoices = [...outputChoices, ...inputChoices, ...storeChoices, ...timerChoices]
@@ -2388,13 +2399,10 @@ export default class Feedbacks {
 			callback: (feedback): CompanionAdvancedFeedbackResult => {
 				if (!parseBoolean(this.config.allowLiveThumbnails)) return {}
 
-				const raw = String(feedback.options.source ?? '')
-				const sepIdx = raw.indexOf(':')
-				if (sepIdx === -1) return {}
-				const source = raw.slice(0, sepIdx) as 'inputs' | 'outputs' | 'imagesStore' | 'timers'
-				const itemId = raw.slice(sepIdx + 1)
+				const parsed = this.parseThumbnailSource(feedback.options.source)
+				if (!parsed) return {}
+				const { source, itemId } = parsed
 				const requestedRate = Math.min(120, Math.max(1, Math.round(Number(feedback.options.refreshRate)) || 5))
-				if (itemId === '') return {}
 				const key = `${source}:${itemId}`
 
 				const prevKey = this.thumbnailFeedbackKey.get(feedback.id)
@@ -2413,13 +2421,21 @@ export default class Feedbacks {
 				}
 				poller.subscribers.set(feedback.id, { rate: requestedRate, lastSeen: Date.now() })
 
-				// Deliberately NOT an immediate this.pollThumbnail(key) here - Companion invokes this callback
-				// once even for a preset-browser preview that never becomes a real placed button (see the
-				// thumbnailPollers field comment above), so firing a request straight from the callback would
-				// hit the device the instant a row is rendered, before there's any way to tell a preview apart
-				// from a real button. Leaving the first fetch to recalculateThumbnailThrottle()'s own interval
-				// means a preview that disappears before its first tick (activeRate, e.g. 5s) never costs a
-				// single device request - a real button just shows its first image one tick later instead.
+				// The first image is fetched right away when this feedback starts watching a source it did not watch
+				// before - on a new button, and every time its Source changes (e.g. turned by an encoder through a
+				// variable) - instead of waiting a whole Refresh Rate for the poller's first tick. A short debounce
+				// coalesces a fast run of Source changes into one request for where it came to rest. The cost: a
+				// preset-browser preview (Companion runs this callback once for each previewed preset, see the
+				// thumbnailPollers comment above) also fetches once; getSnapshot()'s device-wide queue paces such a
+				// burst at 10 requests per second. Skipped while another button already has a cached image of it.
+				if (prevKey !== key && !this.thumbnailCache.has(key)) {
+					const pending = this.thumbnailFirstFetch.get(feedback.id)
+					if (pending) clearTimeout(pending)
+					this.thumbnailFirstFetch.set(feedback.id, setTimeout(() => {
+						this.thumbnailFirstFetch.delete(feedback.id)
+						if (this.thumbnailFeedbackKey.get(feedback.id) === key) this.pollThumbnail(key)
+					}, 150))
+				}
 				this.recalculateThumbnailThrottle()
 
 				const cached = this.thumbnailCache.get(key)
@@ -2432,10 +2448,34 @@ export default class Feedbacks {
 					this.recalculateThumbnailThrottle()
 				}
 				this.thumbnailFeedbackKey.delete(feedback.id)
+				const pending = this.thumbnailFirstFetch.get(feedback.id)
+				if (pending) clearTimeout(pending)
+				this.thumbnailFirstFetch.delete(feedback.id)
 			},
 		}
 
 		return deviceThumbnail
+	}
+
+	/**
+	 * Reads a "Show Thumbnail" Source value. The dropdown uses the short ids (IN3, OUT1, IMG2, TIMER1); an
+	 * expression may also use the raw AWJ spellings (LIVE_3, INPUT_3, IN_3, STILL_2, TIMER_1), in any case,
+	 * and a bare number means an Input. The "category:n" form the dropdown used up to RC3 ('inputs:3',
+	 * 'outputs:1', 'imagesStore:2', 'timers:1') stays valid for configs and expressions written back then.
+	 */
+	private parseThumbnailSource(value: unknown): { source: 'inputs' | 'outputs' | 'imagesStore' | 'timers', itemId: string } | undefined {
+		const raw = String(value ?? '').trim()
+		const legacy = raw.match(/^(inputs|outputs|imagesStore|timers):\s*(\d+)$/i)
+		const short = raw.toUpperCase().match(/^(IN|INPUT|LIVE|OUT|OUTPUT|IMG|STILL|TIMER)?[_\s]*(\d+)$/)
+		const sourceByPrefix: Record<string, 'inputs' | 'outputs' | 'imagesStore' | 'timers'> = {
+			INPUTS: 'inputs', OUTPUTS: 'outputs', IMAGESSTORE: 'imagesStore', TIMERS: 'timers',
+			IN: 'inputs', INPUT: 'inputs', LIVE: 'inputs', OUT: 'outputs', OUTPUT: 'outputs', IMG: 'imagesStore', STILL: 'imagesStore', TIMER: 'timers',
+		}
+		const match = legacy ?? short
+		if (!match) return undefined
+		const itemId = String(Number(match[2]))
+		if (itemId === '0') return undefined
+		return { source: sourceByPrefix[(match[1] ?? 'IN').toUpperCase()], itemId }
 	}
 
 	/** What to actually request for one poller. Live-confirmed on a real Aquilon: the snapshot API's "images"
@@ -2511,6 +2551,8 @@ export default class Feedbacks {
 		this.thumbnailPollers.clear()
 		this.thumbnailCache.clear()
 		this.thumbnailFeedbackKey.clear()
+		for (const pending of this.thumbnailFirstFetch.values()) clearTimeout(pending)
+		this.thumbnailFirstFetch.clear()
 	}
 
 	private releaseThumbnailPoller(key: string, feedbackId: string): void {
@@ -2674,7 +2716,7 @@ export default class Feedbacks {
 	get devicePreconfigBackgroundSetSourceStatus() {
 		type DevicePreconfigBackgroundSetSourceStatus = { bgset: string, output: string, content: string }
 
-		const bgsetChoices = Array.from({ length: 8 }, (_, i) => ({ id: (i + 1).toString(), label: `Background Set ${i + 1}` }))
+		const bgsetChoices = Array.from({ length: 8 }, (_, i) => ({ id: `BS${i + 1}`, label: `Background Set ${i + 1}` }))
 		const outputChoices = this.choices.getBackgroundScreenOutputChoices()
 
 		const devicePreconfigBackgroundSetSourceStatus: AWJfeedback<DevicePreconfigBackgroundSetSourceStatus> = {
@@ -2692,7 +2734,8 @@ export default class Feedbacks {
 					type: 'dropdown',
 					label: 'Background Set',
 					choices: bgsetChoices,
-					default: '1',
+					default: 'BS1',
+					allowInvalidValues: true,
 				},
 				{
 					id: 'output',
@@ -2711,12 +2754,14 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
-				// Accepts both the dropdown's own 'OUT{n}' choices and a bare number (e.g. from an expression
-				// that only has the raw output number available) - same leniency spirit as allowInvalidValues.
-				const output = (feedback.options.output ?? '').replace(/^OUT/i, '')
+				// Accepts the dropdowns' own 'OUT{n}' / 'BS{n}' choices, the raw spellings and a bare number (e.g.
+				// from an expression that only has the raw number available).
+				const output = this.choices.resolveOutputKey(feedback.options.output)
+				const bgset = this.choices.parseIdNumber(feedback.options.bgset, 'BS')
+				if (!output || !bgset) return false
 				const screen = this.choices.getScreenForOutput(output)
 				if (!screen) return false
-				const path = this.choices.getBackgroundSetOutputContentPath(screen, feedback.options.bgset, output)
+				const path = this.choices.getBackgroundSetOutputContentPath(screen, bgset, output)
 				const content = this.choices.shortSourceToBackgroundContent(feedback.options.content)
 				return this.state.get(['DEVICE', ...path]) === content
 			},
@@ -2771,7 +2816,7 @@ export default class Feedbacks {
 				},
 			],
 			callback: (feedback) => {
-				const match = (feedback.options.input ?? '').match(/^(?:IN_?|LIVE_)?(\d+)$/i)
+				const match = (feedback.options.input ?? '').match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 				if (!match) return false
 				const input = `IN_${match[1]}`
 				const plug = this.state.get('DEVICE/device/inputList/items/' + input + '/status/pp/plug')

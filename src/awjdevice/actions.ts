@@ -1257,7 +1257,7 @@ export default class Actions {
 					type: 'dropdown',
 					label: 'Source',
 					tooltip: 'Input/Image use this module\'s own short id convention (IN{n}/IMG{n}) - the raw AWJ id (e.g. LIVE_3/STILL_3) is also accepted.',
-					choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources],
+					choices: [{ id: 'keep', label: "Don't change source" }, ...this.choices.getSourceChoices().map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label })), ...this.choices.choicesBackgroundSources.map((c) => ({ id: this.choices.backgroundContentToShortSource(c.id), label: c.label }))],
 					default: 'keep',
 				},
 				{
@@ -1334,7 +1334,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const match = (action.options.input ?? '').match(/^(?:IN_?|LIVE_)?(\d+)$/i)
+				const match = (action.options.input ?? '').match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 				if (!match) return
 				if (action.options.mode === 'CUT_AND_FILL' && !this.choices.isFirmwareAtLeast('4.0.254')) return
 				const input = `IN_${match[1]}`
@@ -1400,7 +1400,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const match = (action.options.input ?? '').match(/^(?:IN_?)?(\d+)$/i)
+				const match = (action.options.input ?? '').match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 				if (!match) return
 				const input = `IN_${match[1]}`
 				let val = false
@@ -1582,7 +1582,7 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const match = (action.options.output ?? '').match(/^(?:OUT)?(\d+)$/i)
+				const match = (action.options.output ?? '').match(/^(?:OUT|OUTPUT)?[_\s]*0*(\d+)$/i)
 				if (!match) return
 				const output = match[1]
 				let val = false
@@ -1633,13 +1633,16 @@ export default class Actions {
 				},
 			],
 			callback: (action) => {
-				const store = action.options.store
-				const source = action.options.source
+				// The slot is 'IMG{n}' (a bare number or the 'IMG_n'/'STILL_n' spellings work too). In the source field a
+				// bare number is a Library image - the field's own numbering - and a Timer needs its prefix.
+				const store = this.choices.parseIdNumber(action.options.store, 'IMG')
+				const source = String(action.options.source ?? '').trim()
 				if (!store || !source) return
 				const path = ['device', 'stillList', 'items', store, 'control', 'pp']
-				if (source.startsWith('TIMER_')) {
+				const timerKey = this.choices.parseShortId(source)?.kind === 'TIMER' ? this.choices.resolveTimerKey(source) : undefined
+				if (timerKey) {
 					this.connection.sendWSmessage([...path, 'mode'], 'TIMER')
-					this.connection.sendWSmessage([...path, 'timer'], source)
+					this.connection.sendWSmessage([...path, 'timer'], timerKey)
 				} else {
 					const library = Number(source)
 					if (isNaN(library)) return
@@ -5862,6 +5865,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					type: 'dropdown',
 					choices: this.choices.getWidgetSourceChoices(),
 					default: this.choices.getWidgetSourceChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 			],
 			callback: () => {},
@@ -6995,8 +6999,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					id: 'timer',
 					type: 'dropdown',
 					label: 'Timer',
-					choices: this.choices.getTimerChoices(),
-					default: this.choices.getTimerChoices()[0]?.id,
+					choices: this.choices.getTimerShortChoices(),
+					default: this.choices.getTimerShortChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'type',
@@ -7071,8 +7076,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					id: 'timer',
 					type: 'dropdown',
 					label: 'Timer',
-					choices: this.choices.getTimerChoices(),
-					default: this.choices.getTimerChoices()[0]?.id,
+					choices: this.choices.getTimerShortChoices(),
+					default: this.choices.getTimerShortChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'action',
@@ -7094,12 +7100,14 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 			],
 			callback: async (action) => {
+				const timerKey = this.choices.resolveTimerKey(action.options.timer)
+				if (!timerKey) return
 				let timetype = 'countdownDuration'
-				const type = this.state.get(['DEVICE', 'device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'type'])
+				const type = this.state.get(['DEVICE', 'device', 'timerList', 'items', timerKey, 'control', 'pp', 'type'])
 				if (type === 'CURRENTTIME') {
 					timetype = 'timeOffset'
 				}
-				let time = this.state.get(['DEVICE', 'device', 'timerList', 'items', action.options.timer, 'control', 'pp', timetype])
+				let time = this.state.get(['DEVICE', 'device', 'timerList', 'items', timerKey, 'control', 'pp', timetype])
 				const inputvalue = action.options.time
 				if (action.options.action === 'add') {
 					time += timeToSeconds(inputvalue)
@@ -7111,7 +7119,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					time = 0
 				}
 				this.connection.sendWSmessage(
-					['device', 'timerList', 'items', action.options.timer, 'control', 'pp', timetype],
+					['device', 'timerList', 'items', timerKey, 'control', 'pp', timetype],
 					time
 				)
 			},
@@ -7135,8 +7143,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					id: 'timer',
 					type: 'dropdown',
 					label: 'Timer',
-					choices: this.choices.getTimerChoices(),
-					default: this.choices.getTimerChoices()[0]?.id,
+					choices: this.choices.getTimerShortChoices(),
+					default: this.choices.getTimerShortChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'cmd',
@@ -7153,6 +7162,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 			],
 			callback: (action) => {
+				const timerKey = this.choices.resolveTimerKey(action.options.timer)
+				if (!timerKey) return
 				let cmd = 'xPause'
 				if (action.options.cmd === 'start') {
 					cmd = 'xStart'
@@ -7166,7 +7177,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						'device',
 						'timerList',
 						'items',
-						action.options.timer,
+						timerKey,
 						'status',
 						'pp',
 						'state',
@@ -7182,7 +7193,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						'device',
 						'timerList',
 						'items',
-						action.options.timer,
+						timerKey,
 						'status',
 						'pp',
 						'state',
@@ -7193,7 +7204,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						cmd = 'xStart'
 					}
 				}
-				this.connection.sendWSmessage(['device', 'timerList', 'items', action.options.timer, 'control', 'pp', cmd], false, true)
+				this.connection.sendWSmessage(['device', 'timerList', 'items', timerKey, 'control', 'pp', cmd], false, true)
 			},
 		}
 
@@ -7340,6 +7351,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 			description: 'Turns a Testpattern on or off (or "Inhibit"s it) for a Screen Canvas, Output, or Input Group.',
 			options: [...deviceTestpatternsOptions, ...outputExtraOptions],
 			callback: (action) => {
+				const itemKey = (group: string, value: unknown) => this.choices.resolveTestpatternItemKey(group, value)
 				if (action.options.group === 'all') {
 					const idx = deviceTestpatternsOptions.findIndex((option) => {
 						return option?.id === 'group'
@@ -7349,8 +7361,10 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					.forEach((group) => {
 						deviceTestpatternsOptions.find((option) => option.id === group.id)?.choices
 						.forEach((choice) => {
-							this.connection.sendWSmessage(['device', group.id.toString(), 'items', choice.id.toString(), 'pattern', 'control', 'pp', 'inhibit'], true)
-							this.connection.sendWSmessage(['device', group.id.toString(), 'items', choice.id.toString(), 'pattern', 'control', 'pp', 'type'],
+							const key = itemKey(group.id.toString(), choice.id)
+							if (!key) return
+							this.connection.sendWSmessage(['device', group.id.toString(), 'items', key, 'pattern', 'control', 'pp', 'inhibit'], true)
+							this.connection.sendWSmessage(['device', group.id.toString(), 'items', key, 'pattern', 'control', 'pp', 'type'],
 								deviceTestpatternsOptions.find((option) => option.id === group.id + 'Pat')?.choices[0]?.id ?? ''
 							)
 						} )
@@ -7364,17 +7378,19 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					// same concept differently (two separate booleans) and has no Raster Box action yet, so this
 					// deliberately does not touch Midra.
 					if (this.actionsToUse.includes('deviceTestpatternRasterBox')) {
-						for (const output of this.choices.getOutputChoices()) {
-							this.connection.sendWSmessage(['device', 'outputList', 'items', output.id.toString(), 'pattern', 'control', 'pp', 'centering'], [])
+						for (const output of this.choices.getOutputArray()) {
+							this.connection.sendWSmessage(['device', 'outputList', 'items', output.id, 'pattern', 'control', 'pp', 'centering'], [])
 						}
 					}
 				} else {
+					const key = itemKey(action.options.group, action.options[action.options.group])
+					if (!key) return
 					this.connection.sendWSmessage(
 						[
 							'device',
 							action.options.group,
 							'items',
-							action.options[action.options.group],
+							key,
 							'pattern',
 							'control',
 							'pp',
@@ -7392,7 +7408,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 							'device',
 							action.options.group,
 							'items',
-							action.options[action.options.group],
+							key,
 							'pattern',
 							'control',
 							'pp',
@@ -7406,7 +7422,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					// control/pp/{fitArea,disableColorimetry} and .../pattern/color/pp/{red,green,blue}. Color
 					// is only meaningful for the "COLOR" (Solid Color) pattern, but harmless to always send.
 					if (action.options.group === 'outputList') {
-						const outputPath = ['device', 'outputList', 'items', action.options.outputList, 'pattern']
+						const outputPath = ['device', 'outputList', 'items', key, 'pattern']
 						if (action.options.area !== undefined) {
 							this.connection.sendWSmessage([...outputPath, 'control', 'pp', 'fitArea'], action.options.area)
 						}
@@ -7466,6 +7482,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					label: 'Output or Output Group',
 					choices: this.choices.getOutputChoices(),
 					default: this.choices.getOutputChoices()[0]?.id,
+					allowInvalidValues: true,
 				},
 				{
 					id: 'rasterBox',
@@ -7491,7 +7508,9 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				},
 			],
 			callback: (action) => {
-				const path = ['device', 'outputList', 'items', action.options.output, 'pattern', 'control', 'pp', 'centering']
+				const output = this.choices.resolveOutputKey(action.options.output)
+				if (!output) return
+				const path = ['device', 'outputList', 'items', output, 'pattern', 'control', 'pp', 'centering']
 				const current: string[] = this.state.get(['DEVICE', ...path]) ?? []
 				const result = new Set(current)
 				for (const box of action.options.rasterBox) {
@@ -7540,14 +7559,16 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
 				id: 'inputList',
 				type: 'dropdown',
 				label: 'Input',
-				choices: this.choices.getLiveInputChoices(),
-				default: this.choices.getLiveInputChoices()[0]?.id,
+				choices: this.choices.getInputShortChoices(),
+				default: this.choices.getInputShortChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{
@@ -8085,7 +8106,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 	get devicePreconfigBackgroundSetSource() {
 		type DevicePreconfigBackgroundSetSource = { bgset: string }
 
-		const bgsetChoices = Array.from({ length: 8 }, (_, i) => ({ id: (i + 1).toString(), label: `Background Set ${i + 1}` }))
+		const bgsetChoices = Array.from({ length: 8 }, (_, i) => ({ id: `BS${i + 1}`, label: `Background Set ${i + 1}` }))
 		// 'NONE' deliberately excluded - live-confirmed (2026-09-08) it can't actually be set this way: after
 		// resetting a Background Set via WebRCS (which has no direct "set to None" of its own either, only a
 		// full reset), every one of its outputs reports content 'NONE', but that state isn't reachable through
@@ -8104,7 +8125,8 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					type: 'dropdown',
 					label: 'Background Set',
 					choices: bgsetChoices,
-					default: '1',
+					default: 'BS1',
+					allowInvalidValues: true,
 				},
 				...screenOutputs.flatMap(({ screen, outputs }) => [
 					{ id: `screenHeader_${screen.id}`, type: 'static-text' as const, label: '', value: `---\n**${screen.id}**`, disableAutoExpression: true },
@@ -8118,12 +8140,15 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 				]),
 			],
 			callback: (action) => {
+				// 'BS{n}' from the list; a bare number or 'NATIVE_n' from an expression works too.
+				const bgset = this.choices.parseIdNumber(action.options.bgset, 'BS')
+				if (!bgset) return
 				for (const { screen, outputs } of screenOutputs) {
 					for (const out of outputs) {
 						const shortValue = action.options[`output_${screen.id}_${out.id}`] as string
 						if (!shortValue || shortValue === 'keep') continue
 						const value = this.choices.shortSourceToBackgroundContent(shortValue)
-						const path = this.choices.getBackgroundSetOutputContentPath(screen.id, action.options.bgset, out.id)
+						const path = this.choices.getBackgroundSetOutputContentPath(screen.id, bgset, out.id)
 						this.connection.sendWSmessage(path, value)
 						// Without this, the device leaves the assignment reporting isContentValid: false forever -
 						// see getBackgroundContentUseOnOutputPath()'s own doc comment for why.

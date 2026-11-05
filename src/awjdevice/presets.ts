@@ -2131,7 +2131,7 @@ export default class Presets {
 	get timers() {
 		const presets: CategorizedPresetDefinitions = {}
 
-		for (const timer of this.choices.getTimerChoices()) {
+		for (const timer of this.choices.getTimerShortChoices()) {
 			presets['Play/Pause ' + timer.label] = {
 			type: 'simple',
 				name: 'Play/Pause ' + timer.label,
@@ -2361,8 +2361,8 @@ export default class Presets {
 					{
 						feedbackId: 'deviceThumbnail',
 						options: {
-							// deviceThumbnail's own "source" option is one combined "category:id" string (see its
-							// sourceChoices in feedback.ts) - not a separate category/item pair.
+							// deviceThumbnail's "source" option is one short id (IN3, OUT1, IMG2, TIMER1) for all
+							// four categories, see its sourceChoices in feedback.ts.
 							source,
 							// Companion does not fill in a preset's missing feedback option values with the
 							// field's own declared default - refreshRate showed up as 0 (not the field's
@@ -2376,18 +2376,18 @@ export default class Presets {
 
 		for (const input of this.choices.getLiveInputArray()) {
 			const num = input.index ?? input.id.replace(/^\D+/, '')
-			addThumbnailPreset(`Input${num}`, `Input ${num}`, `inputs:${num}`)
+			addThumbnailPreset(`Input${num}`, `Input ${num}`, `IN${num}`)
 		}
 		for (const output of this.choices.getOutputArray()) {
 			if (this.choices.getMultiviewerOutputListKeys().includes(output.id)) continue
-			addThumbnailPreset(`Output${output.id}`, `Output ${output.id}`, `outputs:${output.id}`)
+			addThumbnailPreset(`Output${output.id}`, `Output ${output.id}`, `OUT${output.id}`)
 		}
 		for (const store of this.choices.getStillsArray()) {
-			addThumbnailPreset(`Store${store.id}`, `IMG${store.id}`, `imagesStore:${store.id}`)
+			addThumbnailPreset(`Store${store.id}`, `IMG${store.id}`, `IMG${store.id}`)
 		}
 		for (const timer of this.choices.getTimerArray()) {
 			const num = timer.index ?? timer.id.replace(/^\w+_/, '')
-			addThumbnailPreset(`Timer${num}`, `Timer ${num}`, `timers:${num}`)
+			addThumbnailPreset(`Timer${num}`, `Timer ${num}`, `TIMER${num}`)
 		}
 
 		return presets

@@ -139,7 +139,7 @@ export default class PresetsLivepremier4 extends Presets {
 	get timers() {
 		const presets = super.timers
 
-		for (const timer of this.choices.getTimerChoices()) {
+		for (const timer of this.choices.getTimerShortChoices()) {
 			const timerNum = timer.label.replace(/\D/g, '')
 			presets['Time ' + timer.label] = {
 				type: 'simple',

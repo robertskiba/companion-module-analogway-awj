@@ -308,14 +308,16 @@ export default class FeedbacksLivepremier4 extends Feedbacks  {
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
 				id: 'inputList',
 				type: 'dropdown',
 				label: 'Input',
-				choices: this.choices.getLiveInputChoices(),
-				default: this.choices.getLiveInputChoices()[0]?.id,
+				choices: this.choices.getInputShortChoices(),
+				default: this.choices.getInputShortChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{

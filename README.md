@@ -9,6 +9,11 @@ This is a fork of the original companion-module-analogway-awj repository. It is 
 ## Changed
 
 - **"LIVE - Screen Selection" no longer selects a Screen or Aux that is switched off in the preconfig**, matching WebRCS, which offers no way to select one either. A button saved while the Screen was still in use, or an expression naming it, now only logs a warning instead of putting an invisible Screen into the selection. Deselecting still works.
+- **Every field that names an Input, Output, Image, Timer, Background Set or Screen source uses the module's short ids** - `IN3`, `OUT1`, `IMG2`, `TIMER1`, `BS4`, `SCR2` - the same spelling the variables use, so an expression reads the way the variable it comes from is named. V2 listed the raw device ids there (`IN_3`, `LIVE_3`, `TIMER_1`, `STILL_2`, `NATIVE_4`, a bare `5` for an Output). Covers the Timer actions and "Timers - State", "Set Testpattern" (Output and Input) and "Testpattern Active", the Raster Box action and feedback, "Input Signal Present", "Multiviewer - Select Source in Widget", the Backup actions and feedbacks, "Set Background Set Source" and its status feedback, "Assign Image from Library to Image Store", "Show Thumbnail", and the source lists of "Layer Properties - Source", "Cut&Fill", "Layer Source", "Cut&Fill Source" and "Source Tally". Stored values are converted once on load. In expression mode every field accepts any spelling - the short id, the raw device id, upper or lower case - and **a bare number means an Input** wherever the field takes sources; in an Output, Timer, Image Store or Background Set field it means that item. The deprecated V2 actions keep their V2 lists unchanged.
+
+## Fixed
+
+- **"Source Tally" keeps its V2 variable name on connections set to "Use old (V2) variable names".** After the upgrade a tally on Input 1 was called `tally_S1_pgm_IN1` instead of V2's `tally_S1_pgm_LIVE_1`, so button texts referencing the V2 name stayed empty. The V3 name (`S1.pgm.tally.IN1`) is unchanged, and it is now the same however the source is spelled in an expression.
 
 # v3.0.0 RC3 – Changes since RC1
 

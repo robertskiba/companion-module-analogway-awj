@@ -401,10 +401,10 @@ export default class ChoicesMidra extends Choices {
 		}
 
 		// next add live inputs
-		ret.push(...this.getLiveInputChoices())
+		ret.push(...this.getInputShortChoices())
 
 		// next add timer
-		ret.push(...this.getTimerChoices())
+		ret.push(...this.getTimerShortChoices())
 
 		return ret
 	}

@@ -706,7 +706,7 @@ export default class ActionsLivepremier4 extends Actions {
 			// callback's own `source.replace(/\D/g, '')` does in the other direction. Otherwise convert the
 			// raw AWJ id (e.g. STILL_3) to this module's own short id (IMG3) - backgroundContentToShortSource()
 			// passes anything else (NONE/COLOR/SCREEN_n) through unchanged.
-			newoptions.sourceLayer = (isBackground && /^\d+$/.test(raw)) ? `NATIVE_${raw}` : this.choices.backgroundContentToShortSource(raw)
+			newoptions.sourceLayer = (isBackground && /^\d+$/.test(raw)) ? `BS${raw}` : this.choices.backgroundContentToShortSource(raw)
 
 			if (raw === 'COLOR') {
 				const colorpath = [...presetpath, 'layerList', 'items', target.layerKey, 'source', 'color', 'pp']
@@ -1103,7 +1103,7 @@ export default class ActionsLivepremier4 extends Actions {
 						'pp',
 						'source',
 					],
-					action.options.source
+					this.choices.resolveWidgetSource(action.options.source)
 				)
 			}
 		}
@@ -1325,52 +1325,54 @@ export default class ActionsLivepremier4 extends Actions {
 		const deviceTimerSetup = super.deviceTimerSetup
 
 		deviceTimerSetup.callback = (action) => {
+			const timerKey = this.choices.resolveTimerKey(action.options.timer)
+			if (!timerKey) return
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'type'],
+				['device', 'timerList', 'items', timerKey, 'control', 'pp', 'type'],
 				action.options.type
 			)
 			if (action.options.type === 'CURRENTTIME') {
 				this.connection.sendWSmessage(
-					['device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'currentTimeMode'],
+					['device', 'timerList', 'items', timerKey, 'control', 'pp', 'currentTimeMode'],
 					action.options.currentTimeMode
 				)
 			} else {
 				this.connection.sendWSmessage(
-					['device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'unitMode'],
+					['device', 'timerList', 'items', timerKey, 'control', 'pp', 'unitMode'],
 					action.options.unitMode
 				)
 			}
 			
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'background', 'color', 'pp', 'red'],
+				['device', 'timerList', 'items', timerKey, 'control', 'background', 'color', 'pp', 'red'],
 				splitRgb(action.options.bg_color).r
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'background', 'color', 'pp', 'green'],
+				['device', 'timerList', 'items', timerKey, 'control', 'background', 'color', 'pp', 'green'],
 				splitRgb(action.options.bg_color).g
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'background', 'color', 'pp', 'blue'],
+				['device', 'timerList', 'items', timerKey, 'control', 'background', 'color', 'pp', 'blue'],
 				splitRgb(action.options.bg_color).b
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'background', 'color', 'pp', 'alpha'],
+				['device', 'timerList', 'items', timerKey, 'control', 'background', 'color', 'pp', 'alpha'],
 				Math.round((splitRgb(action.options.bg_color).a ?? 1) * 255)
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'text', 'color', 'pp', 'red'],
+				['device', 'timerList', 'items', timerKey, 'control', 'text', 'color', 'pp', 'red'],
 				splitRgb(action.options.fg_color).r
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'text', 'color', 'pp', 'green'],
+				['device', 'timerList', 'items', timerKey, 'control', 'text', 'color', 'pp', 'green'],
 				splitRgb(action.options.fg_color).g
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'text', 'color', 'pp', 'blue'],
+				['device', 'timerList', 'items', timerKey, 'control', 'text', 'color', 'pp', 'blue'],
 				splitRgb(action.options.fg_color).b
 			)
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'text', 'color', 'pp', 'alpha'],
+				['device', 'timerList', 'items', timerKey, 'control', 'text', 'color', 'pp', 'alpha'],
 				Math.round((splitRgb(action.options.fg_color).a ?? 1) * 255)
 			)
 		}
@@ -1436,14 +1438,16 @@ export default class ActionsLivepremier4 extends Actions {
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
 				id: 'inputList',
 				type: 'dropdown',
 				label: 'Input',
-				choices: this.choices.getLiveInputChoices(),
-				default: this.choices.getLiveInputChoices()[0]?.id,
+				choices: this.choices.getInputShortChoices(),
+				default: this.choices.getInputShortChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'inputList'",
 			},
 			{

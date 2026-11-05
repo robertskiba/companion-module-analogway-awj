@@ -660,7 +660,7 @@ export default class ActionsMidra extends Actions {
 		// One "Source" field drives every target type, so which of the device's three differently-named
 		// properties gets written is decided purely by the Layer/Screen selection, not by asking the user to
 		// fill the matching one of several parallel fields. The id spaces are disjoint - NONE, COLOR, IN{n},
-		// NATIVE_{n} (Background Set) and TOP_{n} (Foreground Image) - so a single list stays unambiguous, and
+		// BS{n} (Background Set), TOP_{n} (Foreground Image) and SCR{n} - so a single list stays unambiguous, and
 		// the callback ignores any pick that isn't valid for the resolved target, the same way an invalid pick
 		// on a Screen's background layer has always been a no-op.
 		const sourceField = deviceSelectSourceV3.options.find((opt) => opt.id === 'sourceLayer')
@@ -670,14 +670,14 @@ export default class ActionsMidra extends Actions {
 			// shared one already starts with it.
 			const foreground = this.choices.choicesForegroundImagesSource.filter((c) => c.id !== 'NONE')
 			const choices = [...sourceField['choices']]
-			const firstBackgroundSet = choices.findIndex((c: { id: string | number }) => /^NATIVE_\d+$/.test(String(c.id)))
+			const firstBackgroundSet = choices.findIndex((c: { id: string | number }) => /^BS\d+$/.test(String(c.id)))
 			choices.splice(firstBackgroundSet === -1 ? choices.length : firstBackgroundSet, 0, ...foreground)
 			// A Screen's own Program output can be re-inserted into an Aux background, so every configured
 			// Screen is offered too - right at the end, because it is valid for exactly one target (an Aux
 			// background) while everything above it applies to the far more common Screen targets. The V2
 			// action's Aux field has always offered these; the V3 one simply never carried them over.
 			choices.push(...this.choices.getScreensArray().map((screen) => ({
-				id: `PROGRAM_${screen.index}`,
+				id: `SCR${screen.index}`,
 				label: `${screen.id} PGM${screen.label === '' ? '' : ' - ' + screen.label}`,
 			})))
 			sourceField['choices'] = choices
@@ -781,7 +781,7 @@ export default class ActionsMidra extends Actions {
 				// raw AWJ id (e.g. STILL_3) to this module's own short id (IMG3) - backgroundContentToShortSource()
 				// passes anything else (NONE/COLOR) through unchanged.
 				if (/^\d+$/.test(raw)) {
-					newoptions.sourceLayer = `NATIVE_${raw}`
+					newoptions.sourceLayer = `BS${raw}`
 					return newoptions
 				}
 				// `set` is NONE for both "None" and "Color", since Color is expressed as "no Background Set plus
@@ -958,7 +958,7 @@ export default class ActionsMidra extends Actions {
 			// matched that (only the old V2-style 'IN_3'), so a fresh, untouched dropdown selection silently
 			// targeted a nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'. Same lenient
 			// bare-number/'IN{n}'/'IN_{n}' extraction the Aquilon version of this action already uses.
-			const match = (action.options.input ?? '').match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			const match = (action.options.input ?? '').match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 			if (!match) return
 			const input = `INPUT_${match[1]}`
 			// Cut&Fill pairs two inputs: the odd-numbered one carries the Fill and the even one that follows it
@@ -1009,7 +1009,7 @@ export default class ActionsMidra extends Actions {
 			// Same fix as deviceInputKeying above - the dropdown's own choices use the short 'IN{n}' convention
 			// (e.g. 'IN3'), which a plain '.replace(\'IN_\', \'INPUT_\')' never matched, silently targeting a
 			// nonexistent 'IN3' state path instead of Midra's real 'INPUT_3'.
-			const match = (action.options.input ?? '').match(/^(?:IN(?:PUT)?_?)?(\d+)$/i)
+			const match = (action.options.input ?? '').match(/^(?:IN|INPUT|LIVE)?[_\s]*0*(\d+)$/i)
 			if (!match) return
 			const input = `INPUT_${match[1]}`
 			let val = false
@@ -1532,7 +1532,7 @@ export default class ActionsMidra extends Actions {
 						'pp',
 						'source',
 					],
-					action.options.source
+					this.choices.resolveWidgetSource(action.options.source)
 				)
 			}
 		}
@@ -1991,18 +1991,20 @@ export default class ActionsMidra extends Actions {
 		const deviceTimerSetup = super.deviceTimerSetup
 
 		deviceTimerSetup.callback = (action) => {
+			const timerKey = this.choices.resolveTimerKey(action.options.timer)
+			if (!timerKey) return
 			this.connection.sendWSmessage(
-				['device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'type'],
+				['device', 'timerList', 'items', timerKey, 'control', 'pp', 'type'],
 				action.options.type
 			)
 			if (action.options.type === 'CURRENTTIME') {
 				this.connection.sendWSmessage(
-					['device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'currentTimeMode'],
+					['device', 'timerList', 'items', timerKey, 'control', 'pp', 'currentTimeMode'],
 					action.options.currentTimeMode
 				)
 			} else {
 				this.connection.sendWSmessage(
-					['device', 'timerList', 'items', action.options.timer, 'control', 'pp', 'unitMode'],
+					['device', 'timerList', 'items', timerKey, 'control', 'pp', 'unitMode'],
 					action.options.unitMode
 				)
 			}
@@ -2050,6 +2052,7 @@ export default class ActionsMidra extends Actions {
 				label: 'Output',
 				choices: this.choices.getOutputChoices(),
 				default: this.choices.getOutputChoices()[0]?.id,
+				allowInvalidValues: true,
 				isVisibleExpression: "$(options:group) == 'outputList'",
 			},
 			{
