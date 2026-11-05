@@ -6224,7 +6224,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 						case 'prw':
 						case 'pvw':
 							this.state.set('LOCAL/presetMode', 'PREVIEW')
-							this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+							this.instance.setVariableValues({ selectedPreset: this.instance.oldVariableNames ? 'PVW' : 'PRW' })
 							break
 						case 'tgl':
 							if (this.state.get('LOCAL/presetMode') === 'PREVIEW') {
@@ -6232,7 +6232,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 								this.instance.setVariableValues({ selectedPreset: 'PGM' })
 							} else {
 								this.state.set('LOCAL/presetMode', 'PREVIEW')
-								this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+								this.instance.setVariableValues({ selectedPreset: this.instance.oldVariableNames ? 'PVW' : 'PRW' })
 							}
 							break
 					}
@@ -6455,7 +6455,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 							case 'prw':
 							case 'pvw':
 								this.state.set('LOCAL/presetMode', 'PREVIEW')
-								this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+								this.instance.setVariableValues({ selectedPreset: this.instance.oldVariableNames ? 'PVW' : 'PRW' })
 								break
 							case 'tgl':
 								if (this.state.get('LOCAL/presetMode') === 'PREVIEW') {
@@ -6463,7 +6463,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 									this.instance.setVariableValues({ selectedPreset: 'PGM' })
 								} else {
 									this.state.set('LOCAL/presetMode', 'PREVIEW')
-									this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+									this.instance.setVariableValues({ selectedPreset: this.instance.oldVariableNames ? 'PVW' : 'PRW' })
 								}
 								break
 						}
@@ -6584,7 +6584,7 @@ sw: screen width, sh: screen height, sa: screen aspect ratio, layer: layer name,
 					preset = this.state.get('LOCAL/presetMode')
 				}
 				if (preset === 'PREVIEW') {
-					vartext = this.config.useOldVariableNames ? 'PVW' : 'PRW'
+					vartext = this.instance.oldVariableNames ? 'PVW' : 'PRW'
 				}
 				this.instance.setVariableValues({ selectedPreset: vartext })
 

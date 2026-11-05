@@ -365,6 +365,21 @@ const UpgradeScripts = [
 			updatedFeedbacks,
 		}
 	},
+
+	// RC4: the "Use old (V2) variable names" checkbox became the three-way "Variable Names" field. A config on
+	// old names - every config carried over from V2, see useOldVariableNamesForExistingConfigs above - moves to
+	// "V3 and V2 names": nothing that references a V2 name breaks, and the V3 names are there to switch to.
+	function variableNamesFromOldCheckbox(_context, props: LooseObj) {
+		if (!props.config || props.config.variableNames !== undefined) {
+			return { updatedConfig: null, updatedActions: [], updatedFeedbacks: [] }
+		}
+		const { useOldVariableNames, ...rest } = props.config
+		return {
+			updatedConfig: { ...rest, variableNames: useOldVariableNames ? 'both' : 'v3' },
+			updatedActions: [],
+			updatedFeedbacks: [],
+		}
+	},
 ]
 
 export { UpgradeScripts }

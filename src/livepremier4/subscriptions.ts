@@ -197,14 +197,15 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const label = this.instance.state.get(path)
 				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
-				if (this.instance.config.useOldVariableNames) {
+				if (this.instance.oldVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'screenLabel', variableId: `${input.replace('S', 'SCREEN_')}label`, name: `Label of Screen ${input}` })
 						this.instance.addVariable({ id: 'screenLabel', variableId: `screen${input}label`, name: `Label of Screen ${input}` })
 					}
 					this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']: label})
 					this.instance.setVariableValues({['screen' + input + 'label']: label})
-				} else {
+				}
+				if (this.instance.newVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'screenLabel', variableId: `${input}.label`, name: `Label of Screen ${input}` })
 					}
@@ -224,14 +225,15 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const label = this.instance.state.get(path)
 				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
-				if (this.instance.config.useOldVariableNames) {
+				if (this.instance.oldVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input.replace('A', 'AUXSCREEN_')}label`, name: `Label of Auxscreen ${input}` })
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screen${input}label`, name: `Label of Auxscreen ${input}` })
 					}
 					this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']: label})
 					this.instance.setVariableValues({['screen' + input + 'label']: label})
-				} else {
+				}
+				if (this.instance.newVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input}.label`, name: `Label of Auxscreen ${input}` })
 					}
@@ -497,7 +499,7 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 			const pgmMem = memInfo(screen, pgmPreset)
 			const pvwMem = memInfo(screen, pvwPreset)
 
-			if (this.instance.config.useOldVariableNames) {
+			if (this.instance.oldVariableNames) {
 				this.instance.addVariable({ id: labelOwnerId, variableId: `${oldLabelPrefix}label`, name: `Label of ${kind} ${screen}` })
 				this.instance.addVariable({ id: labelOwnerId, variableId: `screen${screen}label`, name: `Label of ${kind} ${screen}` })
 				this.instance.setVariableValues({ [`${oldLabelPrefix}label`]: label, [`screen${screen}label`]: label })
@@ -517,7 +519,8 @@ export default class SubscriptionsLivepremier4 extends Subscriptions {
 						[`screen${screen}memoryLabel${presname}`]: mem.label ?? '',
 					})
 				}
-			} else {
+			}
+			if (this.instance.newVariableNames) {
 				this.instance.addVariable({ id: labelOwnerId, variableId: `${screen}.label`, name: `Label of ${kind} ${screen}` })
 				this.instance.setVariableValues({ [`${screen}.label`]: label })
 				this.instance.addVariable({ id: 'screenTransitionTime', variableId: `${screen}.pgm.time`, name: `Transition time for ${screen} PGM` })

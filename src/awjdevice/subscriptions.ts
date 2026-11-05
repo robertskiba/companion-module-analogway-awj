@@ -116,11 +116,12 @@ export default class Subscriptions {
 	}
 
 	/**
-	 * Picks the old (V2) or new (V3) id for a dynamic variable, based on the "Use old (V2) variable names"
-	 * config checkbox. Existing configs are upgraded to keep using the old names automatically (see upgrades.ts).
+	 * Picks the old (V2) or new (V3) id for a dynamic variable, based on the "Variable Names" config field.
+	 * With both schemes on it returns the V3 name and registers the V2 one as its alias - see
+	 * AWJinstance.varName().
 	 */
 	varName(oldName: string, newName: string): string {
-		return this.instance.config.useOldVariableNames ? oldName : newName
+		return this.instance.varName(oldName, newName)
 	}
 
 	/**
@@ -1255,7 +1256,7 @@ export default class Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				// New-name side renamed STILL{n}.label -> IMG{n}.label per explicit user request, to match this
 				// module's own "Image Store"/"Image Library" terminology established today (formatSourceShort's
-				// IMGn convention) - the old-name side (useOldVariableNames) is untouched on purpose.
+				// IMGn convention) - the old-name side (Variable Names: V2) is untouched on purpose.
 				const varId = this.varName(`STILL_${input}label`, `IMG${input}.label`)
 				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
 					this.instance.addVariable({ id: 'stillLabel', variableId: varId, name: `Label of Image ${input}` })
@@ -1296,14 +1297,15 @@ export default class Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const label = this.instance.state.get(path)
 				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
-				if (this.instance.config.useOldVariableNames) {
+				if (this.instance.oldVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'screenLabel', variableId: `${input.replace('S', 'SCREEN_')}label`, name: `Label of Screen ${input}` })
 						this.instance.addVariable({ id: 'screenLabel', variableId: `screen${input}label`, name: `Label of Screen ${input}` })
 					}
 					this.instance.setVariableValues({[input.replace('S', 'SCREEN_') + 'label']: label})
 					this.instance.setVariableValues({['screen' + input + 'label']: label})
-				} else {
+				}
+				if (this.instance.newVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'screenLabel', variableId: `${input}.label`, name: `Label of Screen ${input}` })
 					}
@@ -1324,14 +1326,15 @@ export default class Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const label = this.instance.state.get(path)
 				const exists = this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/mode')) !== 'DISABLED'
-				if (this.instance.config.useOldVariableNames) {
+				if (this.instance.oldVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input.replace('A', 'AUXSCREEN_')}label`, name: `Label of Auxscreen ${input}` })
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screen${input}label`, name: `Label of Auxscreen ${input}` })
 					}
 					this.instance.setVariableValues({[input.replace('A', 'AUXSCREEN_') + 'label']: label})
 					this.instance.setVariableValues({['screen' + input + 'label']: label})
-				} else {
+				}
+				if (this.instance.newVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `${input}.label`, name: `Label of Auxscreen ${input}` })
 					}

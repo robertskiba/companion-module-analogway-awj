@@ -104,6 +104,9 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 
 	/** variables storage */
 	private variables!: TrackedVariable[]
+	/** V3 variableId -> its V2 name, filled by varName() while "Variable Names" is set to both schemes. Every
+	 *  registration, removal and value of the V3 name is mirrored to the V2 one, see addVariable(). */
+	private variableAliases = new Map<string, string>()
 	/** True while a batched updateVariableDefinitions() call from addVariable()/removeVariable() is
 	 *  already queued for the end of the current synchronous work - see scheduleVariableDefinitionsUpdate(). */
 	private variableDefinitionsUpdatePending = false
@@ -296,7 +299,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			this.config.color_red = combineRgb(255,87,22)
 			this.config.color_reddark = combineRgb(216,0,0)
 			this.config.color_redgrey = combineRgb(85,70,70)
-			this.config.useOldVariableNames = false
+			this.config.variableNames = 'v3'
 			this.config.allowLiveThumbnails = true
 			this.config.hotBackupEnabled = false
 			this.config.hotBackupAddress = 'http://192.168.2.141'
@@ -480,9 +483,16 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			}
 		}
 
-		if (this.config.deviceaddr !== oldconfig.deviceaddr || this.config.simulatedDevice !== oldconfig.simulatedDevice) {
+		if (this.config.deviceaddr !== oldconfig.deviceaddr || this.config.simulatedDevice !== oldconfig.simulatedDevice || this.config.variableNames !== oldconfig.variableNames) {
 			// new address, or the user changed "Simulated Device?" by hand - reconnect either way, so a fresh
-			// live check runs and (via the automatic sync above) can correct the checkbox again if needed
+			// live check runs and (via the automatic sync above) can correct the checkbox again if needed.
+			// A new Variable Names setting reconnects too: every dynamic variable is registered on connect, so
+			// starting over is the only way the names of the previous setting disappear.
+			if (this.config.variableNames !== oldconfig.variableNames) {
+				this.resetVariablesToBase()
+				// Source Tally names its variable from its own callback, not from a device subscription.
+				this.checkFeedbacks('deviceSourceTally')
+			}
 			this.updateStatus(InstanceStatus.Connecting)
 			this.connection.disconnect()
 			this.connection.connect(this.config.deviceaddr)
@@ -545,7 +555,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 			preset = this.state.get('LOCAL/presetMode')
 		}
 		if (preset === 'PREVIEW') {
-			vartext = this.config.useOldVariableNames ? 'PVW' : 'PRW'
+			vartext = this.oldVariableNames ? 'PVW' : 'PRW'
 		}
 		this.setVariableValues({ selectedPreset: vartext })
 	}
@@ -602,6 +612,48 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	 * @returns 
 	 */
 	public addVariable(newVariable: TrackedVariable): void {
+		this.addTrackedVariable(newVariable)
+		const alias = this.variableAliases.get(newVariable.variableId)
+		if (alias) this.addTrackedVariable({ ...newVariable, variableId: alias, name: `${newVariable.name} (V2 name)` })
+	}
+
+	/** Whether this connection exposes the V2 variable names ("V2 only" or "V2 and V3"). Also decides values
+	 *  that differ between the schemes, such as selectedPreset's 'PVW'/'PRW' - one variable can only hold one,
+	 *  and while V2 names are on, the V2 value keeps existing button logic working. */
+	public get oldVariableNames(): boolean {
+		return this.config.variableNames === 'v2' || this.config.variableNames === 'both'
+	}
+
+	/** Whether this connection exposes the V3 variable names ("V3 only" or "V2 and V3"). */
+	public get newVariableNames(): boolean {
+		return this.config.variableNames !== 'v2'
+	}
+
+	/**
+	 * The variableId to use for a variable that V2 named differently. With both schemes on, the V3 name is
+	 * returned and the V2 one is registered as its alias, so registering, removing and setting the V3 name
+	 * covers both - see addVariable(), removeVariable() and setVariableValues().
+	 */
+	public varName(oldName: string, newName: string): string {
+		if (this.config.variableNames === 'v2') return oldName
+		if (this.config.variableNames === 'both' && oldName !== newName) this.variableAliases.set(newName, oldName)
+		return newName
+	}
+
+	override setVariableValues(values: Partial<AWJInstanceSchema['variables']>): void {
+		if (this.variableAliases.size > 0) {
+			const mirrored: Partial<AWJInstanceSchema['variables']> = { ...values }
+			for (const [variableId, value] of Object.entries(values)) {
+				const alias = this.variableAliases.get(variableId)
+				if (alias && !(alias in values)) mirrored[alias] = value
+			}
+			super.setVariableValues(mirrored)
+			return
+		}
+		super.setVariableValues(values)
+	}
+
+	private addTrackedVariable(newVariable: TrackedVariable): void {
 		if (this.variables.some(variable => variable.id === newVariable.id && variable.variableId === newVariable.variableId)) {
 			// already registered by this same id, nothing to do (feedbacks may call this on every check, not just once)
 			return
@@ -631,7 +683,8 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	public addSoleVariable(newVariable: TrackedVariable): void {
 		const ownerId = newVariable.id
 		if (ownerId !== undefined) {
-			for (const stale of this.variables.filter(variable => variable.id === ownerId && variable.variableId !== newVariable.variableId)) {
+			const keep = [newVariable.variableId, this.variableAliases.get(newVariable.variableId)]
+			for (const stale of this.variables.filter(variable => variable.id === ownerId && !keep.includes(variable.variableId))) {
 				this.removeVariable(ownerId, stale.variableId)
 			}
 		}
@@ -644,6 +697,12 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	 * @param remVariable variableId of the variable to remove, if undefined remove all variables from that ID
 	 */
 	public removeVariable(id: string, remVariable?: string): void {
+		const alias = remVariable === undefined ? undefined : this.variableAliases.get(remVariable)
+		if (alias) this.removeTrackedVariable(id, alias)
+		this.removeTrackedVariable(id, remVariable)
+	}
+
+	private removeTrackedVariable(id: string, remVariable?: string): void {
 		if (remVariable === undefined && this.variables.findIndex(vari => vari.id === id) != -1) {
 			const newvars = this.variables.filter(vari => vari.id !== id)
 			this.variables = newvars
@@ -662,6 +721,7 @@ export class AWJinstance extends InstanceBase<AWJInstanceSchema> {
 	 * firmware), so a stale, no-longer-applicable variable list doesn't linger.
 	 */
 	public resetVariablesToBase(): void {
+		this.variableAliases.clear()
 		this.variables = initVariables(this)
 		this.updateVariableDefinitions()
 	}

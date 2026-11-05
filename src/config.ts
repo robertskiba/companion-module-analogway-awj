@@ -36,7 +36,8 @@ export interface Config extends JsonObject {
 	color_red: number
 	color_reddark: number
 	color_redgrey: number
-	useOldVariableNames: boolean
+	/** Which variable names this connection exposes, see the "Variable Names" field. */
+	variableNames: 'v3' | 'both' | 'v2'
 	allowLiveThumbnails: boolean
 	hotBackupEnabled: boolean
 	hotBackupAddress: string
@@ -293,12 +294,17 @@ export function GetConfigFields(config?: Config, cardSummaries?: DeviceCardSumma
 			width: 12,
 		},
 		{
-			id: 'useOldVariableNames',
-			type: 'checkbox',
-			label: 'Use old (V2) variable names',
+			id: 'variableNames',
+			type: 'dropdown',
+			label: 'Variable Names',
+			choices: [
+				{ id: 'v3', label: 'V3 names' },
+				{ id: 'both', label: 'V3 and V2 names (for switching over)' },
+				{ id: 'v2', label: 'V2 names only' },
+			],
 			tooltip:
-				'V3 renamed most dynamic variables to a clearer, consistent scheme (e.g. "SM1.label" instead of "screenMemory1label"). Enable this to keep using the old V2 names if you already reference them in button texts or triggers. New connections start with this off.',
-			default: false,
+				'V3 renamed most dynamic variables to a clearer, consistent scheme (e.g. "SM1.label" instead of "screenMemory1label"). "V3 and V2 names" exposes every renamed variable under both names, so button texts and triggers can be moved over one at a time; switch to "V3 names" once nothing references the V2 names any more. Values that differ between the schemes, such as selectedPreset (PVW/PRW), keep their V2 value while V2 names are on. Configurations from V2 start on "V3 and V2 names", new connections on "V3 names". Changing this reconnects to the device.',
+			default: 'v3',
 			width: 12,
 		},
 		{

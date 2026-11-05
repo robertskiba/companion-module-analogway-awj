@@ -931,7 +931,7 @@ export default class ActionsLivepremier4 extends Actions {
 						case 'prw':
 						case 'pvw':
 							this.state.set('LOCAL/presetMode', 'PREVIEW')
-							this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+							this.instance.setVariableValues({ selectedPreset: this.instance.oldVariableNames ? 'PVW' : 'PRW' })
 							break
 						case 'tgl':
 							if (this.state.get('LOCAL/presetMode') === 'PREVIEW') {
@@ -939,7 +939,7 @@ export default class ActionsLivepremier4 extends Actions {
 								this.instance.setVariableValues({ selectedPreset: 'PGM' })
 							} else {
 								this.state.set('LOCAL/presetMode', 'PREVIEW')
-								this.instance.setVariableValues({ selectedPreset: this.config.useOldVariableNames ? 'PVW' : 'PRW' })
+								this.instance.setVariableValues({ selectedPreset: this.instance.oldVariableNames ? 'PVW' : 'PRW' })
 							}
 							break
 					}

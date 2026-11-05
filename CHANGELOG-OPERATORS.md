@@ -10,6 +10,7 @@ This is a plain-language summary for people programming and running shows with t
 - **The automatic deselect of switched-off screens is reliable now**, even when one is pressed several times in quick succession.
 - **One way of writing sources everywhere.** Wherever you pick an Input, Output, Image, Timer, Background Set or Screen, the list now uses the same names as the variables: `IN3`, `OUT1`, `IMG2`, `TIMER1`, `BS4`, `SCR2`. Your existing buttons are converted automatically. In an expression you can also just write a number – `3` means Input 3 in any source field.
 - **Thumbnails show up right away.** A new thumbnail button, or one whose source you change (e.g. with an encoder), fetches its picture immediately instead of waiting for the first refresh. Thumbnail sources are now written `IN3`, `OUT1`, `IMG2` or `TIMER1` too; the old `inputs:3` still works.
+- **Switching from old to new variable names is easier.** In the connection settings, "Variable Names" now has a middle option, "V3 and V2 names". Every variable then exists under its old and its new name, so you can update your buttons one by one. When you're done, switch to "V3 names". Shows carried over from V2 start on the middle option automatically.
 - **Source Tally with old (V2) variable names** is called `tally_S1_pgm_LIVE_1` again, as in V2, so button texts using that name show the tally again.
 
 ## RC3 – since RC1

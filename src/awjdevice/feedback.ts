@@ -863,12 +863,15 @@ export default class Feedbacks {
 	 * segment count at a fixed four. Multiple Screens stay dash-joined (`S1-S2-A1.pgm.tally.IN1`) - the one
 	 * part that can't be a clean entity prefix, because the variable genuinely describes a set.
 	 */
-	protected tallyVariableName(screensSegment: string, sortedScreens: string[], preset: string, source: string): string {
-		// The old (V2) name always spelled out the resolved Screen list, tokens included - kept exactly as it
-		// was so a connection running on old names keeps matching whatever its buttons already reference.
-		if (this.instance.config.useOldVariableNames) return `tally_${sortedScreens.join('-')}_${preset}_${source}`
+	protected tallyVariableName(screensSegment: string, preset: string, source: string): string {
 		const presetSegment = preset === 'both_and' ? 'bothand' : preset === 'both_or' ? 'bothor' : preset
 		return `${screensSegment}.${presetSegment}.tally.${source}`
+	}
+
+	/** The V2 name of a tally variable. V2 always spelled out the resolved Screen list, tokens included, and
+	 *  used the raw device id of the source - kept exactly so buttons built on V2 keep matching. */
+	protected tallyVariableNameV2(sortedScreens: string[], preset: string, deviceSource: string): string {
+		return `tally_${sortedScreens.join('-')}_${preset}_${deviceSource}`
 	}
 
 	/**
@@ -908,19 +911,25 @@ export default class Feedbacks {
 		// V3 names, and V2's raw device id ('LIVE_3', 'STILL_2') for old names - V2 named the variable after
 		// its raw option value, which the upgrade has since converted to the short id.
 		const deviceSource = this.choices.shortSourceToBackgroundContent(source ?? '')
-		const canonicalSource = this.instance.config.useOldVariableNames ? deviceSource : this.choices.backgroundContentToShortSource(deviceSource)
+		const shortSource = this.choices.backgroundContentToShortSource(deviceSource)
 		const screensSegment = this.tallyScreensSegment(rawScreens, sortedScreens)
-		// Old-name mode spells out the resolved list even for the tokens, so there it still takes a non-empty one.
-		const screensPart = this.instance.config.useOldVariableNames ? sortedScreens.join('-') : screensSegment
-		if (!screensPart || !canonicalSource) {
+		// The V2 name spells out the resolved list even for the tokens, so it needs a non-empty one.
+		const v2Name = sortedScreens.length > 0 && deviceSource ? this.tallyVariableNameV2(sortedScreens, preset, deviceSource) : undefined
+		const v3Name = screensSegment && shortSource ? this.tallyVariableName(screensSegment, preset, shortSource) : undefined
+		// With both schemes on, the V3 name is the variable and the V2 one its alias (instance.varName()), as
+		// long as both can be formed right now - an empty "Selected Screens" has a V3 name but no V2 one.
+		let varName: string | undefined
+		if (!this.instance.newVariableNames) varName = v2Name
+		else if (!this.instance.oldVariableNames || v2Name === undefined) varName = v3Name
+		else varName = v3Name === undefined ? v2Name : this.instance.varName(v2Name, v3Name)
+		if (!varName) {
 			this.instance.removeVariable(feedbackId)
 			return null
 		}
-		const varName = this.tallyVariableName(screensSegment, sortedScreens, preset, canonicalSource)
 		this.instance.addSoleVariable({
 			id: feedbackId,
 			variableId: varName,
-			name: `Tally for ${canonicalSource} at screens ${screensSegment}, preset ${preset}`,
+			name: `Tally for ${shortSource} at screens ${screensSegment}, preset ${preset}`,
 		})
 		return varName
 	}
@@ -1262,7 +1271,7 @@ export default class Feedbacks {
 					preset = this.state.get('LOCAL/presetMode')
 				}
 				if (preset === 'PREVIEW') {
-					vartext = this.config.useOldVariableNames ? 'PVW' : 'PRW'
+					vartext = this.instance.oldVariableNames ? 'PVW' : 'PRW'
 				}
 				this.instance.setVariableValues({ selectedPreset: vartext })
 				return preset === feedback.options.preset

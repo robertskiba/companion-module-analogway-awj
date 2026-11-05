@@ -278,7 +278,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const input = Array.isArray(path) ? path[5] : path.split('/')[5]
 				// New-name side renamed STILL{n}.label -> IMG{n}.label per explicit user request, to match this
 				// module's own "Image Store"/"Image Library" terminology established today (formatSourceShort's
-				// IMGn convention) - the old-name side (useOldVariableNames) is untouched on purpose.
+				// IMGn convention) - the old-name side (Variable Names: V2) is untouched on purpose.
 				const varId = this.varName(`STILL_${input}label`, `IMG${input}.label`)
 				if (this.instance.state.get(path.toString().replace('control/pp/label', 'status/pp/isValid'))) {
 					this.instance.addVariable({ id: 'stillLabel', variableId: varId, name: `Label of Image ${input}` })
@@ -307,14 +307,15 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const label = this.instance.state.get(path)
 				const exists = this.instance.choices.getScreensArray().some(scr => scr.id === 'S' + input)
-				if (this.instance.config.useOldVariableNames) {
+				if (this.instance.oldVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'screenLabel', variableId: `SCREEN_${input}label`, name: `Label of Screen S${input}` })
 						this.instance.addVariable({ id: 'screenLabel', variableId: `screenS${input}label`, name: `Label of Screen S${input}` })
 					}
 					this.instance.setVariableValues({['SCREEN_' + input + 'label']: label})
 					this.instance.setVariableValues({['screenS' + input + 'label']: label})
-				} else {
+				}
+				if (this.instance.newVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'screenLabel', variableId: `S${input}.label`, name: `Label of Screen S${input}` })
 					}
@@ -334,14 +335,15 @@ export default class SubscriptionsMidra extends Subscriptions {
 				const input = Array.isArray(path) ? path[4] : path.split('/')[4]
 				const label = this.instance.state.get(path)
 				const exists = this.instance.choices.getAuxArray().some(scr => scr.id === 'A' + input)
-				if (this.instance.config.useOldVariableNames) {
+				if (this.instance.oldVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `AUXSCREEN_${input}label`, name: `Label of Auxscreen A${input}` })
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `screenA${input}label`, name: `Label of Auxscreen A${input}` })
 					}
 					this.instance.setVariableValues({['AUXSCREEN_' + input + 'label']: label})
 					this.instance.setVariableValues({['screenA' + input + 'label']: label})
-				} else {
+				}
+				if (this.instance.newVariableNames) {
 					if (exists) {
 						this.instance.addVariable({ id: 'auxscreenLabel', variableId: `A${input}.label`, name: `Label of Auxscreen A${input}` })
 					}
@@ -496,7 +498,7 @@ export default class SubscriptionsMidra extends Subscriptions {
 			}
 			// The old-name scheme exposes each label under two names at once, which varName() cannot express,
 			// so that side is left to the label subscriptions themselves there.
-			if (this.instance.config.useOldVariableNames) continue
+			if (!this.instance.newVariableNames) continue
 			if (live.has(entry.id)) {
 				this.instance.addVariable({ id: entry.labelGroup, variableId: `${entry.id}.label`, name: `Label of ${entry.kind} ${entry.id}` })
 				this.instance.setVariableValues({ [`${entry.id}.label`]: this.instance.state.get(`DEVICE/device/${entry.list}/items/${entry.index}/control/pp/label`) })

@@ -80,11 +80,12 @@ export default class Presets {
 	}
 
 	/**
-	 * Picks the old (V2) or new (V3) id for a dynamic variable, based on the "Use old (V2) variable names"
-	 * config checkbox, so generated button texts reference whichever variable id is actually being kept live.
+	 * Picks the old (V2) or new (V3) id for a dynamic variable, based on the "Variable Names" config field, so
+	 * generated button texts reference a variable id that is actually kept live. With both schemes on, presets
+	 * use the V3 name - new buttons should not add to what has to be moved over later.
 	 */
 	varName(oldName: string, newName: string): string {
-		return this.config.useOldVariableNames ? oldName : newName
+		return this.config.variableNames === 'v2' ? oldName : newName
 	}
 
 	inverseColorBW(color: number): number {
