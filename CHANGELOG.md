@@ -2,6 +2,10 @@
 
 # v3.0.0 RC4 – Changes since RC3
 
+## New
+
+- **"Show Thumbnail" can show a Screen or Aux** (LivePremier). The device has no snapshot of a Screen, so the module builds one from the outputs that form it: each output's snapshot goes where the device reports that output sits in the Screen - any number of outputs, in any grid or free arrangement, with soft-edge overlaps cut down the middle so no blend ramp shows. The result is scaled to at most 256 px on its longer side, keeping the Screen's aspect ratio, so a wide Screen gives a flat picture. Program only - no output carries Preview. Each refresh costs one request per output, and the thumbnail throttle counts it that way. Listed as `S1 PGM`, `A1 PGM` in the Source field and as presets under "Live - Thumbnails"; in an expression, `S1` or `A1`.
+
 ## Changed
 
 - **"LIVE - Screen Selection" no longer selects a Screen or Aux that is switched off in the preconfig**, matching WebRCS, which offers no way to select one either. A button saved while the Screen was still in use, or an expression naming it, now only logs a warning instead of putting an invisible Screen into the selection. Deselecting still works.

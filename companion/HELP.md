@@ -521,7 +521,7 @@ Swaps the "Hot Backup Device Address" with the current "Device Network Address" 
 
 **Feedback: Device - Input/Layer Signal Present** - Available at: LivePremier, Alta 4K, Midra 4K. Shows whether an Input currently has a live signal, or whether the source a Layer is currently showing has one - always true unless it's a live Input that has lost its signal (Still/Color/Timer/Screen-reinsertion sources have no signal-loss concept and always count as present).
 
-**Feedback: LIVE - Show Thumbnail** - Available at: LivePremier, Alta 4K, Midra 4K. Shows a periodically-refreshed live preview image of an Input, Output, Still Image (Store), or Timer, fetched directly from the device. Requires "Allow Live Thumbnails" to be checked in the configuration; using it extensively (many buttons, short Refresh Rates) can noticeably increase CPU load depending on the Companion device it runs on, so the Refresh Rate is deliberately adjustable per button.
+**Feedback: LIVE - Show Thumbnail** - Available at: LivePremier, Alta 4K, Midra 4K. Shows a periodically-refreshed live preview image of an Input, Output, Still Image (Store), or Timer, fetched directly from the device. On LivePremier it can also show a Screen's or Aux's Program (`S1 PGM`): the device has no snapshot of a Screen, so the module puts it together from the snapshots of the outputs that form it, at the positions the device reports (soft-edge overlaps included), and scales it to at most 256 px on the longer side with the Screen's own aspect ratio. One refresh costs one request per output. Preview cannot be shown this way. In an expression the Source is written `IN3`, `OUT1`, `IMG2`, `TIMER1`, `S1` or `A1`; a bare number is an Input. Requires "Allow Live Thumbnails" to be checked in the configuration; using it extensively (many buttons, short Refresh Rates) can noticeably increase CPU load depending on the Companion device it runs on, so the Refresh Rate is deliberately adjustable per button.
 
 **Variables:**
 - `Device.Series` / `Device.Model` / `Device.Name` - the device's model series, specific model, and user-configurable device name.
@@ -603,7 +603,7 @@ Please use the presets as a quick way to get your programming started and adjust
 
 All presets also have color information. In the config you can set up your preferred default colors and all presets will use your provided colors. Presets for memories automatically use the color you have chosen in WebRCS. Again, after you dragged a preset to a button it will stay static. Changes in the default colors or memory colors in WebRCS will not be reflected on programmed buttons.
 
-There is also a "Live - Thumbnails" preset category with one ready-made "Show Thumbnail" button per currently available Input, Output, Still Image (Store) and Timer - see the matching feedback above, including its "Allow Live Thumbnails" configuration switch.
+There is also a "Live - Thumbnails" preset category with one ready-made "Show Thumbnail" button per currently available Screen and Aux (LivePremier), Input, Output, Still Image (Store) and Timer - see the matching feedback above, including its "Allow Live Thumbnails" configuration switch.
 
 ## <a name="deprecated"></a>Deprecated Actions (from V2)
 

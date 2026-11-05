@@ -2375,6 +2375,12 @@ export default class Presets {
 			}
 		}
 
+		// Screens and Auxes, composed from their outputs - LivePremier only for now, see deviceThumbnail.
+		if (this.state.platform !== 'midra') {
+			for (const screen of this.choices.getScreensAuxArray()) {
+				addThumbnailPreset(`Screen${screen.id}`, `${screen.id} PGM`, screen.id)
+			}
+		}
 		for (const input of this.choices.getLiveInputArray()) {
 			const num = input.index ?? input.id.replace(/^\D+/, '')
 			addThumbnailPreset(`Input${num}`, `Input ${num}`, `IN${num}`)

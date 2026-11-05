@@ -15,6 +15,7 @@ import {
 } from '@companion-module/base'
 import Constants from './constants.js'
 import { parseBoolean, stripMemoryPrefix } from '../util.js'
+import { composeScreen, decodePng, encodePng, PlacedSnapshot, RgbaImage, scaleDown } from '../thumbnailCompose.js'
 
 
 /** Helper type for replacing the very generic options with the real structure of options */
@@ -34,6 +35,9 @@ type ReplaceOptionsInFunctions<T, NewOptionsType> = T extends (...args: any[]) =
 
 /** Type which gives CompanionFeedbackDefinition but replaces the generic options with the structure givien in the parameter */
 type AWJfeedback<K> = ReplaceOptionsInFunctions<CompanionFeedbackDefinition, K>
+
+/** What a "Show Thumbnail" poller fetches: one of the device's snapshot categories, or a composed Screen. */
+type ThumbnailSource = 'inputs' | 'outputs' | 'imagesStore' | 'timers' | 'screens'
 
 export default class Feedbacks {
 	protected instance: AWJinstance
@@ -59,7 +63,7 @@ export default class Feedbacks {
 		activeRate: number
 		busy: boolean
 		subscribers: Map<string, { rate: number, lastSeen: number }>
-		source: 'inputs' | 'outputs' | 'imagesStore' | 'timers'
+		source: ThumbnailSource
 		itemId: string
 	}>()
 	private thumbnailFeedbackKey = new Map<string, string>()
@@ -2379,7 +2383,13 @@ export default class Feedbacks {
 			id: `TIMER${t.index ?? t.id.replace(/^\w+_/, '')}`,
 			label: `Timer ${t.index}${t.label ? ' - ' + t.label : ''}`,
 		}))
-		const sourceChoices = [...outputChoices, ...inputChoices, ...storeChoices, ...timerChoices]
+		// A Screen's or Aux's Program, composed from the outputs that form it (see fetchScreenThumbnail). LivePremier
+		// only for now: the output geometry it relies on is confirmed there, not yet on Midra/Alta.
+		const screenChoices = this.state.platform === 'midra' ? [] : this.choices.getScreensAuxArray().map((s) => ({
+			id: s.id,
+			label: `${s.id} PGM${s.label ? ' - ' + s.label : ''}`,
+		}))
+		const sourceChoices = [...screenChoices, ...outputChoices, ...inputChoices, ...storeChoices, ...timerChoices]
 
 		const deviceThumbnail: CompanionAdvancedFeedbackDefinition = {
 			type: 'advanced',
@@ -2472,8 +2482,11 @@ export default class Feedbacks {
 	 * and a bare number means an Input. The "category:n" form the dropdown used up to RC3 ('inputs:3',
 	 * 'outputs:1', 'imagesStore:2', 'timers:1') stays valid for configs and expressions written back then.
 	 */
-	private parseThumbnailSource(value: unknown): { source: 'inputs' | 'outputs' | 'imagesStore' | 'timers', itemId: string } | undefined {
+	private parseThumbnailSource(value: unknown): { source: ThumbnailSource, itemId: string } | undefined {
 		const raw = String(value ?? '').trim()
+		// A Screen or Aux ('S1', 'A2'), composed from its outputs.
+		const screen = raw.toUpperCase().match(/^([SA])0*([1-9][0-9]*)$/)
+		if (screen) return { source: 'screens', itemId: `${screen[1]}${screen[2]}` }
 		const legacy = raw.match(/^(inputs|outputs|imagesStore|timers):\s*(\d+)$/i)
 		const short = raw.toUpperCase().match(/^(IN|INPUT|LIVE|OUT|OUTPUT|IMG|STILL|TIMER)?[_\s]*(\d+)$/)
 		const sourceByPrefix: Record<string, 'inputs' | 'outputs' | 'imagesStore' | 'timers'> = {
@@ -2491,8 +2504,56 @@ export default class Feedbacks {
 	 *  category addresses the Image Store's own slot numbers directly - despite what the protocol doc's stated
 	 *  range suggests, it does NOT address the Library, so no resolution/indirection is needed or possible here
 	 *  (see the "Still Image (Library)" removal note on deviceThumbnail above). */
-	private resolveThumbnailFetchTarget(source: 'inputs' | 'outputs' | 'imagesStore' | 'timers', itemId: string): { category: 'inputs' | 'outputs' | 'images' | 'timers', id: string } {
+	private resolveThumbnailFetchTarget(source: Exclude<ThumbnailSource, 'screens'>, itemId: string): { category: 'inputs' | 'outputs' | 'images' | 'timers', id: string } {
 		return { category: source === 'imagesStore' ? 'images' : source, id: itemId }
+	}
+
+	/** The outputs forming a Screen or Aux, with their place in its canvas as the device reports it - grid spacing
+	 *  and soft-edge overlap already applied (outputList/items/{n}/canvas/status/pp). */
+	private screenThumbnailOutputs(screenId: string): { key: string, left: number, top: number, width: number, height: number }[] {
+		const keys: string[] = this.state.get('DEVICE/device/outputList/itemKeys') ?? []
+		return keys.flatMap((key) => {
+			const canvas = this.state.get(['DEVICE', 'device', 'outputList', 'items', key, 'canvas', 'status', 'pp'])
+			if (canvas?.usedInScreenAux !== screenId) return []
+			const left = Number(canvas.left)
+			const top = Number(canvas.top)
+			const width = Number(canvas.clampedWidth)
+			const height = Number(canvas.clampedHeight)
+			if (![left, top, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return []
+			return [{ key, left, top, width, height }]
+		})
+	}
+
+	/**
+	 * A Screen's or Aux's Program as one thumbnail. The device has no snapshot of a Screen (the snapshot API
+	 * answers "Invalid parameter type" for screens), so the snapshots of its outputs are laid out where the
+	 * device says they sit, at the snapshots' own resolution, and the result is scaled down to at most 256 px
+	 * on its longer side, keeping the Screen's aspect ratio - see thumbnailCompose.ts. An output whose snapshot
+	 * fails stays black, so the picture keeps its shape. Preview is not available: no output carries it.
+	 */
+	private async fetchScreenThumbnail(screenId: string): Promise<string | null> {
+		const outputs = this.screenThumbnailOutputs(screenId)
+		if (outputs.length === 0) return null
+		const snapshots = await Promise.all(outputs.map((o) => this.instance.connection.getSnapshot('outputs', o.key)))
+		const black: RgbaImage = { width: 1, height: 1, data: Buffer.from([0, 0, 0, 255]) }
+		const placed: PlacedSnapshot[] = []
+		let readable = 0
+		outputs.forEach((o, i) => {
+			let image = black
+			const base64 = snapshots[i]
+			if (base64) {
+				try {
+					image = decodePng(Buffer.from(base64, 'base64'))
+					readable++
+				} catch (error) {
+					this.instance.log('debug', `Thumbnail ${screenId}: snapshot of output ${o.key} not readable - ${error instanceof Error ? error.message : String(error)}`)
+				}
+			}
+			placed.push({ left: o.left, top: o.top, width: o.width, height: o.height, image })
+		})
+		if (readable === 0) return null
+		const composed = composeScreen(placed)
+		return composed ? encodePng(scaleDown(composed, 256)).toString('base64') : null
 	}
 
 	private pollThumbnail(key: string): void {
@@ -2516,9 +2577,15 @@ export default class Feedbacks {
 			return
 		}
 
-		const target = this.resolveThumbnailFetchTarget(poller.source, poller.itemId)
 		poller.busy = true
-		this.instance.connection.getSnapshot(target.category, target.id).then((base64) => {
+		let fetch: Promise<string | null>
+		if (poller.source === 'screens') {
+			fetch = this.fetchScreenThumbnail(poller.itemId)
+		} else {
+			const target = this.resolveThumbnailFetchTarget(poller.source, poller.itemId)
+			fetch = this.instance.connection.getSnapshot(target.category, target.id)
+		}
+		fetch.then((base64) => {
 			poller.busy = false
 			if (base64) {
 				this.thumbnailCache.set(key, base64)
@@ -2536,7 +2603,11 @@ export default class Feedbacks {
 	 *  down further, never speed them up beyond what was asked for. Called whenever the poller count changes
 	 *  (a feedback (re-)registers or unsubscribes) so the throttle adapts up and back down again live. */
 	private recalculateThumbnailThrottle(): void {
-		const count = this.thumbnailPollers.size
+		// A Screen thumbnail costs one request per output, so it counts that many times.
+		let count = 0
+		for (const poller of this.thumbnailPollers.values()) {
+			count += poller.source === 'screens' ? Math.max(1, this.screenThumbnailOutputs(poller.itemId).length) : 1
+		}
 		const globalMinInterval = count > this.thumbnailThrottleThreshold ? Math.ceil(count / this.thumbnailThrottleThreshold) : 1
 		for (const [key, poller] of this.thumbnailPollers) {
 			const requestedRate = poller.subscribers.size > 0 ? Math.min(...Array.from(poller.subscribers.values()).map((s) => s.rate)) : 1
