@@ -4,6 +4,12 @@ This is a fork of the original companion-module-analogway-awj repository. It is 
 
 # Changelog
 
+# v3.0.0 RC4 – Changes since RC3
+
+## Changed
+
+- **"LIVE - Screen Selection" no longer selects a Screen or Aux that is switched off in the preconfig**, matching WebRCS, which offers no way to select one either. A button saved while the Screen was still in use, or an expression naming it, now only logs a warning instead of putting an invisible Screen into the selection. Deselecting still works.
+
 # v3.0.0 RC3 – Changes since RC1
 
 **RC2 was never released, so this section covers everything since RC1.** The feature freeze is still in effect: only fixes and Alta 4K / Midra 4K verification work land before the final v3.0.0. The focus since RC1 was a full Midra/Alta pass, done against an Eikos 4K simulator and against real Eikos 4K and Zenith 200 hardware, plus fixes that came out of live shows on an Aquilon.
